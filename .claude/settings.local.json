@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(where.exe cargo *)",
+      "Bash(where.exe rustc *)",
+      "WebFetch(domain:heroui.com)",
+      "Bash(npm install *)",
+      "Bash(npx electron-rebuild *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(timeout 15 npm run dev)"
+    ]
+  }
+}

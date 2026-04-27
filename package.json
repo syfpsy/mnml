@@ -1,0 +1,99 @@
+{
+  "name": "mnml",
+  "version": "0.2.2",
+  "description": "mnml — a super minimal clipboard manager for Windows",
+  "private": true,
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/syfpsy/mnml"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/bump-version.mjs && tsc -b && vite build && electron-builder",
+    "build:dir": "node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --dir",
+    "build:publish": "tsc -b && vite build && electron-builder --publish always",
+    "postinstall": "electron-rebuild -f -o better-sqlite3",
+    "rebuild": "electron-rebuild -f -o better-sqlite3"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "electron-updater": "^6.8.3",
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "@heroui-pro/react": "^1.0.0-beta.1",
+    "@heroui/react": "^3.0.3",
+    "@heroui/styles": "^3.0.3",
+    "@number-flow/react": "^0.6.0",
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "embla-carousel": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
+    "motion": "^12.38.0",
+    "react": "^19.2.5",
+    "react-aria-components": "^1.17.0",
+    "react-dom": "^19.2.5",
+    "react-resizable-panels": "^4.10.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "dev.mnml.app",
+    "productName": "mnml",
+    "copyright": "Copyright © 2026 mnml",
+    "publish": {
+      "provider": "github",
+      "owner": "syfpsy",
+      "repo": "mnml",
+      "releaseType": "release"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "npmRebuild": false,
+    "afterPack": "./scripts/copy-native-deps.mjs",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "mnml-setup.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "mnml",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
+    }
+  }
+}

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="mnml is a minimal clipboard manager for Windows. It keeps your copy history, lets you search it instantly, and pops up with a double-tap of Alt.">
+  <title>mnml — clipboard manager for Windows</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0a0a0a;
+      --border: rgba(255,255,255,0.07);
+      --t1:     #e5e5e5;
+      --t2:     #888;
+      --t3:     #3a3a3a;
+      --blue:   #60a5fa;
+      --violet: #a78bfa;
+      --rose:   #fb7185;
+    }
+
+    html {
+      background: var(--bg);
+      color: var(--t1);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      scroll-behavior: smooth;
+    }
+
+    body { overflow-x: hidden; }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.028) 1px, transparent 1px);
+      background-size: 22px 22px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ──────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 36px;
+      transition: background 0.25s, border-color 0.25s;
+      border-bottom: 1px solid transparent;
+    }
+    nav.scrolled {
+      background: rgba(10,10,10,0.82);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-color: var(--border);
+    }
+
+    .nav-logo {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--t1);
+      text-decoration: none;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .nav-link {
+      font-size: 13px;
+      color: var(--t2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-link:hover { color: var(--t1); }
+
+    .nav-cta {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--t1);
+      text-decoration: none;
+      padding: 7px 15px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .nav-cta:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 32px;
+      position: relative;
+      z-index: 1;
+    }
+
+    section { position: relative; z-index: 1; }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border) 30%, var(--border) 70%, transparent);
+      margin: 0 auto 72px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--t3);
+      margin-bottom: 36px;
+    }
+
+    /* ── Hero ────────────────────────────────────────── */
+    .hero {
+      padding: 168px 0 0;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--t2);
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      margin-bottom: 36px;
+      letter-spacing: 0.01em;
+    }
+    .badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--violet);
+      flex-shrink: 0;
+    }
+
+    .hero h1 {
+      font-size: clamp(36px, 5.5vw, 54px);
+      font-weight: 400;
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+      margin-bottom: 20px;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--t2);
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--t2);
+      max-width: 440px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-cta-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #0a0a0a;
+      background: var(--t1);
+      text-decoration: none;
+      padding: 11px 22px;
+      border-radius: 10px;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .btn-primary:hover {
+      opacity: 0.86;
+      transform: translateY(-1px);
+    }
+    .btn-primary svg { opacity: 0.55; }
+
+    .hero-meta {
+      font-size: 12px;
+      color: var(--t3);
+      letter-spacing: 0.01em;
+    }
+
+    /* Screenshot */
+    .screenshot-scene {
+      position: relative;
+      width: 460px;
+      max-width: calc(100% - 40px);
+      margin: 72px auto 0;
+    }
+
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(70px);
+      pointer-events: none;
+    }
+    .blob-1 { width: 320px; height: 180px; background: var(--blue);   opacity: 0.12; top: 15%; left: -18%; }
+    .blob-2 { width: 280px; height: 180px; background: var(--violet); opacity: 0.12; top:  5%; right: -14%; }
+    .blob-3 { width: 220px; height: 140px; background: var(--rose);   opacity: 0.10; bottom: 5%; right: 8%; }
+
+    .screenshot {
+      display: block;
+      width: 100%;
+      border-radius: 14px;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.09),
+        0 4px 16px rgba(0,0,0,0.35),
+        0 32px 72px rgba(0,0,0,0.65);
+      animation: float 7s ease-in-out infinite;
+      position: relative;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-7px); }
+    }
+
+    /* ── How it works ────────────────────────────────── */
+    .how { padding: 120px 0 0; }
+
+    .steps { display: flex; flex-direction: column; }
+
+    .step {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 16px;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step:first-child { border-top: 1px solid var(--border); }
+
+    .step-num {
+      font-size: 12px;
+      color: var(--t3);
+      font-variant-numeric: tabular-nums;
+      padding-top: 2px;
+    }
+
+    .step-body h3 {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--t1);
+      letter-spacing: -0.01em;
+      margin-bottom: 5px;
+    }
+
+    .step-body p {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--t2);
+    }
+
+    .step-keys {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+    }
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 9px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-family: inherit;
+      color: var(--t2);
+    }
+
+    /* ── Features ────────────────────────────────────── */
+    .features { padding: 96px 0 0; }
+
+    .features-lead {
+      font-size: 22px;
+      font-weight: 400;
+      letter-spacing: -0.025em;
+      line-height: 1.45;
+      color: var(--t1);
+      margin-bottom: 44px;
+    }
+    .features-lead em {
+      font-style: normal;
+      color: var(--t2);
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .feature-list li {
+      display: grid;
+      grid-template-columns: 16px 1fr;
+      gap: 14px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--t2);
+      align-items: start;
+    }
+    .feature-list li:first-child { border-top: 1px solid var(--border); }
+
+    .fdot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    .feature-list strong {
+      font-weight: 500;
+      color: var(--t1);
+    }
+
+    /* ── Release notes ───────────────────────────────── */
+    .releases { padding: 96px 0 0; }
+
+    .release {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .release:first-of-type { border-top: 1px solid var(--border); }
+
+    .release-hd {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .release-ver {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--t1);
+      letter-spacing: -0.01em;
+    }
+
+    .release-date {
+      font-size: 12px;
+      color: var(--t3);
+    }
+
+    .release-items {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .release-items li {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--t2);
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .release-items li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--t3);
+    }
+
+    .releases-link {
+      display: inline-block;
+      margin-top: 28px;
+      font-size: 13px;
+      color: var(--t2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .releases-link:hover { color: var(--t1); }
+
+    /* ── Download ────────────────────────────────────── */
+    .download {
+      padding: 100px 0 80px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      margin-top: 100px;
+    }
+
+    .download h2 {
+      font-size: 36px;
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+
+    .download-sub {
+      font-size: 15px;
+      color: var(--t2);
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
+
+    .download-meta {
+      font-size: 12px;
+      color: var(--t3);
+      margin-top: 16px;
+      letter-spacing: 0.01em;
+    }
+
+    .download-also {
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--t3);
+    }
+
+    .download-also a {
+      color: var(--t2);
+      text-decoration: none;
+      border-bottom: 1px solid var(--t3);
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .download-also a:hover {
+      color: var(--t1);
+      border-color: var(--t2);
+    }
+
+    /* ── Legal ───────────────────────────────────────── */
+    .legal {
+      padding: 80px 0 120px;
+    }
+
+    .legal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 36px;
+      border-top: 1px solid var(--border);
+      padding-top: 40px;
+    }
+
+    .legal-item h3 {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--t1);
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
+
+    .legal-item p {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--t2);
+    }
+
+    .legal-item a {
+      color: var(--t2);
+      text-decoration: none;
+      border-bottom: 1px solid var(--t3);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .legal-item a:hover {
+      color: var(--t1);
+      border-color: var(--t2);
+    }
+
+    /* ── Footer ──────────────────────────────────────── */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 24px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--t3);
+    }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--t3);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--t2); }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 640px) {
+      nav { padding: 16px 20px; }
+      .nav-right .nav-link { display: none; }
+      .container { padding: 0 20px; }
+      .hero { padding-top: 120px; }
+      .hero h1 { font-size: 34px; }
+      .hero-desc { font-size: 15px; }
+      .screenshot-scene { width: calc(100% - 40px); }
+      .how, .features, .releases { padding-top: 72px; }
+      .legal-grid { grid-template-columns: 1fr; gap: 28px; }
+      footer {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+        padding: 24px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <nav id="nav">
+    <a href="/" class="nav-logo">mnml</a>
+    <div class="nav-right">
+      <a href="#releases" class="nav-link">What's new</a>
+      <a href="https://github.com/syfpsy/mnml" class="nav-link" target="_blank" rel="noopener">GitHub</a>
+      <a href="#download" class="nav-cta">Download</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Free and open source
+      </div>
+
+      <h1>Everything you copied.<br><em>Right where you need it.</em></h1>
+
+      <p class="hero-desc">
+        A clipboard manager for Windows that stays out of your way.
+        Double-tap Alt, find what you need, and paste.
+        No account, no cloud, no subscription.
+      </p>
+
+      <div class="hero-cta-wrap">
+        <a href="https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe" class="btn-primary">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1v8M3.5 6l3.5 3.5L10.5 6M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Download for Windows
+        </a>
+        <span class="hero-meta">v0.2.2 &middot; 82 MB &middot; Windows 10 and 11 &middot; 64-bit &middot; free</span>
+      </div>
+    </div>
+
+    <div class="screenshot-scene">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <img
+        class="screenshot"
+        src="screenshot.png"
+        alt="mnml showing recent clipboard items: images, text snippets, and copied links"
+        width="460"
+        height="540"
+      >
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how">
+    <div class="container">
+      <div class="divider"></div>
+      <p class="section-label">How it works</p>
+      <div class="steps">
+
+        <div class="step">
+          <span class="step-num">01</span>
+          <div class="step-body">
+            <h3>Copy as you normally would</h3>
+            <p>Ctrl+C, right-click, drag and drop. mnml watches in the background and captures text, links, and screenshots without getting in the way.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">02</span>
+          <div class="step-body">
+            <h3>Double-tap Alt to open it</h3>
+            <p>The window opens right next to your cursor. Recent clips are listed immediately, or type a few letters to search through everything.</p>
+            <div class="step-keys">
+              <kbd>Alt</kbd>
+              <kbd>Alt</kbd>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">03</span>
+          <div class="step-body">
+            <h3>Click to paste</h3>
+            <p>Click any item and it lands in whatever you were working in. Shift-click to copy it to your clipboard without pasting right away.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="container">
+      <div class="divider" style="margin-top: 96px;"></div>
+      <p class="section-label">The details</p>
+      <p class="features-lead">
+        The basics, done well.<br>
+        <em>A few things worth knowing about.</em>
+      </p>
+      <ul class="feature-list">
+        <li>
+          <span class="fdot" style="background: var(--blue)"></span>
+          <span><strong>Catches everything.</strong> Text, links, and screenshots, captured automatically. Links even pull in the page title so you know what you copied at a glance.</span>
+        </li>
+        <li>
+          <span class="fdot" style="background: var(--violet)"></span>
+          <span><strong>Search that actually works.</strong> Type a few letters and the list narrows in real time. No waiting, just the things that match.</span>
+        </li>
+        <li>
+          <span class="fdot" style="background: var(--rose)"></span>
+          <span><strong>Pins for the things you reuse.</strong> Keep frequently used snippets at the top. Templates, addresses, whatever you reach for every week.</span>
+        </li>
+        <li>
+          <span class="fdot" style="background: var(--blue)"></span>
+          <span><strong>Two sizes.</strong> A compact list for quick grabs, and a wider view with tabs to filter by type when you want to browse properly.</span>
+        </li>
+        <li>
+          <span class="fdot" style="background: var(--violet)"></span>
+          <span><strong>Updates itself.</strong> New versions download quietly while you work. When one is ready, a small notice shows up at the bottom with a restart button.</span>
+        </li>
+        <li>
+          <span class="fdot" style="background: var(--rose)"></span>
+          <span><strong>Fully local.</strong> No account, no sync, no telemetry. Everything lives in a SQLite file on your machine and goes nowhere.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Release notes -->
+  <section class="releases" id="releases">
+    <div class="container">
+      <div class="divider" style="margin-top: 96px;"></div>
+      <p class="section-label">Release notes</p>
+
+      <div class="release">
+        <div class="release-hd">
+          <span class="release-ver">v0.2.2</span>
+          <span class="release-date">Apr 28, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li>Auto-update: running copies check for new versions on startup and every 4 hours. Updates download in the background and a small banner appears at the bottom of the window when one is ready.</li>
+          <li>GitHub Actions release workflow: pushing a version tag now triggers a Windows build and publishes the installer to GitHub Releases automatically.</li>
+          <li>Stable download filename (mnml-setup.exe) so the download link on this page always points to the latest build.</li>
+        </ul>
+      </div>
+
+      <div class="release">
+        <div class="release-hd">
+          <span class="release-ver">v0.2.0</span>
+          <span class="release-date">Apr 27, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li>Removed the copy action button from list rows. Clicking a row already pastes, so the button was redundant.</li>
+          <li>Delete now requires a second click to confirm. First click turns the trash icon red; second click deletes. Auto-disarms after 2 seconds or when you click elsewhere.</li>
+        </ul>
+      </div>
+
+      <div class="release">
+        <div class="release-hd">
+          <span class="release-ver">v0.1.15</span>
+          <span class="release-date">Apr 27, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li>Link rows now show the site's favicon, fetched from Google's favicon service with a fallback to the link icon.</li>
+          <li>Subtle per-category tint on each row: blue for text, violet for links, rose for images.</li>
+          <li>The window now opens with its top-left corner at the cursor, instead of offset to the side.</li>
+          <li>Settings panel added to the compact view, not just the expanded one.</li>
+          <li>Fixed auto-paste: the window now properly transfers OS focus before sending Ctrl+V.</li>
+        </ul>
+      </div>
+
+      <div class="release">
+        <div class="release-hd">
+          <span class="release-ver">v0.1.14</span>
+          <span class="release-date">Apr 27, 2026</span>
+        </div>
+        <ul class="release-items">
+          <li>Rewrote show/hide to use opacity and mouse-event masking instead of the OS window cycle. The renderer stays permanently live, which eliminates the flicker on open.</li>
+        </ul>
+      </div>
+
+      <a href="https://github.com/syfpsy/mnml/blob/main/CHANGELOG.md" class="releases-link" target="_blank" rel="noopener">
+        Full changelog on GitHub &rarr;
+      </a>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="download" id="download">
+    <div class="container">
+      <h2>Give it a try.</h2>
+      <p class="download-sub">
+        One-click installer. No wizard, no UAC prompt, no account.<br>
+        Uninstall cleanly from Add or Remove Programs if it is not for you.
+      </p>
+      <a href="https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe" class="btn-primary">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M7 1v8M3.5 6l3.5 3.5L10.5 6M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download mnml-setup.exe
+      </a>
+      <p class="download-meta">v0.2.2 &middot; 82 MB &middot; Windows 10 / 11 &middot; 64-bit</p>
+      <p class="download-also">
+        Looking for an older version or the source code?
+        <a href="https://github.com/syfpsy/mnml/releases" target="_blank" rel="noopener">All releases on GitHub</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- Legal -->
+  <section class="legal">
+    <div class="container">
+      <p class="section-label" style="margin-bottom: 0;">Legal</p>
+      <div class="legal-grid">
+        <div class="legal-item">
+          <h3>Privacy</h3>
+          <p>
+            mnml stores your clipboard history locally in a SQLite database on
+            your machine. It does not collect, transmit, or share any data. There
+            are no analytics, no crash reports, and no telemetry of any kind.
+            Nothing leaves your computer.
+          </p>
+        </div>
+        <div class="legal-item">
+          <h3>License</h3>
+          <p>
+            mnml is open source software released under the
+            <a href="https://github.com/syfpsy/mnml/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
+            You are free to use, copy, modify, and distribute it. The full source
+            is available on <a href="https://github.com/syfpsy/mnml" target="_blank" rel="noopener">GitHub</a>.
+          </p>
+        </div>
+        <div class="legal-item">
+          <h3>Disclaimer</h3>
+          <p>
+            mnml is provided as-is, without warranty of any kind. The author is
+            not responsible for any data loss or other issues arising from the use
+            of this software. Use it at your own risk.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="footer-copy">mnml &middot; 2026</span>
+    <div class="footer-links">
+      <a href="https://github.com/syfpsy/mnml" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/syfpsy/mnml/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/syfpsy/mnml/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+    </div>
+  </footer>
+
+  <script>
+    const nav = document.getElementById("nav");
+    window.addEventListener("scroll", () => {
+      nav.classList.toggle("scrolled", window.scrollY > 24);
+    }, { passive: true });
+  </script>
+
+</body>
+</html>

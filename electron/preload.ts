@@ -10,7 +10,8 @@ const api = {
   search: (query: string, type?: ItemType, limit?: number): Promise<Item[]> =>
     ipcRenderer.invoke(IPC.search, { query, type, limit }),
 
-  restore: (id: number): Promise<void> => ipcRenderer.invoke(IPC.restore, id),
+  restore: (id: number, paste = false): Promise<void> =>
+    ipcRenderer.invoke(IPC.restore, { id, paste }),
   remove: (id: number): Promise<void> => ipcRenderer.invoke(IPC.remove, id),
   clear: (): Promise<void> => ipcRenderer.invoke(IPC.clear),
   pin: (id: number, pinned: boolean): Promise<void> =>

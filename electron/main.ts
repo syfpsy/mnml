@@ -67,7 +67,6 @@ function ensurePasteScript(): string {
     pasteScriptPath = path.join(dir, "paste.vbs");
     const vbs =
       'Set ws = CreateObject("WScript.Shell")\r\n' +
-      "WScript.Sleep 60\r\n" +
       'ws.SendKeys "^v"\r\n';
     try { fs.writeFileSync(pasteScriptPath, vbs, "ascii"); }
     catch (err) { log("[paste] failed to write paste.vbs:", String(err)); }
@@ -294,19 +293,19 @@ function hideWindow() {
   win.webContents.send(IPC.onVisibilityChanged, false);
 
   // Fire auto-paste if a restore was queued.
-  // setOpacity(0) alone does NOT transfer OS focus to the target app, so we
-  // must call win.hide() here; then restore the invisible-but-live state after
-  // the paste script has had time to fire.
+  // setOpacity(0) alone does NOT transfer OS focus to the target app.
+  // Sequence: blur (tells OS to activate the previous window) → hide → paste.
   if (pastePending) {
     pastePending = false;
-    win.hide();
-    setTimeout(triggerPaste, 100);
+    win.blur();   // signal OS: give focus back to whoever had it before us
+    win.hide();   // truly remove from the window stack
+    setTimeout(triggerPaste, 300);  // 300 ms is enough for focus to settle
     setTimeout(() => {
       if (!win || win.isDestroyed() || windowVisible) return;
       win.setOpacity(0);
       win.setIgnoreMouseEvents(true, { forward: true });
       win.showInactive();
-    }, 500);
+    }, 700);
   }
 }
 

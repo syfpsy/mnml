@@ -15,7 +15,7 @@ interface Props {
 export function CompactView({ onExpand, onThemeChange }: Props) {
   const [query,        setQuery]        = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { items, setItems, refetch } = useItems({ query, limit: 10 });
+  const { items, setItems, refetch } = useItems({ query, limit: 25 });
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLDivElement>(null);
 
@@ -29,7 +29,7 @@ export function CompactView({ onExpand, onThemeChange }: Props) {
     grid?.focus();
   };
 
-  const activate = async (item: Item) => { await bridge.restore(item.id); await bridge.hide(); };
+  const activate = async (item: Item) => { await bridge.restore(item.id, true); await bridge.hide(); };
   const copyOnly = async (item: Item) => { await bridge.restore(item.id); };
   const togglePin = async (item: Item) => {
     const nowPinned = item.pinned_at == null;

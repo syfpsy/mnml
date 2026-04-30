@@ -42,7 +42,7 @@ export function ExpandedView({ onCollapse, onThemeChange }: Props) {
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
-  const activate = async (item: Item) => { await bridge.restore(item.id); await bridge.hide(); };
+  const activate = async (item: Item) => { await bridge.restore(item.id, true); await bridge.hide(); };
   const copyOnly = async (item: Item) => { await bridge.restore(item.id); };
   const togglePin = async (item: Item) => {
     const nowPinned = item.pinned_at == null;

@@ -36,11 +36,13 @@ export function registerIpc(windowControl: WindowControl) {
     },
   );
 
-  ipcMain.handle(IPC.restore, (_, id: number) => {
+  ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
     const item = getById(id);
     if (item) {
       restoreItem(item);
-      if (getSetting("autoPaste")) windowControl.setPastePending();
+      // Only arm auto-paste when the caller explicitly requested it (i.e. the
+      // user clicked/entered an item to paste, not shift-click copy-only).
+      if (paste && getSetting("autoPaste")) windowControl.setPastePending();
     }
   });
 

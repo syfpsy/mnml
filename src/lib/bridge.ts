@@ -7,7 +7,7 @@ export const bridge = {
     window.mnml.listRecent(limit, type) as Promise<Item[]>,
   search: (q: string, type?: ItemType, limit?: number) =>
     window.mnml.search(q, type, limit) as Promise<Item[]>,
-  restore: (id: number) => window.mnml.restore(id),
+  restore: (id: number, paste = false) => window.mnml.restore(id, paste),
   remove: (id: number) => window.mnml.remove(id),
   clear: () => window.mnml.clear(),
   pin: (id: number, pinned: boolean) => window.mnml.pin(id, pinned),

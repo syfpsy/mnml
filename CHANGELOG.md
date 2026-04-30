@@ -1,9 +1,22 @@
 # mnml Changelog
 
+## v0.2.3 — 2026-04-30
+
+### Fixed
+- **Paste now works** — `autoPaste` defaulted to `false` so nothing ever pasted. Default is now `true`, and paste intent is passed explicitly through the IPC layer so copy-only actions never accidentally arm it.
+- **Search auto-focus** — the search bar now receives focus automatically when the window appears, with an 80 ms delay to let the OS finish handing focus to the Electron window. No more having to click first.
+- **Scrollbar removed** — scroll containers no longer show a visible scrollbar. Scroll still works normally with the mouse wheel or trackpad.
+
+### Changed
+- **Compact list shows 25 items** instead of 10.
+
+---
+
 ## v0.2.2 — 2026-04-27
 
-<!-- fill in release notes here -->
+Patch release — internal build pipeline fix. No user-facing changes.
 
+---
 
 ## v0.2.1 — 2026-04-27
 

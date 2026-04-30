@@ -16,7 +16,7 @@ const DEFAULTS: AppSettings = {
   monitoring: true,
   maxItems: 200,
   launchOnStartup: false,
-  autoPaste: false,
+  autoPaste: true,
   lightTheme: false,
   windowMode: "compact",
 };

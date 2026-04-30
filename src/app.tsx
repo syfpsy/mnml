@@ -37,12 +37,17 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus search when window becomes visible.
+  // Small delay lets the OS finish transferring focus to the Electron window
+  // before we programmatically focus the input — without it the first keypress
+  // is swallowed on Windows.
   useEffect(() => {
     const off = bridge.onVisibilityChanged((visible) => {
       if (visible) {
-        const el = document.querySelector<HTMLInputElement>("input[aria-label='Search clipboard']");
-        el?.focus();
-        el?.select();
+        setTimeout(() => {
+          const el = document.querySelector<HTMLInputElement>("input[aria-label='Search clipboard']");
+          el?.focus();
+          el?.select();
+        }, 80);
       }
     });
     return off;

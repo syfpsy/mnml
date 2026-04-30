@@ -79,13 +79,13 @@ body {
 .mnml-drag    { -webkit-app-region: drag; }
 .mnml-no-drag { -webkit-app-region: no-drag; }
 
-/* ── Scrollbar ────────────────────────────────────────────────────────────── */
-.mnml-scroll::-webkit-scrollbar       { width: 4px; }
-.mnml-scroll::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 999px;
+/* ── Scrollbar — hidden everywhere, scroll still works ───────────────────── */
+* {
+  scrollbar-width: none;        /* Firefox */
 }
-.mnml-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-h); }
+*::-webkit-scrollbar {
+  display: none;                /* Chrome / Electron */
+}
 
 /* ── ListView overrides ───────────────────────────────────────────────────── */
 

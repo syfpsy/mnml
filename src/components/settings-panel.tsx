@@ -15,7 +15,13 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // Stop the event from reaching app.tsx's global Escape→hide handler.
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);

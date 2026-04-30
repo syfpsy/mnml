@@ -71,13 +71,15 @@ export function fetchTitle(
             return;
           }
 
-          let buf = "";
+          const chunks: Buffer[] = [];
           let total = 0;
 
           res.on("data", (chunk: Buffer) => {
             total += chunk.length;
-            buf += chunk.toString("latin1");
-            const m = buf.match(/<title[^>]*>([\s\S]{1,400}?)<\/title>/i);
+            chunks.push(chunk);
+            // Decode all collected bytes as UTF-8 so multi-byte chars are never split.
+            const text = Buffer.concat(chunks).toString("utf8");
+            const m = text.match(/<title[^>]*>([\s\S]{1,400}?)<\/title>/i);
             if (m || total >= MAX_BYTES) {
               res.destroy();
               resolve(m ? cleanTitle(m[1]) : null);
@@ -85,7 +87,8 @@ export function fetchTitle(
           });
 
           res.on("end", () => {
-            const m = buf.match(/<title[^>]*>([\s\S]{1,400}?)<\/title>/i);
+            const text = Buffer.concat(chunks).toString("utf8");
+            const m = text.match(/<title[^>]*>([\s\S]{1,400}?)<\/title>/i);
             resolve(m ? cleanTitle(m[1]) : null);
           });
 

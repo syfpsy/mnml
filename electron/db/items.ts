@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { getDb } from "./index.js";
 
 export type ItemType = "text" | "image" | "link";
@@ -98,11 +99,29 @@ export function getById(id: number): Item | undefined {
 }
 
 export function deleteById(id: number): void {
-  getDb().prepare("DELETE FROM items WHERE id = ?").run(id);
+  const db = getDb();
+  const row = db
+    .prepare<[number], { image_path: string | null }>("SELECT image_path FROM items WHERE id = ?")
+    .get(id);
+  db.prepare("DELETE FROM items WHERE id = ?").run(id);
+  if (row?.image_path) {
+    try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
+  }
 }
 
 export function clearAll(): void {
-  getDb().exec("DELETE FROM items");
+  const db = getDb();
+  const rows = db
+    .prepare<[], { image_path: string | null }>(
+      "SELECT image_path FROM items WHERE image_path IS NOT NULL",
+    )
+    .all();
+  db.exec("DELETE FROM items");
+  for (const row of rows) {
+    if (row.image_path) {
+      try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
+    }
+  }
 }
 
 export function updateTitle(id: number, title: string): void {
@@ -111,25 +130,23 @@ export function updateTitle(id: number, title: string): void {
     .run(title, id);
 }
 
-export function countAll(): number {
-  const row = getDb()
-    .prepare<[], { c: number }>("SELECT COUNT(*) as c FROM items")
-    .get();
-  return row?.c ?? 0;
-}
-
 export function trimToMax(max: number): { deletedIds: number[] } {
   const db = getDb();
   // Pinned items never get pruned. Apply the limit only to unpinned ones.
   const rows = db
-    .prepare<[number], { id: number }>(
-      "SELECT id FROM items WHERE pinned_at IS NULL ORDER BY updated_at DESC LIMIT -1 OFFSET ?",
+    .prepare<[number], { id: number; image_path: string | null }>(
+      "SELECT id, image_path FROM items WHERE pinned_at IS NULL ORDER BY updated_at DESC LIMIT -1 OFFSET ?",
     )
     .all(max);
   const ids = rows.map((r) => r.id);
   if (ids.length === 0) return { deletedIds: [] };
   const placeholders = ids.map(() => "?").join(",");
   db.prepare(`DELETE FROM items WHERE id IN (${placeholders})`).run(...ids);
+  for (const row of rows) {
+    if (row.image_path) {
+      try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
+    }
+  }
   return { deletedIds: ids };
 }
 

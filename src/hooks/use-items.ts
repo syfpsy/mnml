@@ -12,7 +12,6 @@ interface Options {
 // and debounces search queries so typing stays smooth.
 export function useItems({ query, type, limit }: Options) {
   const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
   const [rev, setRev] = useState(0);
   const seq = useRef(0);
 
@@ -21,7 +20,6 @@ export function useItems({ query, type, limit }: Options) {
 
   useEffect(() => {
     const current = ++seq.current;
-    setLoading(true);
 
     const run = async () => {
       const results = query.trim()
@@ -29,7 +27,6 @@ export function useItems({ query, type, limit }: Options) {
         : await bridge.listRecent(limit, type);
       if (current !== seq.current) return;
       setItems(results);
-      setLoading(false);
     };
 
     const timer = setTimeout(run, query.trim() ? 110 : 0);
@@ -57,5 +54,5 @@ export function useItems({ query, type, limit }: Options) {
     );
   }), []);
 
-  return { items, loading, setItems, refetch };
+  return { items, setItems, refetch };
 }

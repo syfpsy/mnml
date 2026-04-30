@@ -8,6 +8,7 @@ import { markIndexDirty } from "../search/service.js";
 import { sha1 } from "../utils/hash.js";
 import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
+import { log } from "../utils/log.js";
 
 type Listener = (item: Item) => void;
 
@@ -114,7 +115,7 @@ function poll() {
     }
   } catch (err) {
     // keep polling even if one read fails
-    console.error("[clipboard] poll error", err);
+    log("[clipboard] poll error:", String(err));
   }
 }
 

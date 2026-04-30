@@ -13,11 +13,6 @@ export function timeAgo(ms: number): string {
   return `${months}mo`;
 }
 
-export function truncate(s: string, n: number): string {
-  if (s.length <= n) return s;
-  return s.slice(0, n).trimEnd() + "…";
-}
-
 /**
  * Split `text` into [chunk, isMatch] pairs for query-term highlighting.
  * Tokens shorter than 2 chars are ignored to avoid noise.

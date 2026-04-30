@@ -1,5 +1,25 @@
 # mnml Changelog
 
+## v0.2.5 — 2026-04-30
+
+### Fixed
+- **Image files now deleted from disk** when items are removed manually, pruned by the max-items limit, or wiped via "Clear history". Previously only the DB row was removed and PNG files accumulated indefinitely.
+- **Escape in Settings no longer hides the window** — pressing Escape while the settings panel is open now only closes the panel. Previously the global Escape handler also fired, making the whole window disappear.
+- **Link titles with non-ASCII characters** (umlauts, Chinese, emoji, etc.) now decode correctly. The HTTP title fetcher was decoding bytes as Latin-1; it now buffers raw bytes and decodes as UTF-8.
+- Clipboard poll errors now route through the structured log file instead of `console.error`.
+
+### Removed
+- Dead code: `countAll()` (db/items), `truncate()` (lib/format), `loading` state (use-items hook), unused `--scrollbar`/`--scrollbar-h` CSS variables.
+
+---
+
+## v0.2.4 — 2026-04-30
+
+Internal build bump — no user-facing changes.
+
+---
+
+
 ## v0.2.3 — 2026-04-30
 
 ### Fixed

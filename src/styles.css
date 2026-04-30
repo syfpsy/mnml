@@ -15,8 +15,6 @@
   --t1:           #e5e5e5;
   --t2:           #636363;
   --t3:           #404040;
-  --scrollbar:    rgba(255, 255, 255, 0.10);
-  --scrollbar-h:  rgba(255, 255, 255, 0.18);
 
   /* Map HeroUI semantic vars → our dark palette */
   --foreground:         var(--t1);
@@ -40,8 +38,6 @@ html.light {
   --t1:           #111111;
   --t2:           #888888;
   --t3:           #bbbbbb;
-  --scrollbar:    rgba(0, 0, 0, 0.12);
-  --scrollbar-h:  rgba(0, 0, 0, 0.20);
 
   /* Map HeroUI semantic vars → our light palette */
   --foreground:         var(--t1);

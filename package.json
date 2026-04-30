@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "node scripts/bump-version.mjs && tsc -b && vite build && electron-builder",
     "build:dir": "node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --dir",
-    "build:publish": "tsc -b && vite build && electron-builder --publish always",
+    "build:publish": "vite build && electron-builder --publish always",
     "postinstall": "electron-rebuild -f -o better-sqlite3",
     "rebuild": "electron-rebuild -f -o better-sqlite3"
   },

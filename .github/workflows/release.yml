@@ -1,6 +1,6 @@
 name: Release
 
-# Triggers when a version tag is pushed (e.g. v0.2.1)
+# Triggers when a version tag is pushed (e.g. v0.2.5)
 on:
   push:
     tags:
@@ -24,13 +24,19 @@ jobs:
       - name: Install dependencies
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          HEROUI_AUTH_TOKEN: ${{ secrets.HEROUI_AUTH_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
           npm ci
 
-      # build:publish skips bump-version.mjs — the version is whatever is
-      # already committed in package.json at the time the tag was pushed.
+      # Restore the heroui-pro dist from the vendored archive.
+      # The package's postinstall requires a licensed auth token to download
+      # the dist at install time; we vendor it instead so CI stays self-contained.
+      - name: Restore @heroui-pro/react dist
+        run: tar -xzf vendor/heroui-pro-react-dist.tgz -C node_modules/@heroui-pro/react
+
+      # build:publish skips bump-version.mjs and tsc — the version is whatever
+      # is already committed in package.json at the time the tag was pushed.
+      # Type-checking is done locally before tagging (npm run build).
       - name: Build & publish to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

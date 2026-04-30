@@ -10,6 +10,8 @@ jobs:
   release:
     runs-on: windows-latest
     timeout-minutes: 30
+    permissions:
+      contents: write   # required to create a GitHub Release and upload assets
 
     steps:
       - name: Checkout

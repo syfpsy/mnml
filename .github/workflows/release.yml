@@ -31,28 +31,11 @@ jobs:
       # Restore the heroui-pro dist from the vendored archive.
       # The package's postinstall requires a licensed auth token to download
       # the dist at install time; we vendor it instead so CI stays self-contained.
+      # The tarball also includes package.json, because the npm-published package
+      # ships without the exports map — the postinstall adds it after CDN download.
       - name: Restore @heroui-pro/react dist
         shell: bash
         run: tar -xzf vendor/heroui-pro-react-dist.tgz -C node_modules/@heroui-pro/react
-
-      # The package exports map has a wildcard entry for CSS:
-      #   "./css/components/*.css": "./dist/css/components/*.css"
-      # Some resolver/condition combinations don't match bare-string wildcard exports.
-      # Add an explicit conditional entry so @tailwindcss/vite always finds the file.
-      - name: Patch @heroui-pro/react CSS exports
-        shell: bash
-        run: |
-          node -e "
-          const fs = require('fs');
-          const f = 'node_modules/@heroui-pro/react/package.json';
-          const pkg = JSON.parse(fs.readFileSync(f, 'utf8'));
-          pkg.exports['./css/components/list-view.css'] = {
-            style:   './dist/css/components/list-view.css',
-            default: './dist/css/components/list-view.css'
-          };
-          fs.writeFileSync(f, JSON.stringify(pkg, null, 2));
-          console.log('patched @heroui-pro/react exports for list-view.css');
-          "
 
       # build:publish skips bump-version.mjs and tsc — the version is whatever
       # is already committed in package.json at the time the tag was pushed.

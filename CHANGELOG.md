@@ -1,5 +1,11 @@
 # mnml Changelog
 
+## v0.2.7 — 2026-04-30
+
+### Fixed
+- **Keyboard input now works immediately after summoning the window.** The opacity-0 / `showInactive()` approach kept the HWND permanently "shown" in the OS window stack, so `SetForegroundWindow` was silently rejected (Windows blocks focus-steal to already-visible windows). The window is now truly hidden (`win.hide()`) after every dismiss and shown with `win.show()` on each summon. Windows unconditionally grants foreground activation on a hidden→shown transition, so the search bar receives keyboard input the moment the window appears — no click required.
+
+
 ## v0.2.6 — 2026-04-30
 
 ### Fixed

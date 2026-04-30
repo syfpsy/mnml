@@ -240,13 +240,16 @@ function createWindow() {
     win.loadFile(path.join(process.env.DIST!, "index.html"));
   }
 
-  // Show the OS window once (invisibly) so the renderer is always live.
-  // All subsequent show/hide operations use setOpacity() — no paint flush.
+  // The renderer loads and stays live regardless of whether the OS window is
+  // visible — Electron runs the page with show:false.  We intentionally leave
+  // the window hidden here so that the first showWindow() call uses win.show()
+  // on a truly-hidden HWND.  Windows only bypasses focus-steal prevention on
+  // a hidden→shown transition; a window that is merely opacity-0 is still
+  // "shown" and SetForegroundWindow is silently rejected.
   win.webContents.once("did-finish-load", () => {
     if (!win || win.isDestroyed()) return;
     win.setIgnoreMouseEvents(true, { forward: true });
-    win.showInactive(); // show at opacity 0, no focus steal
-    log("[startup] window pre-shown (opacity 0)");
+    log("[startup] renderer ready");
   });
 }
 
@@ -260,7 +263,6 @@ function showWindow() {
   win.setBounds({ ...size, x, y });
   win.setAlwaysOnTop(true, "screen-saver");
 
-  // Reveal: no OS show/hide, just flip opacity and re-enable mouse events.
   windowShownAt = Date.now();
   windowVisible = true;
   win.setIgnoreMouseEvents(false);
@@ -269,14 +271,13 @@ function showWindow() {
   // Notify renderer (focuses search input, etc.)
   win.webContents.send(IPC.onVisibilityChanged, true);
 
-  // On Windows, win.focus() alone respects the OS "focus steal prevention"
-  // policy and silently fails when another app is in the foreground.
-  // app.focus({ steal: true }) bypasses that policy for clipboard-manager
-  // use-cases where the user explicitly triggered the hotkey.
-  app.focus({ steal: true });
-  win.focus();
-  // Belt-and-suspenders: a second focus attempt after 50 ms covers the narrow
-  // window where the OS finishes activating the process between the two calls.
+  // win.show() on a *hidden* HWND triggers ShowWindow(SW_SHOW), which Windows
+  // unconditionally grants foreground activation to — no focus-steal prevention
+  // applies, unlike SetForegroundWindow on an already-visible window.
+  // hideWindow() always calls win.hide() so this path is always hidden→shown.
+  win.show();
+  // Belt-and-suspenders: an extra focus nudge after 50 ms for the narrow race
+  // where the renderer hasn't committed the focused element yet.
   setTimeout(() => {
     if (!win || win.isDestroyed() || !windowVisible) return;
     win.focus();
@@ -291,26 +292,25 @@ function hideWindow() {
   blurLocked    = false;
   windowVisible = false;
 
-  win.setOpacity(0);
   win.setIgnoreMouseEvents(true, { forward: true });
 
   // Notify renderer
   win.webContents.send(IPC.onVisibilityChanged, false);
 
-  // Fire auto-paste if a restore was queued.
-  // setOpacity(0) alone does NOT transfer OS focus to the target app.
-  // Sequence: blur (tells OS to activate the previous window) → hide → paste.
   if (pastePending) {
+    // Auto-paste path: blur returns OS focus to the target app before we paste.
+    // Sequence: blur → hide → wait for focus to settle → paste.
     pastePending = false;
-    win.blur();   // signal OS: give focus back to whoever had it before us
-    win.hide();   // truly remove from the window stack
-    setTimeout(triggerPaste, 300);  // 300 ms is enough for focus to settle
-    setTimeout(() => {
-      if (!win || win.isDestroyed() || windowVisible) return;
-      win.setOpacity(0);
-      win.setIgnoreMouseEvents(true, { forward: true });
-      win.showInactive();
-    }, 700);
+    win.blur();
+    win.hide();
+    setTimeout(triggerPaste, 300);
+    // (No showInactive re-show needed — showWindow() will call win.show() on
+    // the hidden window, which guarantees foreground activation next time.)
+  } else {
+    // Normal hide (Escape / click-outside).
+    // Truly hide so the next showWindow() operates on a hidden HWND and gets
+    // OS focus unconditionally via ShowWindow(SW_SHOW).
+    win.hide();
   }
 }
 

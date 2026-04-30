@@ -36,21 +36,50 @@ export default function App() {
     bridge.setMode(mode);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Focus search when window becomes visible.
-  // Small delay lets the OS finish transferring focus to the Electron window
-  // before we programmatically focus the input — without it the first keypress
-  // is swallowed on Windows.
+  // Focus the search input whenever the window becomes visible.
+  //
+  // Two-pronged strategy to cover every Windows timing scenario:
+  //
+  // 1. 80 ms timer  — fast path. Handles the common case where
+  //    app.focus({ steal: true }) + win.focus() in the main process already
+  //    transferred OS focus to Electron by the time the timer fires.
+  //
+  // 2. window "focus" event — slow path. Fires the moment the OS actually
+  //    hands focus to the Electron window. Catches cases where Windows delays
+  //    the grant (e.g. focus-steal prevention kicking in despite the steal
+  //    flag, or the 50 ms retry in main not yet having fired).
+  //
+  // Both paths are cleaned up when the window hides again so they don't
+  // linger and fire on unrelated future focus events.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const focusInput = () => {
+      const el = document.querySelector<HTMLInputElement>("input[aria-label='Search clipboard']");
+      el?.focus();
+      el?.select();
+    };
+
+    const onWindowFocus = () => focusInput();
+
     const off = bridge.onVisibilityChanged((visible) => {
+      // Cancel any pending work from a previous show cycle.
+      if (timer !== null) { clearTimeout(timer); timer = null; }
+      window.removeEventListener("focus", onWindowFocus);
+
       if (visible) {
-        setTimeout(() => {
-          const el = document.querySelector<HTMLInputElement>("input[aria-label='Search clipboard']");
-          el?.focus();
-          el?.select();
-        }, 80);
+        timer = setTimeout(focusInput, 80);
+        // { once } so this auto-removes after the first fire and doesn't
+        // re-focus on every subsequent alt-tab while the window is open.
+        window.addEventListener("focus", onWindowFocus, { once: true });
       }
     });
-    return off;
+
+    return () => {
+      off();
+      if (timer !== null) clearTimeout(timer);
+      window.removeEventListener("focus", onWindowFocus);
+    };
   }, []);
 
   // Esc always hides.

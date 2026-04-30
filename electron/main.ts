@@ -269,9 +269,14 @@ function showWindow() {
   // Notify renderer (focuses search input, etc.)
   win.webContents.send(IPC.onVisibilityChanged, true);
 
+  // On Windows, win.focus() alone respects the OS "focus steal prevention"
+  // policy and silently fails when another app is in the foreground.
+  // app.focus({ steal: true }) bypasses that policy for clipboard-manager
+  // use-cases where the user explicitly triggered the hotkey.
+  app.focus({ steal: true });
   win.focus();
-  // Belt-and-suspenders: a second focus attempt after 50 ms handles the rare
-  // Windows race where focus is initially denied to a background process.
+  // Belt-and-suspenders: a second focus attempt after 50 ms covers the narrow
+  // window where the OS finishes activating the process between the two calls.
   setTimeout(() => {
     if (!win || win.isDestroyed() || !windowVisible) return;
     win.focus();

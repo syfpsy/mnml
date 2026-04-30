@@ -1,5 +1,11 @@
 # mnml Changelog
 
+## v0.2.6 — 2026-04-30
+
+### Fixed
+- **Search bar now reliably auto-focuses** when the window appears. The previous approach called `win.focus()` which Windows silently ignores for background processes (focus-steal prevention). Fixed with two changes: the main process now calls `app.focus({ steal: true })` to explicitly request foreground activation, and the renderer adds a `window "focus"` event listener as a fallback that fires the input focus the instant the OS hands focus to Electron — instead of relying solely on a fixed 80 ms delay that could fire before focus arrived.
+
+
 ## v0.2.5 — 2026-04-30
 
 ### Fixed

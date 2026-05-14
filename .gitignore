@@ -8,3 +8,8 @@ Thumbs.db
 .vite/
 
 .vercel
+
+# The installer is built locally + uploaded to Vercel via `vercel --prod`.
+# Too large to track in git (~80 MB binary). Live at site/mnml-setup.exe
+# in production; rebuilt from source via `npm run build`.
+site/mnml-setup.exe

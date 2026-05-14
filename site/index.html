@@ -3,20 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>mnml — a keyboard-first clipboard for Windows</title>
+  <title>mnml: a keyboard-first clipboard for Windows</title>
 
   <meta name="description" content="A 440×540 overlay window for clipboard history, saved snippets, and an apps + Windows Settings launcher. Press Alt twice. Local SQLite. No telemetry." />
-  <meta name="theme-color" content="#0e0f12" />
+  <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="mnml — a keyboard-first clipboard for Windows" />
+  <!-- Open Graph
+       PNG is the cross-platform safe choice: Twitter/X explicitly rejects
+       SVG og:image, and several other unfurlers handle it inconsistently.
+       The SVG is kept around for environments that prefer it; the PNG is
+       the declared og:image and twitter:image. -->
+  <meta property="og:title" content="mnml: a keyboard-first clipboard for Windows" />
   <meta property="og:description" content="Press Alt twice. Paste from history, launch apps, jump to Windows Settings, save reusable snippets. Local SQLite. No telemetry." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://syfpsy.github.io/mnml/" />
-  <meta property="og:image" content="https://syfpsy.github.io/mnml/og.svg" />
+  <meta property="og:url" content="https://mnml-bay.vercel.app/" />
+  <meta property="og:image" content="https://mnml-bay.vercel.app/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="mnml — a keyboard-first clipboard for Windows. Press Alt twice." />
   <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:image" content="https://mnml-bay.vercel.app/og.png" />
+  <meta property="twitter:image:alt" content="mnml — a keyboard-first clipboard for Windows. Press Alt twice." />
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+  <!-- Apply the saved theme before first paint to avoid a flash of the wrong
+       palette. localStorage > prefers-color-scheme > dark default. -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("mnml-theme");
+        var prefersLight = window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: light)").matches;
+        var wantsLight = stored ? stored === "light" : prefersLight;
+        document.documentElement.classList.toggle("light", wantsLight);
+      } catch (_) { /* private mode etc. — fall through to dark */ }
+    })();
+  </script>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -24,10 +49,23 @@
     <a class="wordmark" href="#top" aria-label="mnml home">
       <span class="dot" aria-hidden="true"></span>mnml
     </a>
-    <nav>
-      <a href="https://github.com/syfpsy/mnml" rel="noreferrer">GitHub</a>
-      <a href="https://github.com/syfpsy/mnml/releases/latest" rel="noreferrer">Releases</a>
-    </nav>
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="Switch to light theme"
+      aria-pressed="false"
+    >
+      <!-- Moon (shown in dark mode — click to go light) -->
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <!-- Sun (shown in light mode — click to go dark) -->
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+    </button>
   </header>
 
   <main id="top">
@@ -45,21 +83,21 @@
           No telemetry.
         </p>
         <div class="cta">
-          <a class="btn primary" id="download-link" href="https://github.com/syfpsy/mnml/releases/latest" data-reveal>
+          <a class="btn primary" id="download-link" href="mnml-setup.exe" data-reveal>
             <span class="btn-label">Download for Windows</span>
-            <span class="btn-meta" id="download-meta">latest installer</span>
-          </a>
-          <a class="btn ghost" href="https://github.com/syfpsy/mnml" rel="noreferrer" data-reveal>
-            View source
+            <span class="btn-meta">.exe installer · Windows 10 / 11 · x64</span>
           </a>
         </div>
         <p class="hero-foot">
-          Windows 10 / 11 · x64 · <a href="https://github.com/syfpsy/mnml/blob/main/LICENSE" rel="noreferrer">MIT</a>
+          Free and MIT-licensed. Installs in seconds, uninstalls cleanly.
         </p>
       </div>
 
-      <!-- Live-looking recreation of the actual 440 × 540 window. -->
-      <aside class="demo" aria-label="Preview of the mnml overlay window">
+      <!-- Live-looking recreation of the actual 440 × 540 window.
+           `inert` on the wrapping <aside> removes the whole subtree from focus
+           order and pointer events. Sighted users still see it; keyboard users
+           don't tab-trap into the six buttons inside the preview. -->
+      <aside class="demo" aria-label="Preview of the mnml overlay window" inert>
         <div class="window">
           <div class="search-bar">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dim">
@@ -72,7 +110,10 @@
             </button>
           </div>
 
-          <div class="tabs" role="tablist" aria-label="Categories">
+          <!-- Decorative tab strip; no `role="tablist"` because the buttons
+               aren't real tabs (they don't have role="tab"/aria-selected/
+               aria-controls). Inert anyway. -->
+          <div class="tabs">
             <button class="tab on">All</button>
             <button class="tab">Text</button>
             <button class="tab">Links</button>
@@ -93,7 +134,7 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
               </div>
               <div class="body">
-                <span class="title">Tailwind v4 — <mark>design</mark> tokens guide</span>
+                <span class="title">Tailwind v4: <mark>design</mark> tokens guide</span>
                 <span class="sub">tailwindcss.com</span>
               </div>
               <span class="when">17m</span>
@@ -109,13 +150,16 @@
             <div class="row text">
               <div class="ico" data-kind="text"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg></div>
               <div class="body">
-                <span class="title">npm run release · ships to GitHub Releases</span>
+                <span class="title">npm run build · ships to local installer</span>
               </div>
               <span class="when">3h</span>
             </div>
           </div>
 
-          <h3 class="section-h">Saved</h3>
+          <!-- The faux section labels inside the demo were <h3>s, which broke
+               heading hierarchy (they appeared before the page's first <h2>).
+               Demoted to <p>; styling is by class. -->
+          <p class="section-h">Saved</p>
           <div class="rows tight">
             <div class="row saved">
               <div class="ico" data-kind="saved">
@@ -123,7 +167,7 @@
               </div>
               <div class="body">
                 <span class="title">Email signature</span>
-                <span class="sub">Best, Seyfi · github.com/syfpsy</span>
+                <span class="sub">Best, Seyfi · syfpsy</span>
               </div>
             </div>
             <div class="row saved">
@@ -137,7 +181,7 @@
             </div>
           </div>
 
-          <h3 class="section-h">Apps &amp; Settings</h3>
+          <p class="section-h">Apps &amp; Settings</p>
           <div class="rows tight">
             <div class="row app">
               <div class="ico" data-kind="app">
@@ -175,7 +219,7 @@
           <span class="n">01</span>
           <div>
             <h3>One window</h3>
-            <p>440 × 540. One tab strip. Categories filter clipboard items, snippets, apps, and Windows Settings — all in the same surface.</p>
+            <p>440 × 540. One tab strip. Categories filter clipboard items, snippets, apps, and Windows Settings, all in the same surface.</p>
           </div>
         </li>
         <li>
@@ -196,7 +240,7 @@
           <span class="n">04</span>
           <div>
             <h3>Local only</h3>
-            <p>SQLite on disk. No accounts, no cloud, no telemetry, no analytics. The auto-updater pings GitHub Releases once a day; nothing else leaves your machine.</p>
+            <p>SQLite on disk. No accounts, no cloud, no telemetry, no analytics. A daily update check is the only outbound request. Nothing else leaves your machine.</p>
           </div>
         </li>
       </ol>
@@ -209,7 +253,7 @@
       <div class="feature">
         <div class="feature-head">
           <span class="feature-tag tag-clipboard">Clipboard</span>
-          <h3>Text, links, images — searchable</h3>
+          <h3>Searchable text, links, images</h3>
         </div>
         <p>
           Whatever you copy lands in the history. Text, URLs (with favicons),
@@ -228,7 +272,7 @@
           Save anything: email signatures, regex patterns, command-line
           incantations, addresses. Hover any clipboard row to one-click save
           it as a snippet, or write a new one with a label and content.
-          Snippets live in their own SQLite table — they don't rotate out.
+          Snippets live in their own SQLite table; they don't rotate out.
         </p>
       </div>
 
@@ -287,20 +331,19 @@
     <section class="install" data-reveal>
       <h2>Get it</h2>
       <p class="install-lede">One installer. No setup, no account, no first-run wizard.</p>
-      <a class="btn primary big" href="https://github.com/syfpsy/mnml/releases/latest" id="download-link-2">
+      <a class="btn primary big" href="mnml-setup.exe" id="download-link-2">
         <span class="btn-label">Download for Windows</span>
-        <span class="btn-meta" id="download-meta-2">latest installer</span>
+        <span class="btn-meta">.exe installer · Windows 10 / 11 · x64</span>
       </a>
       <p class="install-alt">
-        Prefer the binaries page? <a href="https://github.com/syfpsy/mnml/releases" rel="noreferrer">All releases</a>.
-        Or build from source: <code>npm install &amp;&amp; npm run build</code>.
+        Free, MIT-licensed, ~70 MB installed. Uninstall any time via Windows Settings.
       </p>
     </section>
   </main>
 
   <footer class="page-foot">
     <span><span class="dot" aria-hidden="true"></span>mnml</span>
-    <span class="dim"><span id="version-stamp">v0.2.31</span> · MIT · <a href="https://github.com/syfpsy/mnml">github.com/syfpsy/mnml</a></span>
+    <span class="dim">MIT licensed · built for Windows</span>
   </footer>
 
   <script src="main.js" defer></script>

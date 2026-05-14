@@ -1,22 +1,27 @@
 # mnml landing site
 
-Self-contained static page at `site/index.html`. No build step — pure HTML, one CSS file, one short JS file. Hosted on GitHub Pages.
+Self-contained static page at `site/index.html`. No build step — pure HTML, one CSS file, one short JS file. Hosted on Vercel.
 
 ## What's here
 
 | File | Purpose |
 |---|---|
-| `index.html`   | Page markup. Hero, faux compact-view demo, four principles, three feature blocks, specs grid, install CTA, footer. |
-| `styles.css`   | Token system (mirrors the desktop app) + layout. ~500 lines. |
-| `main.js`      | Two effects: fetch the latest GitHub Release on load and rewrite the download buttons; reveal sections on scroll. Page works fully without JS — the static download link points to `releases/latest`. |
+| `index.html`   | Page markup. Hero, faux compact-view demo, four principles, three feature blocks, specs grid, install CTA, footer. Theme toggle in header. |
+| `styles.css`   | Token system (mirrors the desktop app) + layout. Dark + light themes via `html.light` class. ~550 lines. |
+| `main.js`      | Two effects: theme toggle (persists to localStorage, follows system preference until the user picks) and reveal-on-scroll for `[data-reveal]` sections. Page works fully without JS. |
 | `favicon.svg`  | 32×32 emerald dot on the cool-tinted dark bg. |
-| `og.svg`       | 1200×630 Open Graph card. SVG renders identically in all link unfurlers Pages serves through CDN. |
+| `og.svg`       | 1200×630 Open Graph card. SVG renders identically in every link unfurler Vercel serves through its CDN. |
+| `mnml-setup.exe` | The actual installer. Not in git (binary). Drop the latest build here when you ship; the page links to it directly via `<a href="mnml-setup.exe">`. |
 
-The download buttons fetch the latest release's `.exe` asset and stamp version + size + date — so you don't have to edit the page when you ship `npm run release`.
+The download buttons are static `<a>` links to a local `mnml-setup.exe`. No GitHub Releases fetching — the page works against a private repo because the binary is served from the same origin as the site.
+
+## Themes
+
+Dark by default. Light mode is a full token override under `html.light` — body, demo widget, kbd pills, code blocks all theme. The header toggle persists the choice to `localStorage` under `mnml-theme`. If the user has never clicked it, the page follows `prefers-color-scheme` and updates live when the OS theme changes.
 
 ## Local preview
 
-Any static server works. Two zero-install options:
+Any static server works:
 
 ```powershell
 # Python (already on most machines)
@@ -31,21 +36,7 @@ npx --yes http-server -p 8080
 
 ## Deploy
 
-The site is hosted on **Vercel**. Project config is at `vercel.json` in the repo root: no build step, `outputDirectory: "site"`, immutable cache on images, short cache on CSS/JS.
-
-### Auto-deploy
-
-Once the Vercel project is linked to the GitHub repo (one-time, via the Vercel dashboard's **Git** tab → connect the `syfpsy/mnml` repo), every push to `master` redeploys. The `site/` folder is the build output; the rest of the repo is ignored.
-
-### Manual deploy
-
-From a local checkout:
-
-```powershell
-vercel --prod
-```
-
-The CLI uploads the project files directly (doesn't need a GitHub push first), so you can preview production-builds before committing.
+The site is hosted on **Vercel**. Project config is at `vercel.json` in the repo root: no build step, `outputDirectory: "site"`, immutable cache on images, short cache on CSS/JS. Production deploys happen via `vercel --prod` from a local checkout — never automatic, never unprompted.
 
 ### Custom domain
 

@@ -81,12 +81,15 @@ export function SavedList({
   return (
     <div className="mt-1 mnml-no-drag">
       <div className="flex items-center justify-between px-2 py-1">
-        <h3
+        {/* Section label, not a document-outline heading. The compact view
+            has no h1/h2 above this; promoting to h3 created a heading-level
+            skip. <p> with styling is the honest choice. */}
+        <p
           className="text-[11px] font-medium uppercase tracking-wide m-0"
           style={{ color: "var(--t3)" }}
         >
           Snippets
-        </h3>
+        </p>
         <button
           type="button"
           aria-label={adding ? "Cancel adding snippet" : "Add new snippet"}
@@ -322,7 +325,7 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
           type="submit"
           disabled={!content.trim()}
           className="text-[11px] px-2.5 py-1 rounded-md font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: "var(--accent-saved-bg)", color: "var(--accent-saved)" }}
+          style={{ background: "var(--accent-saved-bg)", color: "var(--accent-saved-text)" }}
         >
           Save
         </button>

@@ -38,7 +38,7 @@
           font-size="22" font-weight="600" fill="#e8e8e6">Alt + Alt</text>
   </g>
 
-  <!-- Bottom-left version stamp -->
+  <!-- Bottom-left tagline -->
   <text x="120" y="570" font-family="Cascadia Code, Consolas, ui-monospace, monospace"
-        font-size="20" fill="#7e7e85">github.com/syfpsy/mnml</text>
+        font-size="20" fill="#7e7e85">local · keyboard-first · MIT</text>
 </svg>

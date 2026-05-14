@@ -81,12 +81,14 @@ export function AppResultsList({
 
   return (
     <div className="mt-1 mnml-no-drag">
-      <h3
+      {/* Section label, not a document-outline heading. See the matching
+          comment in `saved-list.tsx` for why this is <p>. */}
+      <p
         className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide m-0"
         style={{ color: "var(--t3)" }}
       >
         Apps &amp; Settings
-      </h3>
+      </p>
 
       <ul
         ref={listRef}

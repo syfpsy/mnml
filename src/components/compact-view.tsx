@@ -156,7 +156,12 @@ export function CompactView({ onThemeChange }: Props) {
     (appResults.length === 0 && !appSearch.isSearching);
 
   return (
-    <div className="relative flex flex-col h-full">
+    <div className="relative h-full">
+    {/* The non-modal subtree is `inert`-ed whenever Settings is open. Pairs
+        with the `aria-modal="true"` on <SettingsPanel> so focus, pointer,
+        and assistive-tech navigation can't leak from the sheet into the
+        compact view underneath. */}
+    <div className="flex flex-col h-full" inert={settingsOpen}>
 
       {/* Header */}
       <div className="mnml-drag px-2.5 pt-2 pb-2 flex items-center gap-2">
@@ -276,6 +281,7 @@ export function CompactView({ onThemeChange }: Props) {
         <span>Click to paste · Shift-click to copy</span>
         <span>Alt Alt to toggle</span>
       </div>
+    </div>{/* /inert subtree */}
 
       {settingsOpen && (
         <SettingsPanel

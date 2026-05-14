@@ -32,12 +32,22 @@
   --accent-danger-bg:  rgba(239, 68, 68, 0.08);
   --accent-pinned:     #f59e0b;
 
+  /* Text-on-tint variants — same value as the base accent in dark mode
+     (the bright forms read fine against any dark surface), darker variants
+     in light mode where the base would fail WCAG AA. Use the base for
+     graphical surfaces (icon tiles, rings, dots — 3:1 threshold) and the
+     `-text` variant for any small text overlay (4.5:1 threshold). */
+  --accent-app-text:   #34d399;
+  --accent-saved-text: #38bdf8;
+
   /* Clipboard-item category tints. */
   --accent-text:           #60a5fa;
+  --accent-text-text:      #60a5fa;
   --accent-text-bg:        rgba(96,165,250,0.10);
   --accent-text-row:       rgba(96,165,250,0.04);
   --accent-text-row-hover: rgba(96,165,250,0.08);
   --accent-link:           #a78bfa;
+  --accent-link-text:      #a78bfa;
   --accent-link-bg:        rgba(167,139,250,0.10);
   --accent-link-row:       rgba(167,139,250,0.04);
   --accent-link-row-hover: rgba(167,139,250,0.08);
@@ -78,16 +88,26 @@ html.light {
   --border-focus: rgba(0, 0, 0, 0.45);
   /* Calibrated for WCAG AA against light `--bg`. */
   --t1:           #15151a;   /* ~ 16 : 1 */
-  --t2:           #5f5f66;   /* ~ 5.5 : 1 */
-  --t3:           #76767a;   /* ~ 4.6 : 1 */
+  --t2:           #565660;   /* ~ 6.9 : 1  — bumped from #5f5f66 for clearer hierarchy */
+  --t3:           #69696f;   /* ~ 5.1 : 1  — bumped from #6c6c75 for honest margin */
 
   --accent-app:        #10b981;
   --accent-app-bg:     rgba(16, 185, 129, 0.12);
   --accent-saved:      #0284c7;
-  --accent-saved-bg:   rgba(2, 132, 199, 0.12);
+  --accent-saved-bg:   rgba(2, 132, 199, 0.10);  /* was 0.12 — matched to site for consistency */
   --accent-danger:     #dc2626;
   --accent-danger-bg:  rgba(220, 38, 38, 0.10);
   --accent-pinned:     #d97706;
+
+  /* Text-on-tint variants — light-mode-only darker shades for AA on the
+     tinted backgrounds. Each base accent passes 3:1 (graphical), but small
+     text needs 4.5:1, so we ship a darker text-variant. Dark mode keeps the
+     base values (defined in `:root` above) since the bright forms read fine
+     on any dark surface. */
+  --accent-app-text:   #047857;   /* emerald-700 — 5.3:1 vs --bg, 4.7:1 vs tinted bg */
+  --accent-saved-text: #075985;   /* sky-800     — 5.6:1 vs tinted bg in app, 6.0:1 in site */
+  --accent-text-text:  #1e3a8a;   /* blue-900    — 9.8:1 vs --bg, 7.4:1 vs tinted bg */
+  --accent-link-text:  #5b21b6;   /* violet-800  — 8.5:1 vs --bg, 6.5:1 vs tinted bg */
 
   /* Slightly more saturated category tints in light mode to keep the
      row-tint perceptible against the warm `#fafaf8` bg. */
@@ -150,6 +170,16 @@ textarea:focus-visible,
 [role="grid"]:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+/* ── Placeholders ─────────────────────────────────────────────────────────────
+   Pin placeholder text to `--t3` instead of the browser default (currentColor
+   at ~50%) so it reads as a deliberate hint in both themes — particularly
+   important in light mode where 50% of `--t1` falls under AA. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--t3);
+  opacity: 1;
 }
 
 #root {

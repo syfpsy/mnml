@@ -11,6 +11,15 @@ interface Props {
 export function SettingsPanel({ onClose, onThemeChange }: Props) {
   const { settings, update } = useSettings();
   const [confirmClear, setConfirmClear] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the sheet on open. Pairs with the `inert` attribute on
+  // <CompactView>'s non-modal subtree (set in compact-view.tsx) — together
+  // they form a proper modal: focus enters the dialog, can't escape until
+  // close, and the rest of the window is silenced for assistive tech.
+  useEffect(() => {
+    closeBtnRef.current?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
@@ -60,6 +69,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
             Settings
           </h2>
           <button
+            ref={closeBtnRef}
             type="button"
             aria-label="Close"
             onClick={onClose}
@@ -160,6 +170,13 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
  * Toggle — plain button + `role="switch"`. Replaces HeroUI's `Switch.Root`
  * to drop the entire `@heroui/react` dependency. ~40 lines vs. a multi-MB
  * library; identical to the user.
+ *
+ * Sizing: 40 × 24 track, 20 × 20 thumb, 2 px padding. 24 px height meets
+ * WCAG 2.5.8 (Target Size — Minimum) which the previous 18 px height failed.
+ *
+ * Animation: thumb position is driven by `transform: translateX()`, not
+ * `left`. Transform is composited and doesn't trigger reflow; animating
+ * `left` was a layout-property animation the design laws prohibit.
  */
 function Toggle({ isSelected, onChange, label }: {
   isSelected: boolean;
@@ -173,20 +190,22 @@ function Toggle({ isSelected, onChange, label }: {
       aria-checked={isSelected}
       aria-label={label}
       onClick={() => onChange(!isSelected)}
-      className="relative inline-flex items-center w-8 h-[18px] rounded-full transition-colors"
+      className="relative inline-flex items-center w-10 h-6 rounded-full transition-colors"
       style={{
         background: isSelected ? "var(--accent-app)" : "var(--item-active)",
       }}
     >
       <span
         aria-hidden
-        className="absolute top-[2px] w-[14px] h-[14px] rounded-full transition-all"
+        className="absolute top-[2px] left-[2px] w-5 h-5 rounded-full"
         style={{
           // The thumb wants the inverse of the track colour. Use `--bg`
           // (themed) instead of the literal dark hex so the thumb looks
           // right in both themes.
           background: isSelected ? "var(--bg)" : "var(--t2)",
-          left: isSelected ? "16px" : "2px",
+          transform: isSelected ? "translateX(16px)" : "translateX(0)",
+          transition:
+            "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease",
         }}
       />
     </button>

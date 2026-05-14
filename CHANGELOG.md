@@ -1,5 +1,51 @@
 # mnml Changelog
 
+## v0.2.32 — 2026-05-15
+
+First public-website release. Audit passes 1 and 2 (21 findings) closed; landing site live at https://mnml-bay.vercel.app/ with a static `mnml-setup.exe` download served from the same origin. No new features; this is a UI polish + a11y + theming release.
+
+### Fixed (second audit pass: all 8 findings closed)
+- **`--accent-saved` repeated the same AA-fail pattern we fixed for `--accent-app` last cycle.** Light `#0284c7` on the tinted accent-bg landed at 3.1 : 1 (app) / 3.4 : 1 (site) — both below AA. Affected the "Save" submit button in the snippet-add form and the "Snippets" feature pill on the landing site. **Fix:** new `--accent-saved-text` token. Dark = `#38bdf8` (current), light = `#075985` (sky-800, ~5.6 : 1 on tinted bg). Repointed both usages.
+- **Pre-emptively split `--accent-link-text` (`#5b21b6`) and `--accent-text-text` (`#1e3a8a`)** to standardise the pattern. Repointed `.tag-clipboard` on the site. App-side usages are graphical-only (icon tiles, selection rings); kept on the base accents. The system now has a clear rule: `--accent-*` for graphical surfaces (3 : 1 threshold), `--accent-*-text` for small-text overlays (4.5 : 1 threshold).
+- **Settings modal wasn't truly modal.** `aria-modal="true"` was declared but tab order leaked into the search bar / tabs / list behind the scrim, and there was no autofocus on open. **Fix:** initial focus moves to the X close button via `useEffect` + ref. The non-modal subtree of `<CompactView>` gets `inert={settingsOpen}` so focus, pointer, and assistive-tech navigation can't escape the sheet. Browser support: Chrome 102+, Safari 15.5+, Firefox 112+ (well within Electron 33's Chromium 130).
+- **Heading hierarchy started at `<h3>` in compact view.** `app-results-list` and `saved-list` declared `<h3>` for their section labels with no `<h1>` or `<h2>` above. **Fix:** demoted both to `<p>` with the existing class-based styling. Mirrors the same demote the demo widget on the site received in the previous audit pass.
+- **OG image was SVG-only.** Twitter/X explicitly rejects SVG for cards, so the link rendered blank when shared there. **Fix:** generated `site/og.png` (1200 × 630, 71 KB, rasterised from `og.svg` via `npx sharp-cli`). Pointed `og:image` and the new `twitter:image` at the PNG. Added `og:image:width` / `:height` / `:alt` and `twitter:image:alt` meta tags. The SVG stays around for environments that prefer it.
+- **Light `--bg-raised` drifted between app and site.** App was `#f0f0ec` (warm cream, anti-AI-slop), site was `#ffffff` (pure white, on the design-laws watchlist). **Fix:** site now mirrors the app at `#f0f0ec`. The demo widget in light mode now matches the actual product surface.
+- **App `--accent-saved-bg` alpha drift.** App had `0.12`, site had `0.10`. **Fix:** app dropped to `0.10` to match.
+- **Light `--t3` contrast comment overstated the margin.** Real measurement was 4.81 : 1 (claimed ~5.0). **Fix:** bumped from `#6c6c75` to `#69696f` in both files for an honest ~5.1 : 1.
+
+### Fixed (first audit pass: all 13 findings closed)
+- **`--accent-app` failed WCAG AA as text in light mode.** Light `#059669` had only ~3.2 : 1 against the tinted accent-bg, failing AA (4.5 : 1) for small text. Affected the principle numbers (`.principle-list .n`), the "Launcher" feature tag, and (via opacity blending) the download-button meta line. **Fix:** new `--accent-app-text` token. Same bright emerald (`#34d399`) in dark mode, darker emerald-700 (`#047857`, ~5.3 : 1 vs `--bg`, ~4.7 : 1 vs tinted bg) in light mode. Repointed the three text usages; left `--accent-app` for graphical uses (button bg, dot, glow) which only need 3 : 1.
+- **Em dashes in user-visible site copy.** Five occurrences in hero/principles/features plus the page title and OG title. The absolute-bans list forbids em dashes everywhere a user sees them. Rewritten with colons, commas, semicolons, and period splits. The title is now "mnml: a keyboard-first clipboard for Windows".
+- **Demo widget keyboard trap.** The faux preview in the hero contained six interactive `<button>` elements (clear-X + 5 category tabs) that were in the natural tab order and led to dead-ends. **Fix:** `inert` attribute on the wrapping `<aside class="demo">`. The whole subtree is now non-focusable and click-inert but still rendered and announceable. Stripped the misleading `role="tablist"` from the inner tab strip (the buttons inside don't have `role="tab"` / `aria-selected` / `aria-controls`, so the contract was broken anyway).
+- **Heading hierarchy violation in the demo.** Two `<h3 class="section-h">` elements ("Saved", "Apps & Settings") appeared inside the hero `<aside>` before the page's first `<h2>`, breaking the h1 → h2 → h3 outline. **Fix:** demoted to `<p class="section-h">`. Styling is by class, so visuals are unchanged.
+- **Settings toggle thumb animated `left` (a layout property).** Triggers reflow + paint on every frame instead of compositing. **Fix:** `transform: translateX(0 / 16px)` with an explicit `transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease`. Dropped the broad `transition-all` that was sweeping in `left`.
+- **Settings toggle target size (32 × 18 px) below WCAG 2.5.8 minimum (24 × 24).** **Fix:** track bumped to 40 × 24, thumb 20 × 20, 2 px padding. Visually similar; meets AA target size.
+- **Light `--t3` contrast was 4.57 : 1 (margin too thin against display variance).** **Fix:** bumped from `#76767a` (app) / `#6f6f78` (site) to `#6c6c75` in both files for a clean 5 : 1.
+- **Light `--t2` bumped on app side** from `#5f5f66` to `#565660` for stronger secondary-text hierarchy (~6.9 : 1, up from ~5.5 : 1). Mirrors what the site already shipped.
+- **`.btn-meta` opacity dropped from 0.72 to none.** Opacity-blending made effective contrast theme-sensitive (4.7 : 1 dark, 3.5 : 1 light). The size + weight contrast vs `.btn-label` already provides the visual hierarchy without dropping contrast.
+
+### Changed
+- **Theme toggle bumps to 40 × 40 on viewports ≤ 600 px** (was 34 × 34 everywhere). Above WCAG 2.5.8 baseline at both sizes; thumb-friendly on phones.
+- **Site header `backdrop-filter` decision documented** in CSS as a deliberate single-use exception to the glassmorphism ban. Added an `@supports not (backdrop-filter)` fallback that ups the background opacity so the header stays readable when the blur isn't honoured.
+- **Demoted legacy `docs/index.html` + `docs/screenshot.png`.** Pre-Vercel landing page from April; replaced by `site/`. Was already excluded from deploys via `.vercelignore`, but greppable / browsable. Kept `docs/bug-history.md` for institutional memory.
+- **Landing site: download buttons are now static links to a local `mnml-setup.exe`.** The old flow fetched `api.github.com/repos/syfpsy/mnml/releases/latest` on page load and rewrote the buttons to point at the latest `.exe` asset, with a version + size + date meta line. That flow stopped working when the repo went private (the GitHub API returns 404 for unauthenticated requests). New flow: `<a href="mnml-setup.exe">` served from the same origin as the page. The site no longer talks to GitHub at all.
+- **Landing site: removed every GitHub-repo link.** Header nav (GitHub, Releases), hero "View source" CTA, install-section "All releases" + "build from source" line, footer URL. The repo is private; advertising a 404 URL is worse than not linking. Header nav now hosts a single theme-toggle button.
+
+### Added
+- **Landing site: light theme + header toggle.** Full `html.light` token override mirroring the app's palette family — warm `#fafaf8` bg, calibrated `--t1/2/3` for AA, darker green primary accent (`#059669`) so dark text on the button still hits AAA. The toggle persists to `localStorage` under `mnml-theme`; if the user has never clicked it, the page follows `prefers-color-scheme` and updates live when the OS theme changes. Inline boot script sets the class before first paint so there's no flash of the wrong palette. Smooth 220 ms cross-theme transition on body / header / window / button.
+- **`--bg-elevated`, `--border-strong`, `--accent-app-strong`** site tokens — one notch above the existing tokens, used for kbd pills, inline code, and the demo glow in light mode where the dark-mode `--accent-app-bg` was too faint against warm cream.
+- **`--btn-primary-fg` token** (both app + site) — dark-text-on-green primary button colour. Was hardcoded `#0c1410` in the site button rule; now a token defined per-theme so the rule is theme-neutral.
+- **App + site `input::placeholder` rule pinned to `--t3`.** Browser default was 50 % `currentColor`, which in light mode landed around 3 : 1 against the warm bg (below AA). `--t3` is calibrated 5 : 1 in both themes.
+
+### Fixed
+- **Site OG card no longer prints the GitHub URL.** Bottom-left of `og.svg` was "github.com/syfpsy/mnml" — broken link for everyone who isn't an authenticated collaborator. Replaced with the tagline "local · keyboard-first · MIT".
+
+### Notes
+- No new dependencies. Theme toggle is ~30 lines of vanilla JS.
+- No production deploy from this change — the user said keep tweaking. The `vercel.json` + `.vercelignore` are unchanged.
+
+
 ## v0.2.31 — 2026-05-15
 
 Audit fixes — every P1 / P2 / P3 finding from the v0.2.30 audit landed.

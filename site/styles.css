@@ -1,22 +1,28 @@
-/* ── Tokens ──────────────────────────────────────────────────────────────────
+/* ── Tokens — dark (default) ─────────────────────────────────────────────────
    Same family the desktop app uses (`src/styles.css`), so the demo widget on
-   the page is pixel-identical to the actual product. */
+   the page is pixel-identical to the actual product. Keep these in lock-step
+   with the app tokens when re-tuning. */
 :root {
   color-scheme: dark;
 
   --bg:           #0e0f12;
   --bg-raised:    #181a1f;
+  --bg-elevated:  #1f2128;             /* one notch above raised — kbd / code */
   --item-hover:   rgba(255, 255, 255, 0.05);
   --item-active:  rgba(255, 255, 255, 0.10);
   --item-selected: rgba(255, 255, 255, 0.10);
   --border:       rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
   --border-focus: rgba(255, 255, 255, 0.40);
-  --t1:           #e8e8e6;
-  --t2:           #9494a0;
-  --t3:           #7e7e85;
+
+  /* Text — calibrated for WCAG AA against `--bg`. */
+  --t1:           #e8e8e6;   /* ~ 14.5 : 1  primary text */
+  --t2:           #9494a0;   /* ~  6.5 : 1  secondary text */
+  --t3:           #7e7e85;   /* ~  5.0 : 1  hint / footer text */
 
   --accent-app:        #34d399;
   --accent-app-bg:     rgba(52, 211, 153, 0.10);
+  --accent-app-strong: rgba(52, 211, 153, 0.20);
   --accent-saved:      #38bdf8;
   --accent-saved-bg:   rgba(56, 189, 248, 0.10);
   --accent-text:       #60a5fa;
@@ -29,7 +35,89 @@
   --accent-image-bg:   rgba(251, 113, 133, 0.10);
   --accent-image-row:  rgba(251, 113, 133, 0.04);
 
+  /* Text-on-tint variants. Same hex as the base accent in dark mode (bright
+     forms read on any dark surface), darker variants under `html.light`
+     below where the base fails WCAG AA for small text. Use the base accent
+     for graphical surfaces (icon tiles, rings, glows — 3:1 threshold) and
+     the `-text` variant for text overlays (4.5:1 threshold). */
+  --accent-app-text:   #34d399;
+  --accent-saved-text: #38bdf8;
+  --accent-text-text:  #60a5fa;
+  --accent-link-text:  #a78bfa;
+
   --accent-highlight-bg: rgba(251, 191, 36, 0.22);
+
+  /* Foreground colour the primary button uses. Dark green bg → black-ish
+     text in both themes (white on either green fails AA). Defined as a
+     token so the rule itself isn't tied to a theme. */
+  --btn-primary-fg: #0c1410;
+
+  /* Shadows tuned per theme. Dark mode wants deep, soft, far shadows. */
+  --shadow-window:
+    0 0 0 1px var(--border),
+    0 20px 60px -20px rgba(0, 0, 0, 0.60),
+    0 60px 120px -40px rgba(0, 0, 0, 0.50);
+  --shadow-btn-primary: 0 8px 22px -10px var(--accent-app);
+}
+
+/* ── Tokens — light override ─────────────────────────────────────────────── */
+html.light {
+  color-scheme: light;
+
+  /* Warm-tinted neutrals — pure #fff is in the AI-slop "don't" list.
+     `--bg-raised` matches the app's value (#f0f0ec) so the demo widget
+     reads identically to the actual product in light mode. */
+  --bg:           #fafaf8;
+  --bg-raised:    #f0f0ec;
+  --bg-elevated:  #f4f4ef;
+  --item-hover:   rgba(15, 18, 25, 0.04);
+  --item-active:  rgba(15, 18, 25, 0.08);
+  --item-selected: rgba(15, 18, 25, 0.08);
+  --border:       rgba(15, 18, 25, 0.10);
+  --border-strong: rgba(15, 18, 25, 0.18);
+  --border-focus: rgba(15, 18, 25, 0.45);
+
+  /* Calibrated for WCAG AA against light `--bg`. */
+  --t1:           #15151a;   /* ~ 16 : 1 */
+  --t2:           #565660;   /* ~ 6.9 : 1  — bumped from #5f5f66 for clearer AA on warm bg */
+  --t3:           #69696f;   /* ~ 5.1 : 1 — bumped from #6c6c75 for honest margin */
+
+  --accent-app:        #059669;
+  --accent-app-bg:     rgba(5, 150, 105, 0.10);
+  --accent-app-strong: rgba(5, 150, 105, 0.22);
+  --accent-saved:      #0284c7;
+  --accent-saved-bg:   rgba(2, 132, 199, 0.10);
+
+  /* Slightly more saturated category tints in light mode to keep the
+     row-tint perceptible against the warm `#fafaf8` bg. */
+  --accent-text:           #1d4ed8;
+  --accent-text-bg:        rgba(29, 78, 216, 0.10);
+  --accent-text-row:       rgba(29, 78, 216, 0.05);
+  --accent-link:           #6d28d9;
+  --accent-link-bg:        rgba(109, 40, 217, 0.10);
+  --accent-link-row:       rgba(109, 40, 217, 0.05);
+  --accent-image:          #be123c;
+  --accent-image-bg:       rgba(190, 18, 60, 0.10);
+  --accent-image-row:      rgba(190, 18, 60, 0.05);
+
+  /* Darker text-variants for AA on tinted backgrounds. See the comment in
+     `:root` for the use rule (graphical = base, text = `-text`). */
+  --accent-app-text:   #047857;   /* emerald-700 — 5.3:1 vs --bg, 4.7:1 vs tinted */
+  --accent-saved-text: #075985;   /* sky-800     — 6.0:1 vs tinted bg */
+  --accent-text-text:  #1e3a8a;   /* blue-900    — strong margin */
+  --accent-link-text:  #5b21b6;   /* violet-800  — strong margin */
+
+  --accent-highlight-bg:   rgba(217, 119, 6, 0.28);
+
+  /* Primary button stays dark-text-on-green; the green is darker in light
+     mode but black text still hits AAA. */
+  --btn-primary-fg: #04140d;
+
+  --shadow-window:
+    0 0 0 1px rgba(15, 18, 25, 0.07),
+    0 12px 36px -16px rgba(15, 18, 25, 0.18),
+    0 40px 80px -28px rgba(15, 18, 25, 0.14);
+  --shadow-btn-primary: 0 8px 22px -10px rgba(5, 150, 105, 0.55);
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
@@ -47,6 +135,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  transition: background 220ms ease, color 220ms ease;
 }
 a { color: inherit; text-underline-offset: 3px; }
 a:hover { color: var(--accent-app); }
@@ -68,10 +157,19 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   align-items: center;
   justify-content: space-between;
   padding: 18px clamp(20px, 5vw, 60px);
+  /* Deliberate blur — single sticky-header use, justified by readability when
+     hero content scrolls under. The design-laws ban is on glassmorphism as a
+     default; one purposeful blur with a strong border-bottom is the exception.
+     Falls back to a slightly more opaque bg where backdrop-filter isn't
+     supported. */
   background: color-mix(in oklab, var(--bg) 88%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
+  transition: background 220ms ease, border-color 220ms ease;
+}
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .page-header { background: color-mix(in oklab, var(--bg) 96%, transparent); }
 }
 .wordmark {
   font-weight: 700;
@@ -81,6 +179,7 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: var(--t1);
 }
 .wordmark .dot {
   width: 9px;
@@ -89,16 +188,41 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   background: var(--accent-app);
   box-shadow: 0 0 0 4px var(--accent-app-bg);
 }
-.page-header nav {
-  display: flex;
-  gap: 24px;
-  font-size: 13px;
+
+/* Theme toggle — round, ghost, swaps icons on theme. 34 px at desktop is
+   comfortable for mouse; bumped to 40 px on narrow viewports where the
+   primary input is a thumb (above WCAG 2.5.8 24×24 baseline at both sizes). */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 9px;
   color: var(--t2);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
-.page-header nav a {
-  text-decoration: none;
-  transition: color 140ms ease;
+@media (max-width: 600px) {
+  .theme-toggle { width: 40px; height: 40px; border-radius: 10px; }
 }
+.theme-toggle:hover {
+  color: var(--t1);
+  background: var(--item-hover);
+  border-color: var(--border-strong);
+}
+.theme-toggle:active { transform: scale(0.96); }
+.theme-toggle .icon-sun  { display: none; }
+.theme-toggle .icon-moon { display: inline-block; }
+html.light .theme-toggle .icon-sun  { display: inline-block; }
+html.light .theme-toggle .icon-moon { display: none; }
 
 /* ── Hero ───────────────────────────────────────────────────────────────────── */
 .hero {
@@ -144,7 +268,8 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
 .hero-foot {
   margin-top: 24px;
   color: var(--t3);
-  font-size: 12px;
+  font-size: 13px;
+  max-width: 50ch;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
@@ -157,36 +282,35 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
-  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease;
   cursor: pointer;
 }
 .btn-label { display: block; }
 .btn-meta {
   font-size: 11px;
-  font-weight: 400;
-  margin-top: 2px;
+  font-weight: 500;
+  margin-top: 3px;
   color: inherit;
-  opacity: 0.7;
+  /* No opacity — opacity-blending with the button bg made the effective
+     contrast theme-sensitive (failed AA in light mode at 0.72). The size +
+     weight contrast vs `.btn-label` is enough hierarchy without dropping
+     contrast. */
 }
 .btn.primary {
   background: var(--accent-app);
-  color: #0c1410;
-  box-shadow: 0 8px 22px -10px var(--accent-app);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--shadow-btn-primary);
 }
 .btn.primary:hover {
   background: color-mix(in oklab, var(--accent-app) 90%, white 10%);
-  color: #0c1410;
+  color: var(--btn-primary-fg);
   transform: translateY(-1px);
 }
-.btn.ghost {
-  background: transparent;
-  color: var(--t1);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-.btn.ghost:hover {
-  background: var(--item-hover);
-  color: var(--t1);
-}
+.btn.primary:active { transform: translateY(0); }
 .btn.big {
   padding: 16px 28px;
   font-size: 16px;
@@ -207,17 +331,20 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   filter: blur(40px);
   z-index: -1;
 }
+html.light .demo::before {
+  /* Slightly stronger glow in light mode so the colour reads against the
+     warm-white surface. */
+  background: radial-gradient(closest-side, var(--accent-app-strong), transparent 72%);
+}
 .window {
   width: min(420px, 100%);
   background: var(--bg-raised);
   border-radius: 12px;
-  box-shadow:
-    0 0 0 1px var(--border),
-    0 20px 60px -20px rgba(0, 0, 0, 0.6),
-    0 60px 120px -40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-window);
   overflow: hidden;
   font-size: 13px;
   user-select: none;
+  transition: background 220ms ease, box-shadow 220ms ease;
 }
 .window .search-bar {
   display: flex;
@@ -231,6 +358,7 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   box-shadow: 0 0 0 1px var(--border-focus);
   color: var(--t1);
 }
+html.light .window .search-bar { background: var(--bg-elevated); }
 .window .search-bar .dim { color: var(--t3); }
 .window .query { flex: 1; }
 .window .caret {
@@ -377,9 +505,9 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   display: inline-block;
   padding: 2px 7px;
   border-radius: 5px;
-  background: var(--bg-raised);
+  background: var(--bg-elevated);
   box-shadow:
-    inset 0 0 0 1px var(--border),
+    inset 0 0 0 1px var(--border-strong),
     0 1px 0 var(--border);
   font: 600 12px ui-monospace, "Cascadia Code", Consolas, monospace;
   color: var(--t1);
@@ -422,7 +550,9 @@ section {
 }
 .principle-list .n {
   font: 600 13px ui-monospace, Consolas, monospace;
-  color: var(--accent-app);
+  /* `--accent-app-text` is the darker emerald in light mode for AA on the
+     tinted bg; same bright value as `--accent-app` in dark mode. */
+  color: var(--accent-app-text);
   background: var(--accent-app-bg);
   padding: 2px 8px;
   border-radius: 4px;
@@ -434,6 +564,7 @@ section {
   margin: 0 0 6px;
   font-size: 18px;
   letter-spacing: -0.01em;
+  color: var(--t1);
 }
 .principle-list p {
   margin: 0;
@@ -479,14 +610,15 @@ section {
   border-radius: 4px;
   margin-bottom: 14px;
 }
-.tag-clipboard { background: var(--accent-text-bg);  color: var(--accent-text); }
-.tag-saved     { background: var(--accent-saved-bg); color: var(--accent-saved); }
-.tag-app       { background: var(--accent-app-bg);   color: var(--accent-app); }
+.tag-clipboard { background: var(--accent-text-bg);  color: var(--accent-text-text); }
+.tag-saved     { background: var(--accent-saved-bg); color: var(--accent-saved-text); }
+.tag-app       { background: var(--accent-app-bg);   color: var(--accent-app-text); }
 .feature h3 {
   margin: 0;
   font-size: clamp(20px, 2.4vw, 28px);
   letter-spacing: -0.015em;
   line-height: 1.15;
+  color: var(--t1);
 }
 .feature p {
   margin: 0;
@@ -496,11 +628,12 @@ section {
   max-width: 56ch;
 }
 .feature code {
-  background: var(--bg-raised);
+  background: var(--bg-elevated);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.88em;
   color: var(--t1);
+  border: 1px solid var(--border);
 }
 
 /* ── Specs ─────────────────────────────────────────────────────────────────── */
@@ -528,11 +661,12 @@ section {
   color: var(--t1);
 }
 .spec-grid dd code {
-  background: var(--bg-raised);
+  background: var(--bg-elevated);
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 0.92em;
   color: var(--t2);
+  border: 1px solid var(--border);
 }
 
 /* ── Install ───────────────────────────────────────────────────────────────── */
@@ -547,6 +681,7 @@ section {
   letter-spacing: -0.025em;
   font-weight: 800;
   margin: 0 0 16px;
+  color: var(--t1);
 }
 .install-lede {
   color: var(--t2);
@@ -582,7 +717,6 @@ section {
   vertical-align: 1px;
 }
 .page-foot .dim { color: var(--t3); }
-.page-foot .dim a { color: var(--t2); }
 
 /* ── Reveal-on-scroll ──────────────────────────────────────────────────────── */
 [data-reveal] {
@@ -599,4 +733,7 @@ section {
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { opacity: 1; transform: none; transition: none; }
   .window .caret { animation: none; }
+  body, .page-header, .window, .theme-toggle, .btn {
+    transition: none;
+  }
 }

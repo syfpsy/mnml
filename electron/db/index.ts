@@ -1,20 +1,20 @@
 import Database from "better-sqlite3";
-import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import { getDataDir } from "./data-dir.js";
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
 
-  const userData = app.getPath("userData");
-  if (!fs.existsSync(userData)) fs.mkdirSync(userData, { recursive: true });
+  const dataDir = getDataDir();
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-  const imagesDir = path.join(userData, "images");
-  if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+  const imgDir = path.join(dataDir, "images");
+  if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
 
-  const dbPath = path.join(userData, "mnml.sqlite");
+  const dbPath = path.join(dataDir, "mnml.sqlite");
   db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("synchronous = NORMAL");
@@ -24,7 +24,28 @@ export function getDb(): Database.Database {
 }
 
 export function imagesDir(): string {
-  return path.join(app.getPath("userData"), "images");
+  return path.join(getDataDir(), "images");
+}
+
+/**
+ * Cleanly close the SQLite connection (WAL checkpoint + handle release).
+ * Used before swapping `dataDir`. After calling this, the next `getDb()`
+ * call re-opens at whatever path `getDataDir()` now resolves to.
+ *
+ * Safe to call when no connection is open — it's a no-op.
+ */
+export function closeDb(): void {
+  if (!db) return;
+  try {
+    // Force a checkpoint so the -wal file is merged into the main DB before
+    // we close. Otherwise a copy of just the .sqlite file would miss any
+    // not-yet-checkpointed writes.
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    db.close();
+  } catch {
+    /* swallow — we're about to throw the handle away anyway */
+  }
+  db = null;
 }
 
 function migrate(d: Database.Database) {

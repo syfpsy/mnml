@@ -34,15 +34,17 @@ export function SearchBar({
 }: Props) {
   return (
     <div
+      data-mnml-search-bar="true"
       className="mnml-no-drag flex items-center gap-2 h-9 px-3 rounded-lg transition-shadow"
       style={{
         background: "var(--bg-raised)",
         boxShadow: "0 0 0 1px var(--border)",
       }}
       // 1px light-blue ring via `--focus-search` on the wrapper when any
-      // child (input, clear-x) gains keyboard or pointer focus. The input
-      // itself opts out of the generic 2px outline (see styles.css) so
-      // there's a single, deliberate focus signal.
+      // child (input, clear-x) gains keyboard or pointer focus. The wrapper
+      // owns the focus signal; child inputs + buttons opt out of the
+      // generic 2px outline (scoped by `[data-mnml-search-bar]` in
+      // styles.css) so the two indicators don't stack.
       onFocusCapture={(e) => (e.currentTarget.style.boxShadow = "0 0 0 1px var(--focus-search)")}
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {

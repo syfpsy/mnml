@@ -91,6 +91,16 @@ const api = {
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.installUpdate),
   checkUpdate:   (): Promise<{ ok: boolean; available?: boolean; version?: string | null; message?: string }> =>
     ipcRenderer.invoke(IPC.checkUpdate),
+
+  // ── Storage folder ──────────────────────────────────────────────────────
+  storageGet:    (): Promise<{ dataDir: string; defaultDir: string; isDefault: boolean }> =>
+    ipcRenderer.invoke(IPC.storageGet),
+  storagePick:   (): Promise<string | null> => ipcRenderer.invoke(IPC.storagePick),
+  storageSet:    (targetPath: string): Promise<{ ok: boolean; message: string; adoptedExisting?: boolean }> =>
+    ipcRenderer.invoke(IPC.storageSet, targetPath),
+  storageReset:  (): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke(IPC.storageReset),
+  storageReveal: (): Promise<boolean> => ipcRenderer.invoke(IPC.storageReveal),
 };
 
 contextBridge.exposeInMainWorld("mnml", api);

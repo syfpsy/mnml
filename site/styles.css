@@ -623,6 +623,7 @@ section {
 .tag-clipboard { background: var(--accent-text-bg);  color: var(--accent-text-text); }
 .tag-saved     { background: var(--accent-saved-bg); color: var(--accent-saved-text); }
 .tag-app       { background: var(--accent-app-bg);   color: var(--accent-app-text); }
+.tag-sync      { background: var(--accent-link-bg);  color: var(--accent-link-text); }
 .feature h3 {
   margin: 0;
   font-size: clamp(20px, 2.4vw, 28px);

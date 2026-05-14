@@ -194,10 +194,12 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Search input opts out of the generic 2px focus outline — its wrapper
-   draws a 1px light-blue ring via box-shadow (see search-bar.tsx) so
-   stacking both would look like two competing indicators. */
-input[data-mnml-search="true"]:focus-visible {
+/* Search bar wrapper owns the focus signal (1 px light-blue box-shadow
+   via `--focus-search`). Any focusable child inside the wrapper — the
+   input itself, the clear-x button — opts out of the generic 2 px
+   outline so the two indicators don't stack visually. */
+[data-mnml-search-bar="true"] input:focus-visible,
+[data-mnml-search-bar="true"] button:focus-visible {
   outline: none;
 }
 

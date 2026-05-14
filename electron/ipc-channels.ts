@@ -32,6 +32,18 @@ export const IPC = {
   /** Manually trigger a check (the auto-updater also polls every 24 h). */
   checkUpdate:   "mnml:window:check-update",
 
+  // ── Storage folder (custom dataDir for cross-device sync) ─────────────────
+  /** Returns { dataDir, defaultDir, isDefault } — current state for the UI. */
+  storageGet:    "mnml:storage:get",
+  /** Opens a native folder picker. Returns the absolute path or null. */
+  storagePick:   "mnml:storage:pick",
+  /** Migrates to a new folder + persists the choice + restarts the app. */
+  storageSet:    "mnml:storage:set",
+  /** Resets to the default folder + restarts the app. */
+  storageReset:  "mnml:storage:reset",
+  /** Opens the current dataDir in Windows Explorer. */
+  storageReveal: "mnml:storage:reveal",
+
   // ── Events (main → renderer) ─────────────────────────────────────────────
   onItemAdded:         "mnml:event:item-added",
   onItemUpdated:       "mnml:event:item-updated",

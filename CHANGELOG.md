@@ -1,5 +1,30 @@
 # mnml Changelog
 
+## v0.2.34 — 2026-05-15
+
+Configurable storage folder. Point mnml at a Dropbox / OneDrive / iCloud folder to sync your clipboard history, snippets, and images across devices. One source of truth, no accounts, no cloud middleman.
+
+### Added
+- **Custom storage folder (Settings > Storage folder).** mnml's persistent data — SQLite database, saved snippets, clipboard image files — can now live in any local folder. Default stays at `%APPDATA%/mnml`; user picks an alternative via a native folder dialog. Pick a Dropbox / OneDrive / iCloud folder and your clipboard syncs across devices. Pick the same folder on a second machine and the install adopts the existing data instantly (cross-device handoff).
+  - **Where the choice is stored**: `%APPDATA%/mnml/storage-location.json` (tiny pointer file). The chosen `dataDir` itself can't live in the SQLite because the SQLite IS in `dataDir` (chicken-and-egg). The pointer file is the only thing permanently anchored to the local machine.
+  - **Migration**: when you pick a new folder, mnml closes the SQLite connection (WAL checkpoint + clean handle release), copies `mnml.sqlite` + `mnml.sqlite-wal` + `mnml.sqlite-shm` + the `images/` directory to the new location, persists the new pointer, then auto-restarts to pick up the new path. If the new folder is empty, your current data moves over; if it already has an `mnml.sqlite`, the existing data is adopted as canonical (your local data stays put as a backup at the previous path).
+  - **Graceful failure**: if the configured folder later becomes unreachable (Dropbox folder unmounted, drive missing, permissions broken), mnml falls back to the default location with a warning logged. No data loss; remount the synced folder and the next launch picks it back up.
+  - **One-instance-at-a-time guidance**: a hint under the setting tells users not to run mnml on two devices simultaneously against the same synced folder. SQLite + cloud-sync conflict files would corrupt the DB. Sequential use is fine.
+- **`closeDb()` API** in `electron/db/index.ts` — clean shutdown of the SQLite connection (checkpoint + close). Used by the storage migration; available for future "graceful quit" flows.
+- **`electron/db/data-dir.ts`** module — resolves the active data directory, handles the pointer file (read / write / clear), exports `setDataDir()` / `resetDataDir()` migration primitives with rollback-on-failure semantics.
+- **Five new IPC channels**: `storage:get` (current state), `storage:pick` (native folder dialog), `storage:set` (migrate + restart), `storage:reset` (back to default + restart), `storage:reveal` (open the folder in Explorer).
+- **Landing site: new "Sync" feature block.** Fourth block under "What's in it", uses a new `.tag-sync` (violet) feature pill.
+
+### Internal
+- The `getDb()` flow now always reads paths through `getDataDir()`. The DB file is still `mnml.sqlite`; the images dir is still `<dataDir>/images`. Just the parent path is variable.
+- The Settings panel sheet got a full-width "Storage folder" section between Max-saved-items and Updates. Includes a click-to-reveal path display, "Choose folder…" button, and a "Reset to default" button (only shown when not on default).
+- Search bar scopes its focus indicators via `[data-mnml-search-bar="true"]` so the wrapper's 1 px light-blue ring is the single signal — the input AND the clear-X button both opt out of the global 2 px outline.
+
+### Notes
+- v0.2.33 installs auto-update to v0.2.34 via the Vercel-hosted update channel introduced last release.
+- v0.2.32 installs are still stranded (their auto-updater was pointed at the broken private-repo GitHub URL); manual re-download still required for those.
+
+
 ## v0.2.33 — 2026-05-15
 
 Third audit pass: all 6 findings closed (1 high, 3 medium, 2 low) plus a UX tweak (the search-bar focus ring). Auto-updates now work again from the privately-published source; the installer ships with a Vercel-hosted update channel.

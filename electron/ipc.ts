@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow, nativeImage } from "electron";
+import { ipcMain, app, BrowserWindow, dialog, nativeImage, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import { IPC } from "./ipc-channels.js";
@@ -10,11 +10,14 @@ import {
   setPinned,
   type ItemType,
 } from "./db/items.js";
+import { closeDb } from "./db/index.js";
+import { getDataDir, getDefaultDataDir, isUsingDefaultDataDir, setDataDir, resetDataDir } from "./db/data-dir.js";
 import { getAll as getAllSettings, getSetting, setSetting, type AppSettings } from "./db/settings.js";
 import { addSaved, deleteSaved, getSavedById, listSaved, touchSaved, updateSaved, type SavedSnippet } from "./db/saved.js";
 import { search } from "./search/service.js";
 import { launchAppResult, searchApps, type AppSearchResponse } from "./search/app-search.js";
 import { restoreItem, restoreText, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
+import { log } from "./utils/log.js";
 
 interface WindowControl {
   hide: () => void;
@@ -214,5 +217,91 @@ export function registerIpc(windowControl: WindowControl) {
     } catch (err) {
       return { ok: false, message: String((err as Error)?.message ?? err) } as const;
     }
+  });
+
+  // ── Storage folder ──────────────────────────────────────────────────────
+  // The user can re-point mnml's persistent data to any local folder —
+  // typically a Dropbox / OneDrive / iCloud folder for cross-device sync.
+
+  ipcMain.handle(IPC.storageGet, () => ({
+    dataDir:    getDataDir(),
+    defaultDir: getDefaultDataDir(),
+    isDefault:  isUsingDefaultDataDir(),
+  }));
+
+  ipcMain.handle(IPC.storagePick, async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const result = await dialog.showOpenDialog(win!, {
+      title: "Choose a folder for mnml data",
+      message:
+        "Pick a folder (e.g. inside Dropbox or OneDrive) to keep your clipboard history, snippets, and images. Existing mnml data in the picked folder will be used as-is.",
+      properties: ["openDirectory", "createDirectory", "promptToCreate"],
+      defaultPath: getDataDir(),
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(
+    IPC.storageSet,
+    async (_, targetPath: string): Promise<{ ok: boolean; message: string; adoptedExisting?: boolean }> => {
+      log(`[storage] migration requested: ${targetPath}`);
+
+      // Close SQLite cleanly BEFORE copying any files.
+      closeDb();
+      // Also stop the clipboard monitor so it can't write back into the
+      // about-to-be-stale DB connection.
+      stopMonitor();
+
+      const result = setDataDir(targetPath);
+      if (!result.ok) {
+        // Reopen the (unchanged) DB at the previous location so the running
+        // app keeps working until the user retries.
+        startMonitor();
+        return { ok: false, message: result.message };
+      }
+      if (!result.changed) {
+        startMonitor();
+        return { ok: true, message: result.message };
+      }
+
+      log(`[storage] migration ok, restarting. adoptedExisting=${!!result.adoptedExisting}`);
+
+      // Restart so the renderer + main reload against the new dataDir.
+      // 600 ms gives the IPC reply enough time to make it back to the
+      // renderer so the user sees the "Restarting…" confirmation.
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 600);
+
+      return { ok: true, message: result.message, adoptedExisting: result.adoptedExisting };
+    },
+  );
+
+  ipcMain.handle(IPC.storageReset, async (): Promise<{ ok: boolean; message: string }> => {
+    closeDb();
+    stopMonitor();
+    const result = resetDataDir();
+    if (!result.ok) {
+      startMonitor();
+      return { ok: false, message: result.message };
+    }
+    if (!result.changed) {
+      startMonitor();
+      return { ok: true, message: result.message };
+    }
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 600);
+    return { ok: true, message: result.message };
+  });
+
+  ipcMain.handle(IPC.storageReveal, async () => {
+    const dir = getDataDir();
+    if (!fs.existsSync(dir)) return false;
+    await shell.openPath(dir);
+    return true;
   });
 }

@@ -118,6 +118,10 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
             </div>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px" }}>
+              <StorageSection />
+            </div>
+
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px" }}>
               <Row label="Updates" hint="Auto-check daily. Click to check now.">
                 <CheckUpdateBtn />
               </Row>
@@ -324,6 +328,138 @@ function Row({ label, hint, children }: {
         <div className="text-[11px] mt-0.5 leading-snug" style={{ color: "var(--t2)" }}>{hint}</div>
       </div>
       <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * StorageSection — full-width "Storage folder" row.
+ *
+ * Doesn't use <Row> because the path display wants to span the full sheet
+ * width (paths get long). Three controls: Choose folder, Reset to default
+ * (only when not on default), Reveal in Explorer.
+ *
+ * Migration flow:
+ *   - Click "Choose folder..." → native dialog (main process)
+ *   - On confirm → bridge.storageSet → main copies data + restarts app
+ *   - The renderer sees a brief "Migrating..." state until the app dies.
+ */
+function StorageSection() {
+  const [state, setState] = useState<{ dataDir: string; defaultDir: string; isDefault: boolean } | null>(null);
+  const [busy,  setBusy]  = useState<"idle" | "picking" | "migrating">("idle");
+  const [msg,   setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    bridge.storageGet().then(setState).catch(() => setState(null));
+    return () => { if (msgTimer.current) clearTimeout(msgTimer.current); };
+  }, []);
+
+  const flash = (kind: "ok" | "err", text: string, lingerMs = 4000) => {
+    setMsg({ kind, text });
+    if (msgTimer.current) clearTimeout(msgTimer.current);
+    msgTimer.current = setTimeout(() => setMsg(null), lingerMs);
+  };
+
+  const choose = async () => {
+    if (busy !== "idle") return;
+    setBusy("picking");
+    try {
+      const picked = await bridge.storagePick();
+      if (!picked) { setBusy("idle"); return; }
+      setBusy("migrating");
+      const r = await bridge.storageSet(picked);
+      if (!r.ok) {
+        flash("err", r.message);
+        setBusy("idle");
+        return;
+      }
+      // Success — main process restarts the app within ~600 ms. Show a
+      // confirmation in case the restart is delayed.
+      flash("ok", r.message, 8000);
+    } catch (err) {
+      flash("err", String((err as Error)?.message ?? err));
+      setBusy("idle");
+    }
+  };
+
+  const reset = async () => {
+    if (busy !== "idle") return;
+    setBusy("migrating");
+    const r = await bridge.storageReset();
+    if (!r.ok) {
+      flash("err", r.message);
+      setBusy("idle");
+      return;
+    }
+    flash("ok", r.message, 8000);
+  };
+
+  const reveal = () => { void bridge.storageReveal(); };
+
+  if (!state) {
+    return (
+      <p className="text-[12px]" style={{ color: "var(--t3)" }}>Loading storage info…</p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <div className="text-[13px] leading-tight" style={{ color: "var(--t1)" }}>Storage folder</div>
+        <div className="text-[11px] mt-0.5 leading-snug" style={{ color: "var(--t2)" }}>
+          Where mnml saves clipboard history, snippets, and images. Point this at a Dropbox / OneDrive / iCloud folder to sync across devices. Don't run two devices on the same synced folder at the same time.
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={reveal}
+        title="Open this folder in Explorer"
+        className="text-left text-[11px] font-mono px-2 py-1.5 rounded truncate transition-colors hover:opacity-90"
+        style={{
+          background:  "var(--bg)",
+          color:       "var(--t1)",
+          boxShadow:   "0 0 0 1px var(--border)",
+          fontFamily:  "ui-monospace, 'Cascadia Code', Consolas, monospace",
+        }}
+      >
+        {state.dataDir}
+      </button>
+
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={choose}
+          disabled={busy !== "idle"}
+          className="text-[12px] px-3 py-1.5 rounded-md font-medium transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: "var(--accent-saved-bg)", color: "var(--accent-saved-text)" }}
+        >
+          {busy === "picking"    ? "Choosing…" :
+           busy === "migrating"  ? "Migrating…" :
+           "Choose folder…"}
+        </button>
+
+        {!state.isDefault && (
+          <button
+            type="button"
+            onClick={reset}
+            disabled={busy !== "idle"}
+            className="mnml-btn-ghost text-[12px] px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Reset to default
+          </button>
+        )}
+      </div>
+
+      {msg && (
+        <p
+          className="text-[11px] leading-snug mt-1"
+          style={{ color: msg.kind === "ok" ? "var(--accent-success)" : "var(--accent-danger)" }}
+        >
+          {msg.text}
+        </p>
+      )}
     </div>
   );
 }

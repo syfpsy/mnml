@@ -23,8 +23,30 @@ export interface AppSettings {
   autoPaste: boolean;
   /** Use the light colour theme instead of the default dark one. */
   lightTheme: boolean;
-  /** Last used window mode. */
-  windowMode: "compact" | "expanded";
 }
 
-export type TabKey = "all" | "text" | "image" | "link";
+/** Result row from the app launcher (Start-Menu apps + Windows settings + classic tools). */
+export interface AppResult {
+  id:     string;
+  name:   string;
+  /** What gets passed to `bridge.appLaunch()`. */
+  target: string;
+  kind:   "app" | "setting" | "tool";
+  icon:   string | null;
+}
+
+export interface AppSearchResponse {
+  results: AppResult[];
+}
+
+/** A user-curated reusable text blob, stored independently from clipboard history. */
+export interface SavedSnippet {
+  id:         number;
+  label:      string;
+  content:    string;
+  created_at: number;
+  updated_at: number;
+}
+
+export type TabKey = "all" | "text" | "image" | "link" | "saved";
+

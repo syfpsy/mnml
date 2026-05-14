@@ -28,10 +28,10 @@ export function imagesDir(): string {
 }
 
 function migrate(d: Database.Database) {
-  // Phase 1: tables, FTS, triggers, settings — anything that doesn't reference
-  // recently-added columns. CREATE TABLE IF NOT EXISTS is a no-op on existing
-  // DBs, so we must add new columns separately (phase 2) BEFORE any index
-  // that references them.
+  // Phase 1: tables, FTS, triggers — anything that doesn't reference
+  // recently-added columns. CREATE TABLE IF NOT EXISTS is a no-op on
+  // existing DBs, so we must add new columns separately (phase 2) BEFORE
+  // any index that references them.
   d.exec(`
     CREATE TABLE IF NOT EXISTS items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,13 +79,39 @@ function migrate(d: Database.Database) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- Saved snippets: user-curated reusable text. Independent of the
+    -- clipboard history (which is volatile / capped). One row = one snippet.
+    CREATE TABLE IF NOT EXISTS saved_snippets (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      label      TEXT NOT NULL,           -- short display name shown in the list
+      content    TEXT NOT NULL,           -- full text body that gets pasted
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_updated_at ON saved_snippets(updated_at DESC);
   `);
 
   // Phase 2: idempotent column adds for older DBs that pre-date this column.
   ensureColumn(d, "items", "pinned_at", "INTEGER");
 
   // Phase 3: indexes that reference newly-added columns.
-  d.exec(`CREATE INDEX IF NOT EXISTS idx_items_pinned_at ON items(pinned_at);`);
+  d.exec(`
+    CREATE INDEX IF NOT EXISTS idx_items_pinned_at ON items(pinned_at);
+  `);
+
+  // Phase 4: drop the deprecated PC-search index tables. The bulk file
+  // crawler and chokidar watcher have been removed; these tables would
+  // otherwise sit around taking disk space (potentially hundreds of MB on
+  // machines that ran the v0.2.16–v0.2.22 indexer).
+  d.exec(`
+    DROP TRIGGER IF EXISTS pc_entries_ai;
+    DROP TRIGGER IF EXISTS pc_entries_ad;
+    DROP TRIGGER IF EXISTS pc_entries_au;
+    DROP TABLE   IF EXISTS pc_entries_fts;
+    DROP TABLE   IF EXISTS pc_entries;
+    DROP TABLE   IF EXISTS pc_index_meta;
+  `);
 }
 
 function ensureColumn(

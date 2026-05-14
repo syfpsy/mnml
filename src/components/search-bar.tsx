@@ -9,9 +9,10 @@ interface Props {
   onEnd?: () => void;
   onEnter?: (e: React.KeyboardEvent) => void;
   onEscape?: () => void;
-  /** Called when Delete is pressed while the input is empty — removes active item. */
+  /** Called when Delete is pressed while the input is empty. */
   onDelete?: () => void;
   placeholder?: string;
+  ariaLabel?: string;
   autoFocus?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }
@@ -26,8 +27,9 @@ export function SearchBar({
   onEnter,
   onEscape,
   onDelete,
-  placeholder = "Search…",
-  autoFocus = true,
+  placeholder = "Search...",
+  ariaLabel = "Search clipboard",
+  autoFocus = false,
   inputRef,
 }: Props) {
   return (
@@ -37,18 +39,19 @@ export function SearchBar({
         background: "var(--bg-raised)",
         boxShadow: "0 0 0 1px var(--border)",
       }}
-      /* focus-within via JS: update ring on focus */
       onFocusCapture={(e) => (e.currentTarget.style.boxShadow = "0 0 0 1px var(--border-focus)")}
       onBlurCapture={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node))
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
           e.currentTarget.style.boxShadow = "0 0 0 1px var(--border)";
+        }
       }}
     >
       <SearchIcon className="w-[14px] h-[14px] shrink-0" style={{ color: "var(--t3)" }} />
 
       <input
         ref={inputRef}
-        aria-label="Search clipboard"
+        aria-label={ariaLabel}
+        data-mnml-search="true"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -56,12 +59,12 @@ export function SearchBar({
         className="flex-1 min-w-0 bg-transparent outline-none text-[13px]"
         style={{ color: "var(--t1)" }}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown")                    { e.preventDefault(); onArrowDown?.(); }
-          else if (e.key === "ArrowUp")                 { e.preventDefault(); onArrowUp?.(); }
-          else if (e.key === "Home" && e.ctrlKey)       { e.preventDefault(); onHome?.(); }
-          else if (e.key === "End"  && e.ctrlKey)       { e.preventDefault(); onEnd?.(); }
-          else if (e.key === "Enter")                   { e.preventDefault(); onEnter?.(e); }
-          else if (e.key === "Delete" && !value)        { e.preventDefault(); onDelete?.(); }
+          if (e.key === "ArrowDown") { e.preventDefault(); onArrowDown?.(); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); onArrowUp?.(); }
+          else if (e.key === "Home" && e.ctrlKey) { e.preventDefault(); onHome?.(); }
+          else if (e.key === "End" && e.ctrlKey) { e.preventDefault(); onEnd?.(); }
+          else if (e.key === "Enter") { e.preventDefault(); onEnter?.(e); }
+          else if (e.key === "Delete" && !value) { e.preventDefault(); onDelete?.(); }
           else if (e.key === "Escape") {
             if (value) onChange("");
             else onEscape?.();
@@ -74,10 +77,7 @@ export function SearchBar({
           type="button"
           onClick={() => onChange("")}
           aria-label="Clear"
-          className="shrink-0 transition-colors"
-          style={{ color: "var(--t3)" }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--t2)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--t3)")}
+          className="mnml-btn-ghost shrink-0 p-1 -m-1 rounded"
         >
           <XIcon className="w-[14px] h-[14px]" />
         </button>

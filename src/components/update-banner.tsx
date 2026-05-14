@@ -6,18 +6,27 @@ interface Props {
   onInstall: () => void;
 }
 
+/**
+ * UpdateBanner — appears along the bottom edge while an update is downloading
+ * and after one is ready to install. Colours come from the themed
+ * `--accent-info` / `--accent-success` token families so the banner looks
+ * right in both dark and light themes.
+ */
 export function UpdateBanner({ state, version, onInstall }: Props) {
   if (state === "idle") return null;
 
   const ready = state === "ready";
+  const fg     = ready ? "var(--accent-success)"        : "var(--accent-info)";
+  const bg     = ready ? "var(--accent-success-bg)"     : "var(--accent-info-bg)";
+  const border = ready ? "var(--accent-success-border)" : "var(--accent-info-border)";
 
   return (
     <div
       className="mnml-no-drag absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-1.5 text-[11px]"
       style={{
-        background:  ready ? "rgba(74,222,128,0.10)" : "rgba(96,165,250,0.10)",
-        borderTop:   ready ? "1px solid rgba(74,222,128,0.22)" : "1px solid rgba(96,165,250,0.18)",
-        color:       ready ? "#4ade80" : "#60a5fa",
+        background: bg,
+        borderTop:  `1px solid ${border}`,
+        color:      fg,
       }}
     >
       <span>
@@ -30,7 +39,7 @@ export function UpdateBanner({ state, version, onInstall }: Props) {
           type="button"
           onClick={onInstall}
           className="px-2 py-0.5 rounded text-[10px] font-medium transition-opacity hover:opacity-75 active:opacity-60"
-          style={{ background: "rgba(74,222,128,0.18)", color: "#4ade80" }}
+          style={{ background: "var(--accent-success-btn)", color: "var(--accent-success)" }}
         >
           Restart now
         </button>

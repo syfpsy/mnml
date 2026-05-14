@@ -1,51 +1,121 @@
 @import "tailwindcss";
-@import "@heroui/styles";
-@import "@heroui-pro/react/css/components/list-view.css";
 
 /* ── Colour tokens ── dark (default) ─────────────────────────────────────── */
 :root {
   color-scheme: dark;
 
-  --bg:           #111111;
-  --bg-raised:    #1a1a1a;
-  --item-hover:   rgba(255, 255, 255, 0.045);
-  --item-active:  rgba(255, 255, 255, 0.08);
-  --border:       rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(255, 255, 255, 0.22);
-  --t1:           #e5e5e5;
-  --t2:           #636363;
-  --t3:           #404040;
+  /* Cool-tinted neutrals — pure black/white look clinical and "AI-templated". */
+  --bg:           #0e0f12;
+  --bg-raised:    #181a1f;
+  --item-hover:   rgba(255, 255, 255, 0.05);
+  --item-active:  rgba(255, 255, 255, 0.10);
+  /* Subtle bg shift for the keyboard-focused row. The actual WCAG 1.4.11
+     state indicator is the 1px ring drawn on `aria-selected` rows — see
+     each list component. */
+  --item-selected: rgba(255, 255, 255, 0.10);
+  --border:       rgba(255, 255, 255, 0.09);
+  --border-focus: rgba(255, 255, 255, 0.40);
+  /* Text tokens — calibrated for WCAG AA against `--bg`. */
+  --t1:           #e8e8e6;   /* ~ 14.5 : 1  primary text */
+  --t2:           #9494a0;   /* ~  6.5 : 1  secondary text */
+  --t3:           #7e7e85;   /* ~  5.0 : 1  hint / footer text */
 
-  /* Map HeroUI semantic vars → our dark palette */
-  --foreground:         var(--t1);
-  --muted:              var(--t2);
-  --default:            rgba(255, 255, 255, 0.09);
-  --surface:            var(--bg-raised);
-  --surface-foreground: var(--t1);
-  --color-focus:        var(--border-focus);
+  /* App-launcher accent — emerald. Used for the icon tile + selection ring
+     in `app-results-list`. */
+  --accent-app:        #34d399;
+  --accent-app-bg:     rgba(52, 211, 153, 0.10);
+  /* Saved-snippets accent — soft sky. Distinct from the app emerald. */
+  --accent-saved:      #38bdf8;
+  --accent-saved-bg:   rgba(56, 189, 248, 0.10);
+  /* Semantic accents. */
+  --accent-danger:     #ef4444;
+  --accent-danger-bg:  rgba(239, 68, 68, 0.08);
+  --accent-pinned:     #f59e0b;
+
+  /* Clipboard-item category tints. */
+  --accent-text:           #60a5fa;
+  --accent-text-bg:        rgba(96,165,250,0.10);
+  --accent-text-row:       rgba(96,165,250,0.04);
+  --accent-text-row-hover: rgba(96,165,250,0.08);
+  --accent-link:           #a78bfa;
+  --accent-link-bg:        rgba(167,139,250,0.10);
+  --accent-link-row:       rgba(167,139,250,0.04);
+  --accent-link-row-hover: rgba(167,139,250,0.08);
+  --accent-image:          #fb7185;
+  --accent-image-bg:       rgba(251,113,133,0.10);
+  --accent-image-row:      rgba(251,113,133,0.04);
+  --accent-image-row-hover: rgba(251,113,133,0.08);
+
+  /* Search-match highlight. */
+  --accent-highlight-bg:   rgba(251, 191, 36, 0.22);
+
+  /* Update-banner status colours. */
+  --accent-info:           #60a5fa;
+  --accent-info-bg:        rgba(96, 165, 250, 0.10);
+  --accent-info-border:    rgba(96, 165, 250, 0.20);
+  --accent-success:        #4ade80;
+  --accent-success-bg:     rgba(74, 222, 128, 0.10);
+  --accent-success-border: rgba(74, 222, 128, 0.22);
+  --accent-success-btn:    rgba(74, 222, 128, 0.18);
+
+  /* Modal scrim + sheet elevation — themed so light mode doesn't get a
+     dark-mode-calibrated heavy shadow. */
+  --scrim:                 rgba(0, 0, 0, 0.55);
+  --elevation-2:           0 24px 48px rgba(0, 0, 0, 0.40);
 }
 
 /* ── Colour tokens ── light override ─────────────────────────────────────── */
 html.light {
   color-scheme: light;
 
-  --bg:           #ffffff;
-  --bg-raised:    #f3f3f3;
+  /* Warm-tinted neutrals — pure #fff is in the "AI slop" DON'T list. */
+  --bg:           #fafaf8;
+  --bg-raised:    #f0f0ec;
   --item-hover:   rgba(0, 0, 0, 0.04);
-  --item-active:  rgba(0, 0, 0, 0.07);
-  --border:       rgba(0, 0, 0, 0.09);
-  --border-focus: rgba(0, 0, 0, 0.25);
-  --t1:           #111111;
-  --t2:           #888888;
-  --t3:           #bbbbbb;
+  --item-active:  rgba(0, 0, 0, 0.08);
+  --item-selected: rgba(0, 0, 0, 0.08);
+  --border:       rgba(0, 0, 0, 0.10);
+  --border-focus: rgba(0, 0, 0, 0.45);
+  /* Calibrated for WCAG AA against light `--bg`. */
+  --t1:           #15151a;   /* ~ 16 : 1 */
+  --t2:           #5f5f66;   /* ~ 5.5 : 1 */
+  --t3:           #76767a;   /* ~ 4.6 : 1 */
 
-  /* Map HeroUI semantic vars → our light palette */
-  --foreground:         var(--t1);
-  --muted:              var(--t2);
-  --default:            rgba(0, 0, 0, 0.09);
-  --surface:            var(--bg-raised);
-  --surface-foreground: var(--t1);
-  --color-focus:        var(--border-focus);
+  --accent-app:        #10b981;
+  --accent-app-bg:     rgba(16, 185, 129, 0.12);
+  --accent-saved:      #0284c7;
+  --accent-saved-bg:   rgba(2, 132, 199, 0.12);
+  --accent-danger:     #dc2626;
+  --accent-danger-bg:  rgba(220, 38, 38, 0.10);
+  --accent-pinned:     #d97706;
+
+  /* Slightly more saturated category tints in light mode to keep the
+     row-tint perceptible against the warm `#fafaf8` bg. */
+  --accent-text:           #2563eb;
+  --accent-text-bg:        rgba(37,99,235,0.12);
+  --accent-text-row:       rgba(37,99,235,0.04);
+  --accent-text-row-hover: rgba(37,99,235,0.08);
+  --accent-link:           #7c3aed;
+  --accent-link-bg:        rgba(124,58,237,0.12);
+  --accent-link-row:       rgba(124,58,237,0.04);
+  --accent-link-row-hover: rgba(124,58,237,0.08);
+  --accent-image:          #e11d48;
+  --accent-image-bg:       rgba(225,29,72,0.12);
+  --accent-image-row:      rgba(225,29,72,0.04);
+  --accent-image-row-hover: rgba(225,29,72,0.08);
+
+  --accent-highlight-bg:   rgba(217, 119, 6, 0.22);
+
+  --accent-info:           #2563eb;
+  --accent-info-bg:        rgba(37, 99, 235, 0.10);
+  --accent-info-border:    rgba(37, 99, 235, 0.22);
+  --accent-success:        #16a34a;
+  --accent-success-bg:     rgba(22, 163, 74, 0.10);
+  --accent-success-border: rgba(22, 163, 74, 0.24);
+  --accent-success-btn:    rgba(22, 163, 74, 0.20);
+
+  --scrim:                 rgba(20, 20, 25, 0.28);
+  --elevation-2:           0 16px 40px rgba(15, 18, 25, 0.16);
 }
 
 /* ── Base reset ───────────────────────────────────────────────────────────── */
@@ -56,13 +126,30 @@ html, body, #root {
 }
 
 body {
+  /* Windows-first: Segoe UI Variable Display is the modern Win11 system
+     font and avoids the "Inter everywhere" generic-AI tell. */
   font-family:
-    "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: transparent;
+  background: var(--bg);
   overflow: hidden;
   user-select: none;
+}
+
+/* ── Focus rings ──────────────────────────────────────────────────────────────
+   Single, consistent keyboard-only focus indicator across every interactive
+   element. Tailwind preflight removes the browser default; without this rule
+   tabbing through Settings is invisible. `:focus-visible` excludes mouse
+   clicks, so it never shows after a regular click. */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[data-mnml-listbox]:focus-visible,
+[role="listbox"]:focus-visible,
+[role="grid"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 #root {
@@ -83,36 +170,42 @@ body {
   display: none;                /* Chrome / Electron */
 }
 
-/* ── ListView overrides ───────────────────────────────────────────────────── */
-
-/* Denser rows */
-.list-view__item {
-  padding-block:  6px;
-  padding-inline: 8px;
-  gap: 8px;
+/* ── Reusable button hover ────────────────────────────────────────────────────
+   Replaces ~10 sites that wired `onMouseEnter` / `onMouseLeave` in JS to
+   change `style.color`. CSS `:hover` does the same thing, in one rule. The
+   base colour for these icon-only buttons is `--t2`; hover moves to `--t1`. */
+.mnml-btn-ghost {
+  color: var(--t2);
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.mnml-btn-ghost:hover {
+  color: var(--t1);
 }
 
-/* Tighter icon–text gap inside each row */
-.list-view__item-content {
-  gap: 8px;
-}
-
-/* Row separators + per-category background wash.
-   Each ListView.Item sets --item-tint / --item-tint-hover via inline style.
-   Defaults (transparent / --item-hover) preserve the look for untinted items. */
-.list-view--secondary .list-view__item {
-  border-color: var(--border);
+/* ── Clipboard rows ──────────────────────────────────────────────────────────
+   Each row sets `--item-tint` (idle bg) and `--item-tint-hover` (hover/focus
+   bg) inline based on its type. Single CSS rule, no JS hover handlers. */
+.mnml-row {
   background-color: var(--item-tint, transparent);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 120ms ease;
 }
-.list-view--secondary .list-view__item[data-hovered=true] {
+.mnml-row:hover {
   background-color: var(--item-tint-hover, var(--item-hover));
 }
-.list-view--secondary .list-view__item[data-focus-visible=true] {
-  background-color: var(--item-tint-hover, var(--item-active));
-  box-shadow: none;
+.mnml-row:last-child {
+  border-bottom: none;
 }
 
-/* Remove ListView's own min-height so it adapts to content */
-.list-view {
-  min-height: 0;
+/* ── Hide native number-input spinners ──────────────────────────────────────
+   The browser-rendered up/down spinners don't match the rest of the design
+   system. Applied only to opted-in inputs via `.mnml-numinput`. */
+.mnml-numinput {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.mnml-numinput::-webkit-outer-spin-button,
+.mnml-numinput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }

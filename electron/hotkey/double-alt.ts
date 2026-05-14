@@ -5,6 +5,7 @@ import { log } from "../utils/log.js";
 // Avoids breaking normal Alt use: if ANY non-Alt key fires between the two Alts, reset.
 
 const TAP_WINDOW_MS = 380;
+const SUPPRESS_AFTER_FIRE_MS = 1_000;
 
 type Listener = () => void;
 
@@ -13,6 +14,11 @@ interface UiohookEvent {
 }
 
 const ALT_CODES = new Set<number>([UiohookKey.Alt, UiohookKey.AltRight]);
+let suppressUntil = 0;
+
+export function suppressDoubleAltFor(ms: number) {
+  suppressUntil = Math.max(suppressUntil, Date.now() + ms);
+}
 
 export function installDoubleAlt(listener: Listener): () => void {
   let lastAltUp = 0;
@@ -20,11 +26,25 @@ export function installDoubleAlt(listener: Listener): () => void {
   let altIsDown = false;
   let started = false;
 
+  const resetTapState = () => {
+    lastAltUp = 0;
+    pressedDuringAlt = false;
+    altIsDown = false;
+  };
+
+  const isSuppressed = () => {
+    if (Date.now() < suppressUntil) {
+      resetTapState();
+      return true;
+    }
+    return false;
+  };
+
   const keydown = (e: UiohookEvent) => {
+    if (isSuppressed()) return;
     if (ALT_CODES.has(e.keycode)) {
       // If Alt was already down, ignore the auto-repeat keydowns.
       if (!altIsDown) altIsDown = true;
-      pressedDuringAlt = false;
       return;
     }
     if (altIsDown) pressedDuringAlt = true;
@@ -32,6 +52,7 @@ export function installDoubleAlt(listener: Listener): () => void {
   };
 
   const keyup = (e: UiohookEvent) => {
+    if (isSuppressed()) return;
     if (!ALT_CODES.has(e.keycode)) return;
     altIsDown = false;
     if (pressedDuringAlt) {
@@ -41,7 +62,8 @@ export function installDoubleAlt(listener: Listener): () => void {
     }
     const now = Date.now();
     if (lastAltUp && now - lastAltUp <= TAP_WINDOW_MS) {
-      lastAltUp = 0;
+      resetTapState();
+      suppressDoubleAltFor(SUPPRESS_AFTER_FIRE_MS);
       log("[hotkey] double-alt fired");
       try {
         listener();

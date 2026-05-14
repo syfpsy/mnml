@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mnml — a keyboard-first clipboard for Windows</title>
+
+  <meta name="description" content="A 440×540 overlay window for clipboard history, saved snippets, and an apps + Windows Settings launcher. Press Alt twice. Local SQLite. No telemetry." />
+  <meta name="theme-color" content="#0e0f12" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="mnml — a keyboard-first clipboard for Windows" />
+  <meta property="og:description" content="Press Alt twice. Paste from history, launch apps, jump to Windows Settings, save reusable snippets. Local SQLite. No telemetry." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://syfpsy.github.io/mnml/" />
+  <meta property="og:image" content="https://syfpsy.github.io/mnml/og.svg" />
+  <meta property="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="page-header">
+    <a class="wordmark" href="#top" aria-label="mnml home">
+      <span class="dot" aria-hidden="true"></span>mnml
+    </a>
+    <nav>
+      <a href="https://github.com/syfpsy/mnml" rel="noreferrer">GitHub</a>
+      <a href="https://github.com/syfpsy/mnml/releases/latest" rel="noreferrer">Releases</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="hero-text">
+        <h1>
+          A keyboard-first<br>
+          clipboard for Windows.
+        </h1>
+        <p class="lede">
+          Press <kbd class="kbd">Alt</kbd> twice. Paste from history,
+          launch any app or Windows Setting, save reusable snippets.
+          One <span class="num">440 × 540</span> window. Local SQLite.
+          No telemetry.
+        </p>
+        <div class="cta">
+          <a class="btn primary" id="download-link" href="https://github.com/syfpsy/mnml/releases/latest" data-reveal>
+            <span class="btn-label">Download for Windows</span>
+            <span class="btn-meta" id="download-meta">latest installer</span>
+          </a>
+          <a class="btn ghost" href="https://github.com/syfpsy/mnml" rel="noreferrer" data-reveal>
+            View source
+          </a>
+        </div>
+        <p class="hero-foot">
+          Windows 10 / 11 · x64 · <a href="https://github.com/syfpsy/mnml/blob/main/LICENSE" rel="noreferrer">MIT</a>
+        </p>
+      </div>
+
+      <!-- Live-looking recreation of the actual 440 × 540 window. -->
+      <aside class="demo" aria-label="Preview of the mnml overlay window">
+        <div class="window">
+          <div class="search-bar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dim">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <span class="query"><span id="typed">design tokens</span><span class="caret" aria-hidden="true"></span></span>
+            <button type="button" class="x" aria-label="Clear">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="tabs" role="tablist" aria-label="Categories">
+            <button class="tab on">All</button>
+            <button class="tab">Text</button>
+            <button class="tab">Links</button>
+            <button class="tab">Images</button>
+            <button class="tab">Saved</button>
+          </div>
+
+          <div class="rows">
+            <div class="row text selected">
+              <div class="ico" data-kind="text"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg></div>
+              <div class="body">
+                <span class="title">--accent-app: <mark>design</mark> emerald token</span>
+              </div>
+              <span class="when">2m</span>
+            </div>
+            <div class="row link">
+              <div class="ico" data-kind="link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              </div>
+              <div class="body">
+                <span class="title">Tailwind v4 — <mark>design</mark> tokens guide</span>
+                <span class="sub">tailwindcss.com</span>
+              </div>
+              <span class="when">17m</span>
+            </div>
+            <div class="row image">
+              <div class="ico image-thumb" data-kind="image" aria-hidden="true"></div>
+              <div class="body">
+                <span class="title">Screenshot · 2880 × 1800</span>
+                <span class="sub">1024 KB</span>
+              </div>
+              <span class="when">1h</span>
+            </div>
+            <div class="row text">
+              <div class="ico" data-kind="text"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg></div>
+              <div class="body">
+                <span class="title">npm run release · ships to GitHub Releases</span>
+              </div>
+              <span class="when">3h</span>
+            </div>
+          </div>
+
+          <h3 class="section-h">Saved</h3>
+          <div class="rows tight">
+            <div class="row saved">
+              <div class="ico" data-kind="saved">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div class="body">
+                <span class="title">Email signature</span>
+                <span class="sub">Best, Seyfi · github.com/syfpsy</span>
+              </div>
+            </div>
+            <div class="row saved">
+              <div class="ico" data-kind="saved">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div class="body">
+                <span class="title">UUID regex</span>
+                <span class="sub">^[0-9a-f]{8}-([0-9a-f]{4}-){3}…</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="section-h">Apps &amp; Settings</h3>
+          <div class="rows tight">
+            <div class="row app">
+              <div class="ico" data-kind="app">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+              </div>
+              <div class="body">
+                <span class="title">Display</span>
+                <span class="sub">Windows Settings</span>
+              </div>
+            </div>
+            <div class="row app">
+              <div class="ico" data-kind="app">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+              </div>
+              <div class="body">
+                <span class="title">Visual Studio Code</span>
+                <span class="sub">App</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="window-foot">
+            <span>Click to paste · Shift-click to copy</span>
+            <span>Alt Alt to toggle</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <section class="principles" data-reveal>
+      <h2 class="eyebrow">Built around four ideas</h2>
+      <ol class="principle-list">
+        <li>
+          <span class="n">01</span>
+          <div>
+            <h3>One window</h3>
+            <p>440 × 540. One tab strip. Categories filter clipboard items, snippets, apps, and Windows Settings — all in the same surface.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">02</span>
+          <div>
+            <h3>One hotkey</h3>
+            <p>Double-tap <kbd class="kbd inline">Alt</kbd> anywhere. The window appears at your cursor, the search field already has focus.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">03</span>
+          <div>
+            <h3>One paste</h3>
+            <p>Click or press <kbd class="kbd inline">Enter</kbd>. mnml hides, your previous window regains focus, <kbd class="kbd inline">Ctrl + V</kbd> fires automatically.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">04</span>
+          <div>
+            <h3>Local only</h3>
+            <p>SQLite on disk. No accounts, no cloud, no telemetry, no analytics. The auto-updater pings GitHub Releases once a day; nothing else leaves your machine.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <section class="features" data-reveal>
+      <h2 class="eyebrow">What's in it</h2>
+
+      <div class="feature">
+        <div class="feature-head">
+          <span class="feature-tag tag-clipboard">Clipboard</span>
+          <h3>Text, links, images — searchable</h3>
+        </div>
+        <p>
+          Whatever you copy lands in the history. Text, URLs (with favicons),
+          PNG screenshots (rendered as 96 px thumbnails). Full-text search via
+          SQLite FTS5 with a LIKE fallback. Pin items to keep them past the
+          configurable rotation cap.
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-head">
+          <span class="feature-tag tag-saved">Snippets</span>
+          <h3>Reusable text, labelled and pasted in one click</h3>
+        </div>
+        <p>
+          Save anything: email signatures, regex patterns, command-line
+          incantations, addresses. Hover any clipboard row to one-click save
+          it as a snippet, or write a new one with a label and content.
+          Snippets live in their own SQLite table — they don't rotate out.
+        </p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-head">
+          <span class="feature-tag tag-app">Launcher</span>
+          <h3>Apps + Windows Settings, all in the same search</h3>
+        </div>
+        <p>
+          Start-Menu shortcuts plus ~80 curated <code>ms-settings:</code>
+          deep links (Bluetooth, Wi-Fi, Display, Sound, Update, Privacy,
+          Accessibility, Game Bar, …) plus the classic
+          <code>.msc</code> / <code>.cpl</code> tools (Task Manager, Device
+          Manager, Registry Editor, Services, PowerShell, …). Type a few
+          letters and hit Enter.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <section class="specs" data-reveal>
+      <h2 class="eyebrow">Under the hood</h2>
+      <dl class="spec-grid">
+        <div>
+          <dt>Renderer bundle</dt>
+          <dd><strong>228 KB</strong></dd>
+        </div>
+        <div>
+          <dt>Runtime deps</dt>
+          <dd>
+            <code>better-sqlite3</code>,
+            <code>uiohook-napi</code>,
+            <code>electron-updater</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Window size</dt>
+          <dd>440 × 540, fixed</dd>
+        </div>
+        <div>
+          <dt>Search</dt>
+          <dd>FTS5 BM25 with LIKE fallback</dd>
+        </div>
+        <div>
+          <dt>Foreground activation</dt>
+          <dd>Native Win32 via PowerShell + <code>AttachThreadInput</code></dd>
+        </div>
+        <div>
+          <dt>Accessibility</dt>
+          <dd>WCAG AA contrast both themes · keyboard nav across every section</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────── -->
+    <section class="install" data-reveal>
+      <h2>Get it</h2>
+      <p class="install-lede">One installer. No setup, no account, no first-run wizard.</p>
+      <a class="btn primary big" href="https://github.com/syfpsy/mnml/releases/latest" id="download-link-2">
+        <span class="btn-label">Download for Windows</span>
+        <span class="btn-meta" id="download-meta-2">latest installer</span>
+      </a>
+      <p class="install-alt">
+        Prefer the binaries page? <a href="https://github.com/syfpsy/mnml/releases" rel="noreferrer">All releases</a>.
+        Or build from source: <code>npm install &amp;&amp; npm run build</code>.
+      </p>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <span><span class="dot" aria-hidden="true"></span>mnml</span>
+    <span class="dim"><span id="version-stamp">v0.2.31</span> · MIT · <a href="https://github.com/syfpsy/mnml">github.com/syfpsy/mnml</a></span>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

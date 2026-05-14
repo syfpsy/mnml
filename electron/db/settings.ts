@@ -8,8 +8,6 @@ export interface AppSettings {
   autoPaste: boolean;
   /** Use the light colour theme instead of the default dark one. */
   lightTheme: boolean;
-  /** Last used window mode — persisted so main.ts can open at the correct size. */
-  windowMode: "compact" | "expanded";
 }
 
 const DEFAULTS: AppSettings = {
@@ -18,7 +16,6 @@ const DEFAULTS: AppSettings = {
   launchOnStartup: false,
   autoPaste: true,
   lightTheme: false,
-  windowMode: "compact",
 };
 
 export function getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] {
@@ -43,11 +40,10 @@ export function setSetting<K extends keyof AppSettings>(key: K, value: AppSettin
 
 export function getAll(): AppSettings {
   return {
-    monitoring: getSetting("monitoring"),
-    maxItems: getSetting("maxItems"),
+    monitoring:      getSetting("monitoring"),
+    maxItems:        getSetting("maxItems"),
     launchOnStartup: getSetting("launchOnStartup"),
-    autoPaste: getSetting("autoPaste"),
-    lightTheme: getSetting("lightTheme"),
-    windowMode: getSetting("windowMode"),
+    autoPaste:       getSetting("autoPaste"),
+    lightTheme:      getSetting("lightTheme"),
   };
 }

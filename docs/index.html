@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="mnml is a minimal clipboard manager for Windows. It keeps your copy history, lets you search it instantly, and pops up with a double-tap of Alt.">
-  <title>mnml — clipboard manager for Windows</title>
+  <meta name="description" content="mnml is a local clipboard manager and PC search launcher for Windows. Double-tap Alt to search clips, files, folders, and apps from a local index.">
+  <title>mnml - clipboard and PC search for Windows</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -12,14 +12,16 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:     #0a0a0a;
-      --border: rgba(255,255,255,0.07);
-      --t1:     #e5e5e5;
-      --t2:     #888;
-      --t3:     #3a3a3a;
-      --blue:   #60a5fa;
-      --violet: #a78bfa;
-      --rose:   #fb7185;
+      --bg:     #090b0e;
+      --panel:  #10141a;
+      --border: rgba(235,242,255,0.11);
+      --t1:     #f4f7fb;
+      --t2:     #aab4c2;
+      --t3:     #667183;
+      --blue:   #7db7ff;
+      --green:  #7dd3a8;
+      --amber:  #f4c76d;
+      --rose:   #ff8aa1;
     }
 
     html {
@@ -37,8 +39,10 @@
       content: "";
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(rgba(255,255,255,0.028) 1px, transparent 1px);
-      background-size: 22px 22px;
+      background:
+        linear-gradient(180deg, rgba(125,183,255,0.08), transparent 340px),
+        radial-gradient(rgba(255,255,255,0.026) 1px, transparent 1px);
+      background-size: auto, 24px 24px;
       pointer-events: none;
       z-index: 0;
     }
@@ -56,7 +60,7 @@
       border-bottom: 1px solid transparent;
     }
     nav.scrolled {
-      background: rgba(10,10,10,0.82);
+      background: rgba(9,11,14,0.84);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-color: var(--border);
@@ -101,7 +105,7 @@
 
     /* ── Layout ──────────────────────────────────────── */
     .container {
-      max-width: 680px;
+      max-width: 760px;
       margin: 0 auto;
       padding: 0 32px;
       position: relative;
@@ -121,7 +125,7 @@
       font-weight: 500;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--t3);
+      color: var(--t2);
       margin-bottom: 36px;
     }
 
@@ -147,7 +151,7 @@
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: var(--violet);
+      background: var(--green);
       flex-shrink: 0;
     }
 
@@ -158,16 +162,11 @@
       line-height: 1.08;
       margin-bottom: 20px;
     }
-    .hero h1 em {
-      font-style: normal;
-      color: var(--t2);
-    }
-
     .hero-desc {
       font-size: 17px;
       line-height: 1.65;
       color: var(--t2);
-      max-width: 440px;
+      max-width: 560px;
       margin: 0 auto 40px;
     }
 
@@ -178,13 +177,33 @@
       gap: 12px;
     }
 
+    .hero-proof {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 28px;
+    }
+
+    .hero-proof span {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.035);
+      color: var(--t2);
+      font-size: 12px;
+    }
+
     .btn-primary {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       font-size: 14px;
       font-weight: 500;
-      color: #0a0a0a;
+      color: #090b0e;
       background: var(--t1);
       text-decoration: none;
       padding: 11px 22px;
@@ -199,38 +218,37 @@
 
     .hero-meta {
       font-size: 12px;
-      color: var(--t3);
+      color: #fff;
       letter-spacing: 0.01em;
     }
 
     /* Screenshot */
     .screenshot-scene {
       position: relative;
-      width: 460px;
+      width: 480px;
       max-width: calc(100% - 40px);
       margin: 72px auto 0;
     }
 
-    .blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(70px);
-      pointer-events: none;
-    }
-    .blob-1 { width: 320px; height: 180px; background: var(--blue);   opacity: 0.12; top: 15%; left: -18%; }
-    .blob-2 { width: 280px; height: 180px; background: var(--violet); opacity: 0.12; top:  5%; right: -14%; }
-    .blob-3 { width: 220px; height: 140px; background: var(--rose);   opacity: 0.10; bottom: 5%; right: 8%; }
-
     .screenshot {
       display: block;
       width: 100%;
-      border-radius: 14px;
+      border-radius: 12px;
+      background: var(--panel);
       box-shadow:
-        0 0 0 1px rgba(255,255,255,0.09),
+        0 0 0 1px rgba(235,242,255,0.14),
         0 4px 16px rgba(0,0,0,0.35),
         0 32px 72px rgba(0,0,0,0.65);
       animation: float 7s ease-in-out infinite;
       position: relative;
+    }
+
+    .screenshot-note {
+      margin: 16px auto 0;
+      color: var(--t3);
+      font-size: 12px;
+      line-height: 1.5;
+      max-width: 420px;
     }
 
     @keyframes float {
@@ -430,7 +448,7 @@
 
     .download-meta {
       font-size: 12px;
-      color: var(--t3);
+      color: #fff;
       margin-top: 16px;
       letter-spacing: 0.01em;
     }
@@ -546,7 +564,8 @@
   <nav id="nav">
     <a href="/" class="nav-logo">mnml</a>
     <div class="nav-right">
-      <a href="#releases" class="nav-link">What's new</a>
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#releases" class="nav-link">Releases</a>
       <a href="https://github.com/syfpsy/mnml" class="nav-link" target="_blank" rel="noopener">GitHub</a>
       <a href="#download" class="nav-cta">Download</a>
     </div>
@@ -557,15 +576,14 @@
     <div class="container">
       <div class="hero-badge">
         <span class="badge-dot"></span>
-        Free and open source
+        Clipboard history + PC search
       </div>
 
-      <h1>Everything you copied.<br><em>Right where you need it.</em></h1>
+      <h1>mnml</h1>
 
       <p class="hero-desc">
-        A clipboard manager for Windows that stays out of your way.
-        Double-tap Alt, find what you need, and paste.
-        No account, no cloud, no subscription.
+        A local Windows command surface for copied text, images, links, files, folders, and apps.
+        Double-tap Alt, type, then paste or open the result. No account, no cloud, no subscription.
       </p>
 
       <div class="hero-cta-wrap">
@@ -575,21 +593,26 @@
           </svg>
           Download for Windows
         </a>
-        <span class="hero-meta">v0.2.2 &middot; 82 MB &middot; Windows 10 and 11 &middot; 64-bit &middot; free</span>
+        <span class="hero-meta">v0.2.15 &middot; mnml-setup.exe &middot; 82 MB &middot; Windows 10 and 11 &middot; 64-bit &middot; free</span>
+      </div>
+
+      <div class="hero-proof" aria-label="Current highlights">
+        <span>Whole-PC index</span>
+        <span>Latest modified first</span>
+        <span>Double-Alt focus</span>
+        <span>Local SQLite storage</span>
       </div>
     </div>
 
     <div class="screenshot-scene">
-      <div class="blob blob-1"></div>
-      <div class="blob blob-2"></div>
-      <div class="blob blob-3"></div>
       <img
         class="screenshot"
         src="screenshot.png"
-        alt="mnml showing recent clipboard items: images, text snippets, and copied links"
+        alt="mnml search window showing recent clipboard items and search controls"
         width="460"
         height="540"
       >
+      <p class="screenshot-note">The summon window stays compact, focuses search on open, and keeps Settings close for index health and rebuild controls.</p>
     </div>
   </section>
 
@@ -603,16 +626,16 @@
         <div class="step">
           <span class="step-num">01</span>
           <div class="step-body">
-            <h3>Copy as you normally would</h3>
-            <p>Ctrl+C, right-click, drag and drop. mnml watches in the background and captures text, links, and screenshots without getting in the way.</p>
+            <h3>Copy normally</h3>
+            <p>Ctrl+C, right-click, drag and drop. mnml captures text, links, and images in the background without changing how you work.</p>
           </div>
         </div>
 
         <div class="step">
           <span class="step-num">02</span>
           <div class="step-body">
-            <h3>Double-tap Alt to open it</h3>
-            <p>The window opens right next to your cursor. Recent clips are listed immediately, or type a few letters to search through everything.</p>
+            <h3>Double-tap Alt and type</h3>
+            <p>The window opens by your cursor and focuses the search bar. Recent clips appear immediately, or type to search clips, files, folders, and apps.</p>
             <div class="step-keys">
               <kbd>Alt</kbd>
               <kbd>Alt</kbd>
@@ -623,8 +646,16 @@
         <div class="step">
           <span class="step-num">03</span>
           <div class="step-body">
-            <h3>Click to paste</h3>
-            <p>Click any item and it lands in whatever you were working in. Shift-click to copy it to your clipboard without pasting right away.</p>
+            <h3>Paste or open</h3>
+            <p>Click a clipboard item to paste it into the active app. Click a file, folder, or app result to open it. Shift-click copies without pasting.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">04</span>
+          <div class="step-body">
+            <h3>Keep the index visible</h3>
+            <p>Settings includes a PC search dashboard with drive scope, counts, progress, errors, and a rebuild action when you want a clean index.</p>
           </div>
         </div>
 
@@ -633,38 +664,38 @@
   </section>
 
   <!-- Features -->
-  <section class="features">
+  <section class="features" id="features">
     <div class="container">
       <div class="divider" style="margin-top: 96px;"></div>
       <p class="section-label">The details</p>
       <p class="features-lead">
-        The basics, done well.<br>
-        <em>A few things worth knowing about.</em>
+        Clipboard memory plus PC search.<br>
+        <em>Built around a local database, not live Windows Search delays.</em>
       </p>
       <ul class="feature-list">
         <li>
           <span class="fdot" style="background: var(--blue)"></span>
-          <span><strong>Catches everything.</strong> Text, links, and screenshots, captured automatically. Links even pull in the page title so you know what you copied at a glance.</span>
+          <span><strong>Clipboard history.</strong> Text, links, and images are captured automatically. Links include useful metadata so older copies are easier to recognize.</span>
         </li>
         <li>
-          <span class="fdot" style="background: var(--violet)"></span>
-          <span><strong>Search that actually works.</strong> Type a few letters and the list narrows in real time. No waiting, just the things that match.</span>
+          <span class="fdot" style="background: var(--green)"></span>
+          <span><strong>Whole-PC Files & Apps search.</strong> mnml crawls ready local drives into a SQLite FTS index, then searches that database instead of calling Windows Search live.</span>
         </li>
         <li>
-          <span class="fdot" style="background: var(--rose)"></span>
-          <span><strong>Pins for the things you reuse.</strong> Keep frequently used snippets at the top. Templates, addresses, whatever you reach for every week.</span>
+          <span class="fdot" style="background: var(--amber)"></span>
+          <span><strong>Newest files first.</strong> File and folder results carry modified timestamps and sort by latest modified date at the top.</span>
         </li>
         <li>
           <span class="fdot" style="background: var(--blue)"></span>
-          <span><strong>Two sizes.</strong> A compact list for quick grabs, and a wider view with tabs to filter by type when you want to browse properly.</span>
+          <span><strong>Index dashboard.</strong> Settings shows indexed counts, current drive scope, crawl progress, errors, and a rebuild button for a fresh database.</span>
         </li>
         <li>
-          <span class="fdot" style="background: var(--violet)"></span>
-          <span><strong>Updates itself.</strong> New versions download quietly while you work. When one is ready, a small notice shows up at the bottom with a restart button.</span>
+          <span class="fdot" style="background: var(--green)"></span>
+          <span><strong>Stable summon behavior.</strong> Double-Alt summon uses native Windows foreground activation, renderer focus verification, and guard checks to keep search ready.</span>
         </li>
         <li>
           <span class="fdot" style="background: var(--rose)"></span>
-          <span><strong>Fully local.</strong> No account, no sync, no telemetry. Everything lives in a SQLite file on your machine and goes nowhere.</span>
+          <span><strong>Fully local.</strong> No account, no sync, no telemetry. Clipboard history and the PC search index live in SQLite databases on your machine.</span>
         </li>
       </ul>
     </div>
@@ -678,48 +709,50 @@
 
       <div class="release">
         <div class="release-hd">
-          <span class="release-ver">v0.2.2</span>
-          <span class="release-date">Apr 28, 2026</span>
+          <span class="release-ver">v0.2.15</span>
+          <span class="release-date">May 1, 2026</span>
         </div>
         <ul class="release-items">
-          <li>Auto-update: running copies check for new versions on startup and every 4 hours. Updates download in the background and a small banner appears at the bottom of the window when one is ready.</li>
-          <li>GitHub Actions release workflow: pushing a version tag now triggers a Windows build and publishes the installer to GitHub Releases automatically.</li>
+          <li>Whole-PC file and app search with an index dashboard in Settings.</li>
+          <li>Latest results sort by most recently modified first.</li>
+          <li>Double-Alt summon now uses verified Windows foreground focus before focusing the search field.</li>
           <li>Stable download filename (mnml-setup.exe) so the download link on this page always points to the latest build.</li>
         </ul>
       </div>
 
       <div class="release">
         <div class="release-hd">
-          <span class="release-ver">v0.2.0</span>
-          <span class="release-date">Apr 27, 2026</span>
+          <span class="release-ver">v0.2.13</span>
+          <span class="release-date">May 1, 2026</span>
         </div>
         <ul class="release-items">
-          <li>Removed the copy action button from list rows. Clicking a row already pastes, so the button was redundant.</li>
-          <li>Delete now requires a second click to confirm. First click turns the trash icon red; second click deletes. Auto-disarms after 2 seconds or when you click elsewhere.</li>
+          <li>Moved summon and focus ownership into the main process after native window show.</li>
+          <li>Made the window opaque and added build-time summon rules to prevent flash-prone patterns from returning.</li>
+          <li>Delayed show after Alt key-up so Windows can settle keyboard focus before mnml asks the search input to focus.</li>
         </ul>
       </div>
 
       <div class="release">
         <div class="release-hd">
-          <span class="release-ver">v0.1.15</span>
-          <span class="release-date">Apr 27, 2026</span>
+          <span class="release-ver">v0.2.11</span>
+          <span class="release-date">May 1, 2026</span>
         </div>
         <ul class="release-items">
-          <li>Link rows now show the site's favicon, fetched from Google's favicon service with a fallback to the link icon.</li>
-          <li>Subtle per-category tint on each row: blue for text, violet for links, rose for images.</li>
-          <li>The window now opens with its top-left corner at the cursor, instead of offset to the side.</li>
-          <li>Settings panel added to the compact view, not just the expanded one.</li>
-          <li>Fixed auto-paste: the window now properly transfers OS focus before sending Ctrl+V.</li>
+          <li>Files & Apps indexing now crawls all ready local drive letters instead of only common user folders.</li>
+          <li>PC search moved to a SQLite FTS index for database-backed whole-PC lookups.</li>
+          <li>Settings gained the PC search dashboard with counts, drive scope, progress, errors, and rebuild controls.</li>
         </ul>
       </div>
 
       <div class="release">
         <div class="release-hd">
-          <span class="release-ver">v0.1.14</span>
-          <span class="release-date">Apr 27, 2026</span>
+          <span class="release-ver">v0.2.9</span>
+          <span class="release-date">May 1, 2026</span>
         </div>
         <ul class="release-items">
-          <li>Rewrote show/hide to use opacity and mouse-event masking instead of the OS window cycle. The renderer stays permanently live, which eliminates the flicker on open.</li>
+          <li>Introduced local Files & Apps indexing before querying.</li>
+          <li>Removed the slow Windows Search timeout/backoff state from the UI.</li>
+          <li>Unified PC search requests through one local database IPC path.</li>
         </ul>
       </div>
 
@@ -732,9 +765,9 @@
   <!-- Download -->
   <section class="download" id="download">
     <div class="container">
-      <h2>Give it a try.</h2>
+      <h2>Install the latest build.</h2>
       <p class="download-sub">
-        One-click installer. No wizard, no UAC prompt, no account.<br>
+        One installer for Windows 10 and 11. The link always points to the latest GitHub release.<br>
         Uninstall cleanly from Add or Remove Programs if it is not for you.
       </p>
       <a href="https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe" class="btn-primary">
@@ -743,7 +776,7 @@
         </svg>
         Download mnml-setup.exe
       </a>
-      <p class="download-meta">v0.2.2 &middot; 82 MB &middot; Windows 10 / 11 &middot; 64-bit</p>
+      <p class="download-meta">v0.2.15 &middot; mnml-setup.exe &middot; 82 MB &middot; Windows 10 / 11 &middot; 64-bit</p>
       <p class="download-also">
         Looking for an older version or the source code?
         <a href="https://github.com/syfpsy/mnml/releases" target="_blank" rel="noopener">All releases on GitHub</a>.
@@ -759,7 +792,7 @@
         <div class="legal-item">
           <h3>Privacy</h3>
           <p>
-            mnml stores your clipboard history locally in a SQLite database on
+            mnml stores your clipboard history and PC search index locally in SQLite databases on
             your machine. It does not collect, transmit, or share any data. There
             are no analytics, no crash reports, and no telemetry of any kind.
             Nothing leaves your computer.

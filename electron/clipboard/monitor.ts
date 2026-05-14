@@ -4,7 +4,6 @@ import path from "node:path";
 import { insertOrTouch, trimToMax, updateTitle, type Item } from "../db/items.js";
 import { getSetting } from "../db/settings.js";
 import { imagesDir } from "../db/index.js";
-import { markIndexDirty } from "../search/service.js";
 import { sha1 } from "../utils/hash.js";
 import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
@@ -29,6 +28,19 @@ let lastTextHash = "";
 let lastImageHash = "";
 let timer: NodeJS.Timeout | null = null;
 
+/**
+ * Image-poll throttle: clipboard.toPNG() re-encodes the entire bitmap on
+ * every call, which for a 4K screenshot is several MB of allocation churn
+ * every 500 ms. We use the image's dimensions as a cheap fingerprint and
+ * only run the full PNG hash when (a) dimensions changed or (b) it has
+ * been > IMAGE_RECHECK_MS since the last confirmation. Worst case: a new
+ * image with identical dimensions to the previous one is captured up to
+ * IMAGE_RECHECK_MS late — acceptable for a clipboard manager.
+ */
+let lastImageSizeKey = "";
+let lastImageCheckedAt = 0;
+const IMAGE_RECHECK_MS = 4_000;
+
 export function onNewItem(l: Listener): () => void {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -39,7 +51,16 @@ export function start() {
   // initialize baseline so we don't capture whatever was already on the clipboard on launch
   lastTextHash = sha1(clipboard.readText() ?? "");
   const img = clipboard.readImage();
-  lastImageHash = img.isEmpty() ? "" : sha1(img.toPNG());
+  if (img.isEmpty()) {
+    lastImageHash      = "";
+    lastImageSizeKey   = "";
+    lastImageCheckedAt = 0;
+  } else {
+    lastImageHash      = sha1(img.toPNG());
+    const { width, height } = img.getSize();
+    lastImageSizeKey   = `${width}x${height}`;
+    lastImageCheckedAt = Date.now();
+  }
 
   timer = setInterval(poll, POLL_MS);
 }
@@ -47,6 +68,9 @@ export function start() {
 export function stop() {
   if (timer) clearInterval(timer);
   timer = null;
+  // Reset image fingerprint so a re-start triggers a fresh confirmation.
+  lastImageSizeKey   = "";
+  lastImageCheckedAt = 0;
 }
 
 function emit(item: Item) {
@@ -60,8 +84,20 @@ function poll() {
     // image first — when copying screenshots, text is usually empty
     const img = clipboard.readImage();
     if (!img.isEmpty()) {
+      // Cheap dimension fingerprint — getSize() is O(1) (reads cached field
+      // from the wrapping NativeImage; no decode). If dimensions match what
+      // we already hashed AND we re-confirmed recently, the image is almost
+      // certainly the same — skip the expensive toPNG() + sha1.
+      const { width, height } = img.getSize();
+      const sizeKey = `${width}x${height}`;
+      const now = Date.now();
+      if (sizeKey === lastImageSizeKey && now - lastImageCheckedAt < IMAGE_RECHECK_MS) {
+        return;
+      }
       const png = img.toPNG();
       const h = sha1(png);
+      lastImageSizeKey   = sizeKey;
+      lastImageCheckedAt = now;
       if (h !== lastImageHash) {
         lastImageHash = h;
         lastTextHash = sha1(clipboard.readText() ?? ""); // suppress concurrent text dup
@@ -89,7 +125,6 @@ function poll() {
         byte_size: c.url.length,
         hash: h,
       });
-      markIndexDirty();
       trim();
       emit(item);
       // Background title enrichment — fire and forget
@@ -97,7 +132,6 @@ function poll() {
         .then((title) => {
           if (!title) return;
           updateTitle(item.id, title);
-          markIndexDirty();
           emitUpdate({ ...item, title });
         })
         .catch(() => {});
@@ -109,7 +143,6 @@ function poll() {
         byte_size: c.text.length,
         hash: h,
       });
-      markIndexDirty();
       trim();
       emit(item);
     }
@@ -136,7 +169,6 @@ function saveImage(png: Buffer, img: Electron.NativeImage, hash: string) {
     byte_size: png.byteLength,
     hash,
   });
-  markIndexDirty();
   trim();
   emit(item);
 }
@@ -144,8 +176,7 @@ function saveImage(png: Buffer, img: Electron.NativeImage, hash: string) {
 function trim() {
   const max = getSetting("maxItems");
   if (!max || max <= 0) return;
-  const { deletedIds } = trimToMax(max);
-  if (deletedIds.length) markIndexDirty();
+  trimToMax(max);
 }
 
 // Re-copy an item back to the system clipboard.
@@ -159,4 +190,14 @@ export function restoreItem(item: Item) {
   const value = item.content_text ?? item.content_url ?? item.preview;
   clipboard.writeText(value);
   lastTextHash = sha1(value);
+}
+
+/**
+ * Write a plain text snippet to the clipboard. Used by the saved-snippets
+ * restore path. Updates `lastTextHash` so the monitor's next poll doesn't
+ * re-capture our own write as a new clipboard entry.
+ */
+export function restoreText(text: string) {
+  clipboard.writeText(text);
+  lastTextHash = sha1(text);
 }

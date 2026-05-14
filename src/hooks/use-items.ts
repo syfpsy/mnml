@@ -6,11 +6,12 @@ interface Options {
   query: string;
   type?: ItemType;
   limit: number;
+  enabled?: boolean;
 }
 
 // Fetches items (either recent or search results), subscribes to new-item events,
 // and debounces search queries so typing stays smooth.
-export function useItems({ query, type, limit }: Options) {
+export function useItems({ query, type, limit, enabled = true }: Options) {
   const [items, setItems] = useState<Item[]>([]);
   const [rev, setRev] = useState(0);
   const seq = useRef(0);
@@ -20,6 +21,10 @@ export function useItems({ query, type, limit }: Options) {
 
   useEffect(() => {
     const current = ++seq.current;
+    if (!enabled) {
+      setItems([]);
+      return;
+    }
 
     const run = async () => {
       const results = query.trim()
@@ -31,9 +36,10 @@ export function useItems({ query, type, limit }: Options) {
 
     const timer = setTimeout(run, query.trim() ? 110 : 0);
     return () => clearTimeout(timer);
-  }, [query, type, limit, rev]);
+  }, [query, type, limit, rev, enabled]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const off = bridge.onItemAdded((item) => {
       // only auto-prepend on the "recent" view with no type filter or matching type
       if (query.trim()) return;
@@ -44,15 +50,16 @@ export function useItems({ query, type, limit }: Options) {
       });
     });
     return off;
-  }, [query, type, limit]);
+  }, [query, type, limit, enabled]);
 
   // Patch in-place when a field like `title` is enriched asynchronously (e.g. link title fetch).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => bridge.onItemUpdated((updated) => {
+    if (!enabled) return;
     setItems((prev) =>
       prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
     );
-  }), []);
+  }), [enabled]);
 
   return { items, setItems, refetch };
 }

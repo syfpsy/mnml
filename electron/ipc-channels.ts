@@ -1,23 +1,43 @@
 // Shared channel names between main and renderer.
 export const IPC = {
+  // ── Clipboard items ──────────────────────────────────────────────────────
   listRecent: "mnml:items:list",
-  search: "mnml:items:search",
-  restore: "mnml:items:restore",
-  remove: "mnml:items:remove",
-  clear: "mnml:items:clear",
-  pin: "mnml:items:pin",
-  getImage: "mnml:items:image",
-  getSettings: "mnml:settings:get",
+  search:     "mnml:items:search",
+  restore:    "mnml:items:restore",
+  remove:     "mnml:items:remove",
+  clear:      "mnml:items:clear",
+  pin:        "mnml:items:pin",
+  getImage:   "mnml:items:image",
+
+  // ── App launcher (Start-Menu apps + Windows Settings + classic tools) ───
+  appSearch:  "mnml:app:search",
+  appLaunch:  "mnml:app:launch",
+
+  // ── Saved snippets ──────────────────────────────────────────────────────
+  savedList:    "mnml:saved:list",
+  savedAdd:     "mnml:saved:add",
+  savedUpdate:  "mnml:saved:update",
+  savedRemove:  "mnml:saved:remove",
+  /** Copy a saved snippet's content to the clipboard and (optionally) auto-paste. */
+  savedRestore: "mnml:saved:restore",
+  /** Save the currently-focused clipboard item as a snippet. */
+  savedFromItem: "mnml:saved:from-item",
+
+  // ── Settings / window / updates ─────────────────────────────────────────
+  getSettings:   "mnml:settings:get",
   updateSetting: "mnml:settings:set",
-  hide: "mnml:window:hide",
-  setMode: "mnml:window:mode", // "compact" | "expanded"
-  setBlurLock: "mnml:window:blur-lock",
-  onItemAdded: "mnml:event:item-added",
-  onItemUpdated: "mnml:event:item-updated",
+  hide:          "mnml:window:hide",
+  setBlurLock:   "mnml:window:blur-lock",
+  installUpdate: "mnml:window:install-update",
+  /** Manually trigger a check (the auto-updater also polls every 24 h). */
+  checkUpdate:   "mnml:window:check-update",
+
+  // ── Events (main → renderer) ─────────────────────────────────────────────
+  onItemAdded:         "mnml:event:item-added",
+  onItemUpdated:       "mnml:event:item-updated",
   onVisibilityChanged: "mnml:event:visibility",
   onUpdateAvailable:   "mnml:event:update-available",
   onUpdateDownloaded:  "mnml:event:update-downloaded",
-  installUpdate: "mnml:window:install-update",
+  onSavedChanged:      "mnml:event:saved-changed",
 } as const;
 
-export type WindowMode = "compact" | "expanded";

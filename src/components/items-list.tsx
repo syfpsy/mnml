@@ -1,10 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import { ListView } from "@heroui-pro/react/list-view";
-import type { Key } from "react-aria-components";
+/**
+ * items-list.tsx — clipboard history list.
+ *
+ * Plain HTML, no UI library. With ≤200 rows we don't need virtualisation.
+ *
+ * ARIA: a single-column list is a `role="listbox"` / `role="option"`
+ * composite, not `role="grid"`. We use `aria-activedescendant` for virtual
+ * focus on the container; rows are `tabIndex={-1}`.
+ *
+ * Selectors the rest of the app depends on:
+ *   - `[role="listbox"]`               on the container — `compact-view.focusList()`
+ *   - `[role="option"]`                on each row     — `isClipboardEndActive()`
+ *   - `aria-activedescendant`          on the container
+ *   - row `id="item-row-<id>"`         referenced by aria-activedescendant
+ *
+ * Per-type colour comes from CSS tokens (`--accent-text/link/image` family)
+ * so the list themes correctly. Selection indicator is a 1 px FULL inset
+ * ring (frontend-design absolute bans prohibit side-stripes).
+ */
+
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { bridge } from "../lib/bridge";
 import { timeAgo, splitHighlight } from "../lib/format";
-import type { Item } from "../types";
+import type { Item, ItemType } from "../types";
 import {
+  BookmarkIcon,
+  CheckIcon,
   ImageIcon,
   LinkIcon,
   PinFilledIcon,
@@ -13,93 +33,186 @@ import {
   TrashIcon,
 } from "./icons";
 
+const KEYBOARD_GRACE_MS = 250;
+
 interface Props {
   items: Item[];
   onActivate: (item: Item) => void;
   onRemove: (id: number) => void;
   onPinToggle: (item: Item) => void;
+  /** Optional quick-save: clipboard item → saved snippet. */
+  onSave?: (item: Item) => void;
   query: string;
   emptyHint?: string;
   listRef?: React.RefObject<HTMLDivElement | null>;
+  onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>;
 }
 
+/**
+ * Per-type CSS variable names. The actual colour values live in `styles.css`
+ * and theme automatically. Each row reads `--item-tint` / `--item-tint-hover`
+ * from its inline style.
+ */
+const TYPE_VARS: Record<ItemType, {
+  bg: string; icon: string; row: string; rowHover: string;
+}> = {
+  text:  { bg: "var(--accent-text-bg)",  icon: "var(--accent-text)",  row: "var(--accent-text-row)",  rowHover: "var(--accent-text-row-hover)"  },
+  link:  { bg: "var(--accent-link-bg)",  icon: "var(--accent-link)",  row: "var(--accent-link-row)",  rowHover: "var(--accent-link-row-hover)"  },
+  image: { bg: "var(--accent-image-bg)", icon: "var(--accent-image)", row: "var(--accent-image-row)", rowHover: "var(--accent-image-row-hover)" },
+};
+
 export function ItemsList({
-  items, onActivate, onRemove, onPinToggle,
-  query, emptyHint, listRef,
+  items, onActivate, onRemove, onPinToggle, onSave,
+  query, emptyHint, listRef, onKeyDownCapture,
 }: Props) {
-  return (
-    <div ref={listRef} className="mnml-no-drag">
-      <ListView
-        aria-label="Clipboard history"
-        items={items}
-        selectionMode="none"
-        variant="secondary"
-        onAction={(key: Key) => {
-          const item = items.find(i => String(i.id) === String(key));
-          if (item) onActivate(item);
-        }}
-        renderEmptyState={() => (
-          <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-[13px]" style={{ color: "var(--t2)" }}>
-              {query ? "No matches" : "Nothing here yet"}
-            </p>
-            <p className="text-[12px]" style={{ color: "var(--t3)" }}>
-              {query ? "Try different words." : emptyHint ?? "Copy any text, link, or image."}
-            </p>
-          </div>
-        )}
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const lastKbdAt = useRef(0);
+  const listEl    = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setFocusedIndex(-1); }, [items.length, query]);
+
+  const activeId =
+    focusedIndex >= 0 && focusedIndex < items.length
+      ? rowId(items[focusedIndex])
+      : undefined;
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    lastKbdAt.current = Date.now();
+    if (items.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusedIndex((i) => (i < 0 ? 0 : Math.min(i + 1, items.length - 1)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusedIndex((i) => (i <= 0 ? 0 : i - 1));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setFocusedIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setFocusedIndex(items.length - 1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const i = focusedIndex >= 0 ? focusedIndex : 0;
+      const item = items[i];
+      if (item) onActivate(item);
+    }
+  };
+
+  // Empty state — render a listbox container so compact-view's focus helper
+  // still finds a tab-stop in the list region.
+  if (items.length === 0) {
+    return (
+      <div
+        ref={listRef}
+        className="mnml-no-drag"
+        onKeyDownCapture={onKeyDownCapture}
       >
-        {(item: Item) => {
-          const isPinned = item.pinned_at != null;
-          const tint = TYPE_TINT[item.type];
+        <div
+          ref={listEl}
+          role="listbox"
+          aria-label="Clipboard history"
+          tabIndex={0}
+          className="flex flex-col items-center gap-1 text-center py-6 rounded-md"
+        >
+          <p className="text-[13px]" style={{ color: "var(--t2)" }}>
+            {query ? "No matches" : "Nothing here yet"}
+          </p>
+          <p className="text-[12px]" style={{ color: "var(--t3)" }}>
+            {query ? "Try different words." : emptyHint ?? "Copy any text, link, or image."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={listRef}
+      className="mnml-no-drag"
+      onKeyDownCapture={onKeyDownCapture}
+    >
+      <div
+        ref={listEl}
+        role="listbox"
+        aria-label="Clipboard history"
+        aria-activedescendant={activeId}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        className="rounded-md"
+      >
+        {items.map((item, idx) => {
+          const tint    = TYPE_VARS[item.type];
+          const focused = idx === focusedIndex;
           return (
-            <ListView.Item
-              id={String(item.id)}
-              textValue={item.preview ?? "image"}
-              className="group"
+            <div
+              key={item.id}
+              id={rowId(item)}
+              role="option"
+              aria-selected={focused}
+              tabIndex={-1}
+              onClick={() => onActivate(item)}
+              onMouseEnter={() => {
+                if (Date.now() - lastKbdAt.current < KEYBOARD_GRACE_MS) return;
+                setFocusedIndex(idx);
+              }}
+              className="mnml-row group flex items-center gap-2 px-2 py-1.5 cursor-pointer"
               style={{
-                "--item-tint":       tint.rowBg,
-                "--item-tint-hover": tint.rowHover,
-              } as React.CSSProperties}
+                // CSS variables for the row tints. The `.mnml-row` CSS rule
+                // reads these for the idle + hover states.
+                ["--item-tint"       as never]: tint.row,
+                ["--item-tint-hover" as never]: tint.rowHover,
+                // Selected state — full 1 px inset ring in the category accent
+                // (replaces the previously-banned side-stripe). Bg shifts to
+                // `--item-selected` for additional reinforcement.
+                background: focused ? "var(--item-selected)" : undefined,
+                boxShadow:  focused ? `inset 0 0 0 1px ${tint.icon}` : undefined,
+                borderRadius: focused ? 4 : undefined,
+              }}
             >
-              <ListView.ItemContent>
-                <TypeIcon item={item} />
-                <div className="min-w-0 flex flex-col gap-0.5">
-                  <ListView.Title
-                    className={item.type === "text" ? "!whitespace-normal line-clamp-2" : ""}
-                  >
-                    <ItemTitle item={item} query={query} />
-                  </ListView.Title>
-                  <ItemDescLine item={item} />
-                </div>
-              </ListView.ItemContent>
+              <TypeIcon item={item} tint={tint} />
+              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                <span
+                  className={
+                    "text-[13px] leading-tight font-medium " +
+                    (item.type === "text" ? "line-clamp-2 break-words" : "truncate")
+                  }
+                  style={{ color: "var(--t1)" }}
+                >
+                  <ItemTitle item={item} query={query} />
+                </span>
+                <ItemDescLine item={item} />
+              </div>
 
-              <ListView.ItemAction>
-                <div className="flex items-center gap-0.5">
-                  <span className="text-[11px] tabular-nums mr-1" style={{ color: "var(--t3)" }}>
-                    {timeAgo(item.updated_at)}
-                  </span>
-
-                  <ActionBtn
-                    label={isPinned ? "Unpin" : "Pin"}
-                    onClick={() => onPinToggle(item)}
-                    alwaysVisible={isPinned}
-                    color={isPinned ? "#f59e0b" : undefined}
-                  >
-                    {isPinned
-                      ? <PinFilledIcon className="w-3.5 h-3.5" />
-                      : <PinIcon      className="w-3.5 h-3.5" />}
-                  </ActionBtn>
-
-                  <DeleteBtn onRemove={() => onRemove(item.id)} />
-                </div>
-              </ListView.ItemAction>
-            </ListView.Item>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <span className="text-[11px] tabular-nums mr-1" style={{ color: "var(--t3)" }}>
+                  {timeAgo(item.updated_at)}
+                </span>
+                {onSave && item.type !== "image" && (
+                  <SaveBtn onSave={() => onSave(item)} />
+                )}
+                <ActionBtn
+                  label={item.pinned_at != null ? "Unpin" : "Pin"}
+                  onClick={() => onPinToggle(item)}
+                  alwaysVisible={item.pinned_at != null}
+                  color={item.pinned_at != null ? "var(--accent-pinned)" : undefined}
+                >
+                  {item.pinned_at != null
+                    ? <PinFilledIcon className="w-3.5 h-3.5" />
+                    : <PinIcon       className="w-3.5 h-3.5" />}
+                </ActionBtn>
+                <DeleteBtn onRemove={() => onRemove(item.id)} />
+              </div>
+            </div>
           );
-        }}
-      </ListView>
+        })}
+      </div>
     </div>
   );
+}
+
+function rowId(item: Item): string {
+  return `item-row-${item.id}`;
 }
 
 /* ── Action button ────────────────────────────────────────────────────────── */
@@ -110,22 +223,61 @@ function ActionBtn({ children, label, onClick, alwaysVisible = false, color }: {
   alwaysVisible?: boolean;
   color?: string;
 }) {
+  // p-1.5 → ~26 px hit target (was p-1 / ~22 px). Meets WCAG 2.5.8 24 × 24.
   return (
     <button
       type="button"
       aria-label={label}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={[
-        "p-1 rounded-md transition-colors",
+        "p-1.5 rounded-md transition-colors",
+        // When `color` is set (pinned), keep it always visible without
+        // hover-recolouring. Otherwise this is a ghost icon button.
+        color ? "" : "mnml-btn-ghost",
         alwaysVisible
           ? "opacity-100"
-          : "opacity-0 group-hover:opacity-100 focus:opacity-100",
-      ].join(" ")}
-      style={{ color: color ?? "var(--t2)" }}
-      onMouseEnter={(e) => !color && ((e.currentTarget as HTMLElement).style.color = "var(--t1)")}
-      onMouseLeave={(e) => !color && ((e.currentTarget as HTMLElement).style.color = color ?? "var(--t2)")}
+          : "opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100",
+      ].join(" ").trim()}
+      style={color ? { color } : undefined}
     >
       {children}
+    </button>
+  );
+}
+
+/* ── Save button — one-click save to snippets, brief confirmation pulse ──── */
+function SaveBtn({ onSave }: { onSave: () => void | Promise<void> }) {
+  const [saved, setSaved] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  const trigger = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (saved) return;
+    await onSave();
+    setSaved(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setSaved(false), 1500);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={saved ? "Saved as snippet" : "Save as snippet"}
+      onClick={trigger}
+      className={[
+        "p-1.5 rounded-md transition-colors",
+        saved ? "" : "mnml-btn-ghost",
+        saved
+          ? "opacity-100"
+          : "opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100",
+      ].join(" ").trim()}
+      style={saved ? { color: "var(--accent-saved)" } : undefined}
+    >
+      {saved
+        ? <CheckIcon    className="w-3.5 h-3.5" />
+        : <BookmarkIcon className="w-3.5 h-3.5" />}
     </button>
   );
 }
@@ -154,12 +306,13 @@ function DeleteBtn({ onRemove }: { onRemove: () => void }) {
       onClick={(e) => { e.stopPropagation(); if (armed) { disarm(); onRemove(); } else { arm(); } }}
       onBlur={disarm}
       className={[
-        "p-1 rounded-md transition-colors",
-        armed ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100",
-      ].join(" ")}
-      style={{ color: armed ? "#ef4444" : "var(--t2)" }}
-      onMouseEnter={(e) => { if (!armed) (e.currentTarget as HTMLElement).style.color = "var(--t1)"; }}
-      onMouseLeave={(e) => { if (!armed) (e.currentTarget as HTMLElement).style.color = "var(--t2)"; }}
+        "p-1.5 rounded-md transition-colors",
+        armed ? "" : "mnml-btn-ghost",
+        armed
+          ? "opacity-100"
+          : "opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100",
+      ].join(" ").trim()}
+      style={armed ? { color: "var(--accent-danger)" } : undefined}
     >
       <TrashIcon className="w-3.5 h-3.5" />
     </button>
@@ -168,35 +321,27 @@ function DeleteBtn({ onRemove }: { onRemove: () => void }) {
 
 /* ── Type icon ────────────────────────────────────────────────────────────── */
 
-/**
- * Per-category colour tokens.
- *   bg/icon   → icon container background + stroke
- *   rowBg     → whole-row wash (very subtle, ~4 % opacity)
- *   rowHover  → whole-row wash on hover/focus (~8 %)
- *
- * Add new types here; the rest of the component picks them up automatically.
- */
-const TYPE_TINT = {
-  text:  { bg: "rgba(96,165,250,0.10)",  icon: "#60a5fa", rowBg: "rgba(96,165,250,0.04)",  rowHover: "rgba(96,165,250,0.08)"  },
-  link:  { bg: "rgba(167,139,250,0.10)", icon: "#a78bfa", rowBg: "rgba(167,139,250,0.04)", rowHover: "rgba(167,139,250,0.08)" },
-  image: { bg: "rgba(251,113,133,0.10)", icon: "#fb7185", rowBg: "rgba(251,113,133,0.04)", rowHover: "rgba(251,113,133,0.08)" },
-} as const;
+interface TintVars {
+  bg: string;
+  icon: string;
+  row: string;
+  rowHover: string;
+}
 
-function TypeIcon({ item }: { item: Item }) {
-  if (item.type === "image") return <ImageThumb item={item} />;
-  if (item.type === "link")  return <FaviconOrIcon item={item} />;
-  const { bg, icon } = TYPE_TINT.text;
+function TypeIcon({ item, tint }: { item: Item; tint: TintVars }) {
+  if (item.type === "image") return <ImageThumb item={item} tint={tint} />;
+  if (item.type === "link")  return <FaviconOrIcon item={item} tint={tint} />;
   return (
     <div
       className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center"
-      style={{ background: bg, color: icon }}
+      style={{ background: tint.bg, color: tint.icon }}
     >
       <TextIcon className="w-3 h-3" />
     </div>
   );
 }
 
-function ImageThumb({ item }: { item: Item }) {
+function ImageThumb({ item, tint }: { item: Item; tint: TintVars }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -204,23 +349,21 @@ function ImageThumb({ item }: { item: Item }) {
     return () => { alive = false; };
   }, [item.id]);
 
-  const { bg, icon } = TYPE_TINT.image;
   return (
     <div
       className="w-6 h-6 shrink-0 rounded-md overflow-hidden"
-      style={{ background: bg }}
+      style={{ background: tint.bg }}
     >
       {url
         ? <img src={url} alt="" className="w-full h-full object-cover" />
-        : <div className="w-full h-full flex items-center justify-center" style={{ color: icon }}>
+        : <div className="w-full h-full flex items-center justify-center" style={{ color: tint.icon }}>
             <ImageIcon className="w-3 h-3" />
           </div>}
     </div>
   );
 }
 
-function FaviconOrIcon({ item }: { item: Item }) {
-  const { bg, icon } = TYPE_TINT.link;
+function FaviconOrIcon({ item, tint }: { item: Item; tint: TintVars }) {
   const [favOk, setFavOk] = useState(true);
   const faviconUrl = item.hostname
     ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(item.hostname)}&sz=16`
@@ -229,7 +372,7 @@ function FaviconOrIcon({ item }: { item: Item }) {
   return (
     <div
       className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center overflow-hidden"
-      style={{ background: bg, color: icon }}
+      style={{ background: tint.bg, color: tint.icon }}
     >
       {faviconUrl && favOk ? (
         <img
@@ -256,7 +399,7 @@ function Hl({ text, query }: { text: string; query: string }) {
           ? <mark
               key={i}
               className="rounded-[2px] px-px not-italic"
-              style={{ background: "rgba(251,191,36,0.2)", color: "var(--t1)" }}
+              style={{ background: "var(--accent-highlight-bg)", color: "var(--t1)" }}
             >{chunk}</mark>
           : chunk,
       )}

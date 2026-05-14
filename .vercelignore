@@ -1,0 +1,29 @@
+# Only `site/` ships. Everything below is desktop-app build artefacts that
+# would otherwise be uploaded (and a 1.6 GB upload crashes Vercel's API).
+node_modules
+dist
+dist-electron
+release
+build
+vendor
+scripts
+docs
+electron
+src
+.github
+.claude
+.vite
+.vercel
+.git
+*.log
+*.tsbuildinfo
+package-lock.json
+# Anchor with leading `/` so we only match the repo-root files, not the
+# same-named ones inside `site/` (which is what we actually want to ship).
+/index.html
+tsconfig*.json
+vite.config.ts
+/ARCHITECTURE.md
+/CHANGELOG.md
+/README.md
+/LICENSE

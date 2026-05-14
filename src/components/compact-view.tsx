@@ -65,6 +65,17 @@ export function CompactView({ onThemeChange }: Props) {
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
+  // Clear the search query whenever the window hides. Without this, summoning
+  // mnml a second time still shows the previous search — surprising when the
+  // typical mental model is "fresh window every time I press Alt twice".
+  // Doesn't touch the active tab; that's a separate, more opinionated reset
+  // that we leave to the user.
+  useEffect(() => {
+    return bridge.onVisibilityChanged((visible) => {
+      if (!visible) setQuery("");
+    });
+  }, []);
+
   // Reset section focus whenever the underlying lists change.
   useEffect(() => { setFocusedAppIndex(-1);   }, [query, appResults.length, tab]);
   useEffect(() => { setFocusedSavedIndex(-1); }, [query, snippets.length, tab]);

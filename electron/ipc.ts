@@ -201,6 +201,8 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(IPC.installUpdate, () => {
     autoUpdater.quitAndInstall(false /* isSilent */, true /* isForceRunAfter */);
   });
+
+  ipcMain.handle(IPC.getVersion, (): string => app.getVersion());
   ipcMain.handle(IPC.checkUpdate, async () => {
     // Returns a short summary the renderer can show ("checking" / "no update" /
     // "available v0.2.30"). The real update lifecycle still flows through the
@@ -208,12 +210,17 @@ export function registerIpc(windowControl: WindowControl) {
     try {
       const r = await autoUpdater.checkForUpdates();
       if (!r) return { ok: false, message: "Updates disabled (dev build)" } as const;
-      const ver = r.updateInfo?.version;
-      // electron-updater's checkForUpdates resolves once it knows whether an
-      // update exists. If `autoDownload` is on (it is), the download starts
-      // immediately and the `update-downloaded` event fires later, which the
-      // renderer already listens for via UpdateBanner.
-      return { ok: true, available: !!ver, version: ver ?? null } as const;
+
+      // electron-updater's `updateInfo.version` is the server's LATEST
+      // version regardless of whether it's newer than the installed one —
+      // checking `!!updateInfo.version` was the bug that made every check
+      // report "Update ready" even on the latest build. `downloadPromise`
+      // is the authoritative indicator: it's only set when the server
+      // version actually exceeds the installed version (and autoDownload
+      // is enabled, which it is — see setupAutoUpdater in main.ts).
+      const available = !!r.downloadPromise;
+      const ver = r.updateInfo?.version ?? null;
+      return { ok: true, available, version: available ? ver : null } as const;
     } catch (err) {
       return { ok: false, message: String((err as Error)?.message ?? err) } as const;
     }

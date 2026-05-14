@@ -31,6 +31,8 @@ export const IPC = {
   installUpdate: "mnml:window:install-update",
   /** Manually trigger a check (the auto-updater also polls every 24 h). */
   checkUpdate:   "mnml:window:check-update",
+  /** Returns the installed app version (matches package.json's `version`). */
+  getVersion:    "mnml:app:version",
 
   // ── Storage folder (custom dataDir for cross-device sync) ─────────────────
   /** Returns { dataDir, defaultDir, isDefault } — current state for the UI. */

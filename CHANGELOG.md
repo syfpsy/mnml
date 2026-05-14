@@ -1,5 +1,23 @@
 # mnml Changelog
 
+## v0.2.36 — 2026-05-15
+
+Four targeted polish items: bug-fix the update-check false positive, clear the search on hide, show the version + support contact in Settings, surface the support email on the landing site.
+
+### Fixed
+- **"Update ready" lied when no update existed.** The Settings → "Check now" button reported an available update every time, even when on the latest version. Root cause: `electron-updater`'s `checkForUpdates()` resolves with the server's latest version in `updateInfo.version` regardless of whether it's newer than what's installed, and the IPC handler was checking `!!updateInfo.version` (always truthy). **Fix:** switched the check to `!!r.downloadPromise`, which is the authoritative indicator — `downloadPromise` is only set when the server version actually exceeds the installed version and `autoDownload` kicks off a fetch.
+- **Search query persisted between summons.** Type into the search → hit Esc / click outside → press Alt-Alt again → the previous query was still there. Surprising for the "fresh window every summon" mental model. **Fix:** CompactView now subscribes to `onVisibilityChanged`; when the window hides, `setQuery("")` clears the input. Tab selection is intentionally left alone (less destructive).
+
+### Added
+- **Version + support contact in Settings.** Tiny tabular-nums line at the bottom of the Settings sheet shows `mnml vX.Y.Z` on the left and `info@nxyz.art` (mailto link) on the right. Pulled fresh from `app.getVersion()` via a new `getVersion` IPC channel each time the sheet opens.
+- **Support email surfaced on the landing site** in two places:
+  - Install section: install-alt copy ends with "Questions or feedback: info@nxyz.art".
+  - Footer: "MIT licensed · built for Windows · info@nxyz.art" (mailto link).
+
+### Internal
+- New IPC channel `mnml:app:version` (renderer-facing as `bridge.getVersion()`).
+
+
 ## v0.2.35 — 2026-05-15
 
 Auto-launch on Windows login is now the default and self-healing. The hotkey is always live the moment you sign in.

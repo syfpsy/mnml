@@ -91,6 +91,7 @@ const api = {
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.installUpdate),
   checkUpdate:   (): Promise<{ ok: boolean; available?: boolean; version?: string | null; message?: string }> =>
     ipcRenderer.invoke(IPC.checkUpdate),
+  getVersion:    (): Promise<string> => ipcRenderer.invoke(IPC.getVersion),
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    (): Promise<{ dataDir: string; defaultDir: string; isDefault: boolean }> =>

@@ -11,6 +11,7 @@ interface Props {
 export function SettingsPanel({ onClose, onThemeChange }: Props) {
   const { settings, update } = useSettings();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   // Move focus into the sheet on open. Pairs with the `inert` attribute on
@@ -19,6 +20,10 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
   // close, and the rest of the window is silenced for assistive tech.
   useEffect(() => {
     closeBtnRef.current?.focus({ preventScroll: true });
+    // Cheap: one IPC call on open. Not subscribed; version only changes on
+    // app restart, and the sheet is short-lived enough that re-reading on
+    // each open is the simpler model.
+    bridge.getVersion().then(setVersion).catch(() => setVersion(null));
   }, []);
 
   useEffect(() => {
@@ -159,6 +164,24 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
               >
                 Done
               </button>
+            </div>
+
+            {/* About footer — version + support contact. Kept tiny so it
+                reads as metadata, not as a row. */}
+            <div
+              className="flex items-center justify-between text-[10px] pt-3"
+              style={{ color: "var(--t3)" }}
+            >
+              <span className="tabular-nums">
+                mnml {version ? `v${version}` : ""}
+              </span>
+              <a
+                href="mailto:info@nxyz.art"
+                className="hover:opacity-80"
+                style={{ color: "var(--t2)" }}
+              >
+                info@nxyz.art
+              </a>
             </div>
 
           </div>

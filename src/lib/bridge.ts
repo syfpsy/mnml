@@ -51,6 +51,7 @@ export const bridge = {
   checkUpdate:        () => window.mnml.checkUpdate() as Promise<{
     ok: boolean; available?: boolean; version?: string | null; message?: string;
   }>,
+  getVersion:         () => window.mnml.getVersion() as Promise<string>,
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    () => window.mnml.storageGet() as Promise<{

@@ -765,6 +765,40 @@ function toggleWindow() {
 
 function setBlurLock(locked: boolean) { blurLocked = locked; }
 
+/* ── Auto-launch sync ───────────────────────────────────────────────────────
+ * Belt-and-suspenders for the "Launch on startup" setting. Runs on every
+ * boot AND every time the user toggles the setting via the Settings panel
+ * (the toggle's IPC handler also calls `app.setLoginItemSettings`; this
+ * function corrects any drift in the other direction).
+ *
+ * Drift cases this handles:
+ *   - Default ON for new installs: setting=true (DB row absent → returns
+ *     DEFAULTS.launchOnStartup=true), registry=false. We add the Run entry.
+ *   - Cleanup tools removed our HKCU\…\Run entry (CCleaner, Autoruns,
+ *     manual reg edit, Windows reset): setting=true, registry=false. We
+ *     re-add.
+ *   - User explicitly toggled OFF: setting=false, registry=false. No-op.
+ *   - User toggled OFF via mnml but registry still has the entry (race
+ *     during update / reinstall): setting=false, registry=true. We remove.
+ *
+ * On Windows, `setLoginItemSettings` writes to HKEY_CURRENT_USER\Software\
+ * Microsoft\Windows\CurrentVersion\Run with the entry name = app productName
+ * (`mnml`). Re-running with the same arguments is idempotent.
+ */
+function syncLoginItemWithSetting() {
+  try {
+    const desired = Boolean(getSetting("launchOnStartup"));
+    const current = app.getLoginItemSettings().openAtLogin;
+    if (current === desired) return;
+    app.setLoginItemSettings({ openAtLogin: desired });
+    log(`[startup] login item drift corrected: registry ${current} → ${desired}`);
+  } catch (err) {
+    // Worst case: we don't auto-start. The user can still summon mnml
+    // manually after they log in, and the next boot will retry.
+    log("[startup] failed to sync login item:", String(err));
+  }
+}
+
 /* ── App lifecycle ─────────────────────────────────────────────────────────── */
 app.whenReady().then(() => {
   const gotLock = app.requestSingleInstanceLock();
@@ -774,6 +808,12 @@ app.whenReady().then(() => {
 
   try { getDb(); }
   catch (err) { log("[startup] FATAL: DB init:", String(err)); app.quit(); return; }
+
+  // Make absolutely sure the Run-key registry entry matches the user's
+  // saved preference. New installs (default true) get registered here on
+  // first boot; existing installs whose registry got cleaned out by an
+  // external tool get re-registered. See `syncLoginItemWithSetting` above.
+  syncLoginItemWithSetting();
 
   // Build the in-memory app launcher index once at startup. Tiny and sync —
   // a few hundred Start-Menu shortcuts plus the curated `WINDOWS_SHORTCUTS`

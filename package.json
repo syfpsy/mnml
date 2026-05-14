@@ -1,6 +1,6 @@
 {
   "name": "mnml",
-  "version": "0.2.34",
+  "version": "0.2.35",
   "description": "mnml — a super minimal clipboard manager for Windows",
   "private": true,
   "main": "dist-electron/main.js",

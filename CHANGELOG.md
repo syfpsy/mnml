@@ -1,5 +1,26 @@
 # mnml Changelog
 
+## v0.2.35 — 2026-05-15
+
+Auto-launch on Windows login is now the default and self-healing. The hotkey is always live the moment you sign in.
+
+### Changed
+- **`launchOnStartup` defaults to `true`.** Was `false`. mnml is meant to be always-on — the double-Alt hotkey is useless if the app isn't running. New installs auto-register with Windows on first boot. Existing users who never touched the toggle pick up the new default on upgrade; users who explicitly toggled OFF keep their choice (the stored row overrides the default).
+- **Site copy updates** — principle #2 is now "One hotkey, always live" and mentions auto-launch. The install section mentions it too.
+
+### Added
+- **`syncLoginItemWithSetting()` runs on every boot.** Compares the setting to the actual `HKEY_CURRENT_USER\…\Run` registry entry; if they disagree, corrects the registry to match. Recovers gracefully from:
+  - Fresh install (default ON, registry not yet written)
+  - External cleanup tools that removed the Run entry (CCleaner, Autoruns, Windows reset)
+  - User explicit OFF that somehow didn't propagate to the registry
+  - User explicit ON that somehow got cleared
+  - Errors during sync are caught + logged; mnml keeps running even if the registry call fails.
+
+### Notes
+- v0.2.34 installs auto-update to v0.2.35 via the Vercel update channel.
+- This means anyone on v0.2.34 who never opened Settings will start auto-launching with Windows after the update lands. To opt out: Settings > Launch on startup.
+
+
 ## v0.2.34 — 2026-05-15
 
 Configurable storage folder. Point mnml at a Dropbox / OneDrive / iCloud folder to sync your clipboard history, snippets, and images across devices. One source of truth, no accounts, no cloud middleman.

@@ -13,7 +13,11 @@ export interface AppSettings {
 const DEFAULTS: AppSettings = {
   monitoring: true,
   maxItems: 200,
-  launchOnStartup: false,
+  // mnml is meant to be always-on: the hotkey is useless if the app isn't
+  // running. Default to true. Users who explicitly toggle off keep their
+  // choice — `getSetting` returns the stored row when one exists and only
+  // falls back to this default for never-touched settings.
+  launchOnStartup: true,
   autoPaste: true,
   lightTheme: false,
 };

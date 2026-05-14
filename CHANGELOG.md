@@ -1,5 +1,27 @@
 # mnml Changelog
 
+## v0.2.33 — 2026-05-15
+
+Third audit pass: all 6 findings closed (1 high, 3 medium, 2 low) plus a UX tweak (the search-bar focus ring). Auto-updates now work again from the privately-published source; the installer ships with a Vercel-hosted update channel.
+
+### Fixed
+- **Auto-updater was silently broken for end users.** v0.2.32 installer's `electron-updater` was pointed at the (now-private) `syfpsy/mnml` GitHub Releases. Every daily check returned 404; the error was caught but never surfaced, so users would stop getting updates without knowing. **Fix:** switched `package.json` build.publish to the **generic** provider, URL `https://mnml-bay.vercel.app/`. The build now generates `latest.yml` + `mnml-setup.exe.blockmap` alongside the installer; all three artefacts are deployed to the website. Installed apps on v0.2.33+ check the same domain that served the download, no GitHub auth needed. Future releases: drop the three artefacts into `site/` and run `vercel --prod`. The repo stays private.
+- **Renderer first-paint theme flash.** The root `index.html` had `class="dark"` hardcoded; users with `lightTheme: true` saw a brief dark flash before React's `useEffect` applied their preference. **Fix:** main process now reads `lightTheme` synchronously before `win.loadURL/loadFile` and passes it via a `?theme=light|dark` query param. An inline boot script in `index.html` reads the param and applies the class before first paint. No round-trip, no flash.
+- **Content-Security-Policy split into per-directive rules.** Old CSP had `default-src 'self' 'unsafe-inline'` covering everything; `'unsafe-inline'` was over-applied because of inline `style={{ }}` attributes only. **Fix:** the policy is now per-directive — `script-src 'self' 'unsafe-inline'` (needed for the theme boot script), `style-src 'self' 'unsafe-inline'` (needed for inline JSX styles), `img-src` / `font-src` / `connect-src` unchanged. Cleaner intent, same security envelope.
+- **`.exe` download served with `Content-Disposition: inline`.** Browsers downloaded anyway because of the MIME, but the contract was wrong. **Fix:** explicit `attachment; filename="mnml-setup.exe"` rule in `vercel.json` makes intent unambiguous.
+- **`.exe` had no Cache-Control rule.** Default `max-age=0, must-revalidate` meant every visit re-revalidated the 81 MB file. **Fix:** explicit `public, max-age=86400, must-revalidate` rule. `latest.yml` gets a much shorter 60 s cache so update checks see new versions quickly. `.blockmap` gets the same 24 h cache as the .exe.
+- **`useItems` had a stale `eslint-disable-next-line react-hooks/exhaustive-deps` directive.** The disable was no longer needed — `bridge` is module-level, `setItems` is stable from `useState`, and `enabled` is in the deps array. **Fix:** removed the disable.
+
+### Changed
+- **Search-bar focus ring is now 1 px, light blue.** New `--focus-search` token (sky-300 in dark mode, sky-600 in light mode for non-text 3:1 contrast against the warm cream bg). Replaces the generic `--border-focus` value on the SearchBar wrapper's `:focus-within` state. The input itself now opts out of the global 2 px outline (`input[data-mnml-search="true"]:focus-visible { outline: none; }`) so the two focus indicators don't stack. The demo widget on the landing site mirrors the same colour (the demo's search bar is permanently shown in its "focused" state).
+- **Auto-updater rebuild required.** v0.2.32 installer cannot reach the new updater URL because its publish config is baked into the binary. v0.2.33 installer ships with the corrected URL. Users on v0.2.32 will need to re-download from the website (a one-time cost) to pick up the working updater; everyone from v0.2.33 forward gets auto-updates.
+
+### Internal
+- `electron/main.ts:631-642` — `win.loadURL/loadFile` calls now thread the theme query param through.
+- `vercel.json` — three new header rules for `/mnml-setup.exe`, `/(latest|alpha|beta).yml`, `/(.*).blockmap`.
+- `.gitignore` — added `site/mnml-setup.exe.blockmap` and `site/latest.yml` (deploy-only build artefacts).
+
+
 ## v0.2.32 — 2026-05-15
 
 First public-website release. Audit passes 1 and 2 (21 findings) closed; landing site live at https://mnml-bay.vercel.app/ with a static `mnml-setup.exe` download served from the same origin. No new features; this is a UI polish + a11y + theming release.

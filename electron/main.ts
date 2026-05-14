@@ -627,11 +627,18 @@ function createWindow() {
     scheduleSearchFocusVerification("window-focus", [0, 16, 50, 120, 240]);
   });
 
+  // Pass the persisted `lightTheme` setting via a query param so the
+  // renderer's inline boot script can apply the class to <html> BEFORE
+  // first paint. Sync SQLite read here is fine — no I/O concern at the
+  // window-create stage. Result: no flash of the wrong palette when a
+  // light-theme user summons the window.
+  const lightTheme = Boolean(getSetting("lightTheme"));
+  const themeQuery = `?theme=${lightTheme ? "light" : "dark"}`;
   if (DEV_URL) {
-    win.loadURL(DEV_URL);
+    win.loadURL(DEV_URL + themeQuery);
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(process.env.DIST!, "index.html"));
+    win.loadFile(path.join(process.env.DIST!, "index.html"), { search: themeQuery });
   }
 
   // The renderer loads while the OS window stays hidden. Keeping the native

@@ -72,6 +72,14 @@
      dark-mode-calibrated heavy shadow. */
   --scrim:                 rgba(0, 0, 0, 0.55);
   --elevation-2:           0 24px 48px rgba(0, 0, 0, 0.40);
+
+  /* Search-bar focus ring. Distinct from the generic `--border-focus` so
+     the primary input has its own keyboard-focus signal — light blue,
+     1 px, applied as a box-shadow on the wrapper (not an outline on the
+     input itself, which would stack visually). Sky-300 in dark mode reads
+     cleanly on `--bg-raised`; in light mode we shift to sky-600 to clear
+     the 3:1 non-text-contrast bar against the warm cream surface. */
+  --focus-search:          #7dd3fc;
 }
 
 /* ── Colour tokens ── light override ─────────────────────────────────────── */
@@ -136,6 +144,10 @@ html.light {
 
   --scrim:                 rgba(20, 20, 25, 0.28);
   --elevation-2:           0 16px 40px rgba(15, 18, 25, 0.16);
+
+  /* Darker shade of the same sky family for non-text contrast against the
+     warm light bg. ~3.9:1 vs `--bg-raised`. */
+  --focus-search:          #0284c7;
 }
 
 /* ── Base reset ───────────────────────────────────────────────────────────── */
@@ -180,6 +192,13 @@ input::placeholder,
 textarea::placeholder {
   color: var(--t3);
   opacity: 1;
+}
+
+/* Search input opts out of the generic 2px focus outline — its wrapper
+   draws a 1px light-blue ring via box-shadow (see search-bar.tsx) so
+   stacking both would look like two competing indicators. */
+input[data-mnml-search="true"]:focus-visible {
+  outline: none;
 }
 
 #root {

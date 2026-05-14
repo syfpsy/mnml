@@ -39,7 +39,11 @@ export function SearchBar({
         background: "var(--bg-raised)",
         boxShadow: "0 0 0 1px var(--border)",
       }}
-      onFocusCapture={(e) => (e.currentTarget.style.boxShadow = "0 0 0 1px var(--border-focus)")}
+      // 1px light-blue ring via `--focus-search` on the wrapper when any
+      // child (input, clear-x) gains keyboard or pointer focus. The input
+      // itself opts out of the generic 2px outline (see styles.css) so
+      // there's a single, deliberate focus signal.
+      onFocusCapture={(e) => (e.currentTarget.style.boxShadow = "0 0 0 1px var(--focus-search)")}
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
           e.currentTarget.style.boxShadow = "0 0 0 1px var(--border)";

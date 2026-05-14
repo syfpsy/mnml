@@ -52,6 +52,11 @@
      token so the rule itself isn't tied to a theme. */
   --btn-primary-fg: #0c1410;
 
+  /* Search-bar focus ring — mirrors the app token of the same name. The
+     demo widget's search bar is permanently "focused-looking" so this
+     value shows up on the page regardless of user interaction. */
+  --focus-search:  #7dd3fc;
+
   /* Shadows tuned per theme. Dark mode wants deep, soft, far shadows. */
   --shadow-window:
     0 0 0 1px var(--border),
@@ -112,6 +117,9 @@ html.light {
   /* Primary button stays dark-text-on-green; the green is darker in light
      mode but black text still hits AAA. */
   --btn-primary-fg: #04140d;
+
+  /* Sky-600 for non-text 3:1 contrast on the warm light bg. */
+  --focus-search:  #0284c7;
 
   --shadow-window:
     0 0 0 1px rgba(15, 18, 25, 0.07),
@@ -355,7 +363,9 @@ html.light .demo::before {
   padding: 0 12px;
   background: var(--bg);
   border-radius: 8px;
-  box-shadow: 0 0 0 1px var(--border-focus);
+  /* The demo widget shows the search bar in its focused state — 1 px
+     light-blue ring, mirroring the actual app's `--focus-search` token. */
+  box-shadow: 0 0 0 1px var(--focus-search);
   color: var(--t1);
 }
 html.light .window .search-bar { background: var(--bg-elevated); }

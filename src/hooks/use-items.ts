@@ -52,8 +52,9 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     return off;
   }, [query, type, limit, enabled]);
 
-  // Patch in-place when a field like `title` is enriched asynchronously (e.g. link title fetch).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Patch in-place when a field like `title` is enriched asynchronously
+  // (e.g. link title fetch). `bridge` is module-level; `setItems` is stable
+  // from useState — neither needs to be in the deps array. `enabled` is.
   useEffect(() => bridge.onItemUpdated((updated) => {
     if (!enabled) return;
     setItems((prev) =>

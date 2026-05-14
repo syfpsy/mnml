@@ -1,6 +1,6 @@
 {
   "name": "mnml",
-  "version": "0.2.32",
+  "version": "0.2.33",
   "description": "mnml — a super minimal clipboard manager for Windows",
   "private": true,
   "main": "dist-electron/main.js",
@@ -46,10 +46,10 @@
     "productName": "mnml",
     "copyright": "Copyright © 2026 mnml",
     "publish": {
-      "provider": "github",
-      "owner": "syfpsy",
-      "repo": "mnml",
-      "releaseType": "release"
+      "provider": "generic",
+      "url": "https://mnml-bay.vercel.app/",
+      "channel": "latest",
+      "useMultipleRangeRequest": false
     },
     "directories": {
       "output": "release"

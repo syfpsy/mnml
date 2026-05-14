@@ -1,10 +1,27 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data: file: mnml-image: https://www.google.com; font-src 'self' data:; connect-src 'self' ws: http://localhost:* https://localhost:*" />
+    <!-- CSP split into per-directive rules. `'unsafe-inline'` is retained
+         where needed (style attributes from `style={{ }}` JSX, plus the
+         theme boot script below); `script-src 'self' 'unsafe-inline'` is
+         intentionally narrower than the previous default-src catch-all.
+         The renderer loads from file:// in production and localhost in dev;
+         no third-party scripts are loaded. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: mnml-image: https://www.google.com; font-src 'self' data:; connect-src 'self' ws: http://localhost:* https://localhost:*" />
     <title>mnml</title>
+    <!-- Apply the persisted theme before first paint. `main.ts` passes the
+         user's `lightTheme` setting via `?theme=light|dark` so this can run
+         synchronously; no IPC round-trip, no flash. Falls back to dark when
+         the param is missing (cold-boot, dev with no settings yet). -->
+    <script>
+      (function () {
+        var t = new URLSearchParams(location.search).get('theme');
+        if (t === 'light') document.documentElement.classList.add('light');
+        else document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

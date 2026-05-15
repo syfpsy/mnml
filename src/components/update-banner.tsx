@@ -20,9 +20,15 @@ export function UpdateBanner({ state, version, onInstall }: Props) {
   const bg     = ready ? "var(--accent-success-bg)"     : "var(--accent-info-bg)";
   const border = ready ? "var(--accent-success-border)" : "var(--accent-info-border)";
 
+  // No `absolute` positioning anymore — the banner is a regular flex child
+  // inside CompactView's outer column, slotted above the footer. When
+  // `state === "idle"` it returns null and consumes no flex height. When
+  // active it pushes the content area up by its own row height (a few
+  // pixels) so the banner and footer never overlap. `mnml-no-drag` keeps
+  // the row click-through (the parent header has `mnml-drag` set).
   return (
     <div
-      className="mnml-no-drag absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-1.5 text-[11px]"
+      className="mnml-no-drag flex items-center justify-between px-3 py-1.5 text-[11px]"
       style={{
         background: bg,
         borderTop:  `1px solid ${border}`,

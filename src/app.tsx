@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CompactView } from "./components/compact-view";
-import { UpdateBanner, type UpdateState } from "./components/update-banner";
+import { type UpdateState } from "./components/update-banner";
 import { bridge } from "./lib/bridge";
 
 export function applyTheme(light: boolean) {
@@ -97,13 +97,15 @@ export default function App() {
         className="relative w-full h-full overflow-hidden"
         style={{ background: "var(--bg)" }}
       >
-        <div className="h-full">
-          <CompactView onThemeChange={applyTheme} />
-        </div>
-        <UpdateBanner
-          state={updateState}
-          version={updateVersion}
-          onInstall={() => bridge.installUpdate()}
+        {/* CompactView owns the entire window's layout now: header, tabs,
+            content (flex-1), update banner (when active), footer. The
+            update-state subscription stays here so the auto-updater event
+            listeners only register once at the app boundary. */}
+        <CompactView
+          onThemeChange={applyTheme}
+          updateState={updateState}
+          updateVersion={updateVersion}
+          onInstallUpdate={() => bridge.installUpdate()}
         />
       </div>
     </div>

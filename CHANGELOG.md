@@ -1,5 +1,18 @@
 # mnml Changelog
 
+## v0.2.37 — 2026-05-15
+
+Update banner moves out of the footer's way + small cleanup pass.
+
+### Fixed
+- **Update banner overlapped the footer.** The banner was `position: absolute; bottom: 0` and laid on top of the "Click to paste · Shift-click to copy / Alt Alt to toggle" footer row, obscuring both. **Fix:** restructured CompactView's outer container to `relative h-full flex flex-col`. The inert (non-modal) subtree containing header / tabs / content is now `flex-1`. The UpdateBanner and footer became sibling flex children below it, sitting outside the `inert` wrapper so the banner's "Restart now" button stays clickable even while Settings is open. The banner returns `null` when idle and consumes no flex height; when active it pushes the content area up by its own row height (≈28 px) so both rows are fully visible.
+
+### Internal
+- `electron/main.ts`, `electron/ipc.ts`, `src/components/*` swept for `TODO` / `FIXME` / stray `console.*` — grep returned zero hits across both `src/` and `electron/` trees. The codebase has stayed clean across the recent flurry of changes.
+- `UpdateBanner` no longer has `absolute bottom-0 left-0 right-0`; the new comment in `update-banner.tsx` explains why it's a regular flex child now.
+- `app.tsx` no longer imports `UpdateBanner` (only the `UpdateState` type) — CompactView is the sole owner of the banner's render position. Update state still lives in app.tsx (so the `bridge.onUpdateAvailable` / `onUpdateDownloaded` listeners only register once) and is passed down as props.
+
+
 ## v0.2.36 — 2026-05-15
 
 Four targeted polish items: bug-fix the update-check false positive, clear the search on hide, show the version + support contact in Settings, surface the support email on the landing site.

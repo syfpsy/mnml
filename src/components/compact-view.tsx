@@ -5,6 +5,7 @@ import { AppResultsList } from "./app-results-list";
 import { SavedList } from "./saved-list";
 import { SettingsIcon } from "./icons";
 import { SettingsPanel } from "./settings-panel";
+import { UpdateBanner, type UpdateState } from "./update-banner";
 import { useItems } from "../hooks/use-items";
 import { useAppSearch } from "../hooks/use-app-search";
 import { useSaved } from "../hooks/use-saved";
@@ -13,6 +14,12 @@ import type { AppResult, Item, ItemType, SavedSnippet, TabKey } from "../types";
 
 interface Props {
   onThemeChange: (light: boolean) => void;
+  /** Update banner state — owned by app.tsx (subscribes to the
+   *  electron-updater events) and passed here so the banner can render
+   *  inside the same flex column as the footer. */
+  updateState: UpdateState;
+  updateVersion: string | null;
+  onInstallUpdate: () => void;
 }
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -30,7 +37,7 @@ const TYPE_BY_TAB: Record<Exclude<TabKey, "saved">, ItemType | undefined> = {
   image: "image",
 };
 
-export function CompactView({ onThemeChange }: Props) {
+export function CompactView({ onThemeChange, updateState, updateVersion, onInstallUpdate }: Props) {
   const [query,        setQuery]        = useState("");
   const [tab,          setTab]          = useState<TabKey>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -167,12 +174,14 @@ export function CompactView({ onThemeChange }: Props) {
     (appResults.length === 0 && !appSearch.isSearching);
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full flex flex-col">
     {/* The non-modal subtree is `inert`-ed whenever Settings is open. Pairs
         with the `aria-modal="true"` on <SettingsPanel> so focus, pointer,
         and assistive-tech navigation can't leak from the sheet into the
-        compact view underneath. */}
-    <div className="flex flex-col h-full" inert={settingsOpen}>
+        compact view underneath. The UpdateBanner + Footer below are
+        siblings of this subtree so they remain interactive while Settings
+        is open (you can still click "Restart now" on the banner). */}
+    <div className="flex-1 flex flex-col min-h-0" inert={settingsOpen}>
 
       {/* Header */}
       <div className="mnml-drag px-2.5 pt-2 pb-2 flex items-center gap-2">
@@ -284,7 +293,21 @@ export function CompactView({ onThemeChange }: Props) {
         )}
       </div>
 
-      {/* Footer */}
+    </div>{/* /inert subtree */}
+
+      {/* Update banner — only renders when state ≠ "idle" (returns null
+          otherwise, taking no flex height). Sits directly above the footer
+          when active; pushes the content area up by its own height rather
+          than overlaying. */}
+      <UpdateBanner
+        state={updateState}
+        version={updateVersion}
+        onInstall={onInstallUpdate}
+      />
+
+      {/* Footer — global keyboard / paste hints. Static text, always at
+          the bottom of the flex column. Outside the inert wrapper for
+          symmetry with the banner (and because it's just text anyway). */}
       <div
         className="px-3 py-1.5 flex items-center justify-between text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
@@ -292,7 +315,6 @@ export function CompactView({ onThemeChange }: Props) {
         <span>Click to paste · Shift-click to copy</span>
         <span>Alt Alt to toggle</span>
       </div>
-    </div>{/* /inert subtree */}
 
       {settingsOpen && (
         <SettingsPanel

@@ -59,8 +59,10 @@ export const bridge = {
   }>,
   storagePick:   () => window.mnml.storagePick() as Promise<string | null>,
   storageSet:    (path: string) => window.mnml.storageSet(path) as Promise<{
-    ok: boolean; message: string; adoptedExisting?: boolean;
+    ok: boolean; changed: boolean; message: string; adoptedExisting?: boolean;
   }>,
-  storageReset:  () => window.mnml.storageReset() as Promise<{ ok: boolean; message: string }>,
+  storageReset:  () => window.mnml.storageReset() as Promise<{
+    ok: boolean; changed: boolean; message: string;
+  }>,
   storageReveal: () => window.mnml.storageReveal() as Promise<boolean>,
 };

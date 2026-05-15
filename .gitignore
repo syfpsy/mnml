@@ -16,3 +16,8 @@ Thumbs.db
 site/mnml-setup.exe
 site/mnml-setup.exe.blockmap
 site/latest.yml
+
+# Intermediate file the icon-generation script (`npm run icons`) writes
+# before renaming each rasterised size to `icon-NN.png`. If the script is
+# interrupted mid-run, it leaves a stray `icon.png` behind — don't commit it.
+build/icon.png

@@ -57,6 +57,18 @@
      value shows up on the page regardless of user interaction. */
   --focus-search:  #7dd3fc;
 
+  /* Brand dot — the warm orange next to the "m" in the logo mark.
+     mnml has a deliberate two-tier brand:
+       · Full logomark — small-caps "M" + dot, used in the app icon /
+         ICO / OG card / marketing surfaces (see `build/icon.svg`).
+       · Compact wordmark — "•mnml" (just the dot before the lowercase
+         wordmark), used inline in headers / footers where the full
+         mark would carry too much visual weight.
+     Both surfaces refer to `--brand-dot` so the orange stays identical
+     wherever the brand surfaces. UI primary actions remain emerald
+     (`--accent-app`); orange is reserved for identity. */
+  --brand-dot: #fb923c;
+
   /* Shadows tuned per theme. Dark mode wants deep, soft, far shadows. */
   --shadow-window:
     0 0 0 1px var(--border),
@@ -120,6 +132,11 @@ html.light {
 
   /* Sky-600 for non-text 3:1 contrast on the warm light bg. */
   --focus-search:  #0284c7;
+
+  /* Brand dot — darker orange-600 in light mode for ≥3:1 contrast against
+     the warm cream bg. The hue stays in the same family so the brand
+     reads consistent across themes. */
+  --brand-dot: #ea580c;
 
   --shadow-window:
     0 0 0 1px rgba(15, 18, 25, 0.07),
@@ -193,8 +210,10 @@ code, kbd { font-family: ui-monospace, "Cascadia Code", "Cascadia Mono", Consola
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--accent-app);
-  box-shadow: 0 0 0 4px var(--accent-app-bg);
+  background: var(--brand-dot);
+  /* Soft warm-orange halo. color-mix so the glow tints match the dot in
+     both themes without needing a second per-theme token. */
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand-dot) 18%, transparent);
 }
 
 /* Theme toggle — round, ghost, swaps icons on theme. 34 px at desktop is
@@ -723,7 +742,7 @@ section {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent-app);
+  background: var(--brand-dot);
   margin-right: 6px;
   vertical-align: 1px;
 }

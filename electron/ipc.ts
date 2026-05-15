@@ -251,25 +251,34 @@ export function registerIpc(windowControl: WindowControl) {
 
   ipcMain.handle(
     IPC.storageSet,
-    async (_, targetPath: string): Promise<{ ok: boolean; message: string; adoptedExisting?: boolean }> => {
+    async (_, targetPath: string): Promise<{ ok: boolean; changed: boolean; message: string; adoptedExisting?: boolean }> => {
       log(`[storage] migration requested: ${targetPath}`);
 
-      // Close SQLite cleanly BEFORE copying any files.
-      closeDb();
-      // Also stop the clipboard monitor so it can't write back into the
-      // about-to-be-stale DB connection.
+      // Capture the monitoring preference BEFORE we close the DB, so we
+      // know whether to restart the poller on rollback. Otherwise we'd
+      // unconditionally start it on failure — bad for users who'd
+      // explicitly disabled monitoring (timer fires every 500 ms doing
+      // nothing).
+      const monitoringWasOn = Boolean(getSetting("monitoring"));
+
+      // Stop the clipboard timer FIRST so no in-flight poll can reopen
+      // the DB connection we're about to release. Order is load-bearing.
       stopMonitor();
+      closeDb();
 
       const result = setDataDir(targetPath);
       if (!result.ok) {
-        // Reopen the (unchanged) DB at the previous location so the running
+        // Migration aborted — reopen the original setup so the running
         // app keeps working until the user retries.
-        startMonitor();
-        return { ok: false, message: result.message };
+        if (monitoringWasOn) startMonitor();
+        return { ok: false, changed: false, message: result.message };
       }
       if (!result.changed) {
-        startMonitor();
-        return { ok: true, message: result.message };
+        // The picked folder equals the current one — no-op. Resume the
+        // monitor and tell the renderer NOT to expect a restart so it
+        // can clear its "Migrating…" state.
+        if (monitoringWasOn) startMonitor();
+        return { ok: true, changed: false, message: result.message };
       }
 
       log(`[storage] migration ok, restarting. adoptedExisting=${!!result.adoptedExisting}`);
@@ -282,27 +291,28 @@ export function registerIpc(windowControl: WindowControl) {
         app.exit(0);
       }, 600);
 
-      return { ok: true, message: result.message, adoptedExisting: result.adoptedExisting };
+      return { ok: true, changed: true, message: result.message, adoptedExisting: result.adoptedExisting };
     },
   );
 
-  ipcMain.handle(IPC.storageReset, async (): Promise<{ ok: boolean; message: string }> => {
-    closeDb();
+  ipcMain.handle(IPC.storageReset, async (): Promise<{ ok: boolean; changed: boolean; message: string }> => {
+    const monitoringWasOn = Boolean(getSetting("monitoring"));
     stopMonitor();
+    closeDb();
     const result = resetDataDir();
     if (!result.ok) {
-      startMonitor();
-      return { ok: false, message: result.message };
+      if (monitoringWasOn) startMonitor();
+      return { ok: false, changed: false, message: result.message };
     }
     if (!result.changed) {
-      startMonitor();
-      return { ok: true, message: result.message };
+      if (monitoringWasOn) startMonitor();
+      return { ok: true, changed: false, message: result.message };
     }
     setTimeout(() => {
       app.relaunch();
       app.exit(0);
     }, 600);
-    return { ok: true, message: result.message };
+    return { ok: true, changed: true, message: result.message };
   });
 
   ipcMain.handle(IPC.storageReveal, async () => {

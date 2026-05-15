@@ -8,6 +8,35 @@ const TIMEOUT_MS = 4_000;
 const MAX_BYTES = 8_192;
 
 /**
+ * Reject hostnames that resolve to private / link-local / loopback ranges.
+ *
+ * The clipboard-monitor enriches link items by fetching the URL's `<title>`.
+ * Without this guard, a user who copies (or is induced to copy) a URL like
+ * `http://192.168.1.1/admin` causes mnml to probe the intranet and store
+ * the response title in clipboard history. SSRF-lite — user-triggered, not
+ * remote, but still a real privacy / info-disclosure surface.
+ *
+ * Heuristic only — operates on the literal hostname, not on DNS resolution.
+ * A public domain that A-records to 10.x.x.x would not be caught here.
+ * Closing that hole requires resolving + comparing addresses; current
+ * filter covers the obvious cases.
+ */
+function isPrivateHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".localhost")) return true;
+  // IPv4 — loopback, RFC1918 private, link-local
+  if (/^127\./.test(h)) return true;
+  if (/^10\./.test(h))  return true;
+  if (/^192\.168\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return true;
+  if (/^169\.254\./.test(h)) return true;
+  // IPv6 — loopback, unique-local (fc00::/7), link-local (fe80::/10)
+  if (h === "::1" || h.startsWith("[::1") || h.startsWith("fc") || h.startsWith("fd")) return true;
+  if (h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")) return true;
+  return false;
+}
+
+/**
  * Fetch just the <title> tag from a URL.  Non-blocking — all errors resolve to null.
  * Used for enriching link items after they are inserted.
  */
@@ -19,6 +48,13 @@ export function fetchTitle(
     try {
       const parsed = new URL(url);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        resolve(null);
+        return;
+      }
+      // SSRF guard — see comment on `isPrivateHostname`. Applied here AND
+      // in the redirect-follow branch below so a public URL can't 302 us
+      // into the intranet.
+      if (isPrivateHostname(parsed.hostname)) {
         resolve(null);
         return;
       }
@@ -48,6 +84,10 @@ export function fetchTitle(
             redirectsLeft > 0
           ) {
             res.resume();
+            // Re-enter via fetchTitle so the private-hostname guard at the
+            // top runs against the resolved redirect target. Bare URL
+            // resolution alone (`new URL(loc, url)`) wouldn't filter
+            // a 302 → http://192.168.1.1/, but the recursive call does.
             resolve(
               fetchTitle(new URL(loc, url).href, redirectsLeft - 1),
             );

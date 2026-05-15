@@ -97,9 +97,9 @@ const api = {
   storageGet:    (): Promise<{ dataDir: string; defaultDir: string; isDefault: boolean }> =>
     ipcRenderer.invoke(IPC.storageGet),
   storagePick:   (): Promise<string | null> => ipcRenderer.invoke(IPC.storagePick),
-  storageSet:    (targetPath: string): Promise<{ ok: boolean; message: string; adoptedExisting?: boolean }> =>
+  storageSet:    (targetPath: string): Promise<{ ok: boolean; changed: boolean; message: string; adoptedExisting?: boolean }> =>
     ipcRenderer.invoke(IPC.storageSet, targetPath),
-  storageReset:  (): Promise<{ ok: boolean; message: string }> =>
+  storageReset:  (): Promise<{ ok: boolean; changed: boolean; message: string }> =>
     ipcRenderer.invoke(IPC.storageReset),
   storageReveal: (): Promise<boolean> => ipcRenderer.invoke(IPC.storageReveal),
 };

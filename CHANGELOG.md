@@ -1,5 +1,43 @@
 # mnml Changelog
 
+## v0.2.38 — 2026-05-15
+
+Big release. New brand identity (proper app icon, finally), real app icons in the launcher (not generic shortcut overlays), a configurable storage folder rounded into shape, plus the five queued bug-fixes from the post-v0.2.37 hunt.
+
+### Added — brand
+- **First proper app icon.** Replaces the Electron-default icon. Master design at `build/icon.svg`: small-caps "M" with V counterform (real typography technique using SVG `fill-rule="evenodd"`), warm orange dot at the M's baseline-right, on a cool-dark rounded square. Modern, minimal, intentional.
+- **`scripts/make-icons.mjs`** renders the master SVG into a multi-resolution Windows ICO (7 sizes: 16, 24, 32, 48, 64, 128, 256) plus tray PNGs. No new project dependencies — uses the existing `npx sharp-cli` toolchain for PNG rasterisation; hand-rolled ~30 lines of buffer math assembles the ICO container.
+- **`npm run icons`** regenerates everything from the master SVG.
+- **electron-builder wired** via `package.json` `build.win.icon: "build/icon.ico"` so the installer + executable embed the new icon. `extraResources` copies `tray.png` / `tray@2x.png` / `icon.ico` into the packaged app's Resources directory.
+- **BrowserWindow gets the icon** via `icon:` option so the title-bar / Alt-Tab thumbnail / taskbar match the executable.
+- **Tray icon** now loads the multi-resolution ICO (not a single 16-px PNG). Windows picks the right size per DPI scaling — no more upscale-blur on HiDPI displays.
+- **Site favicon** redesigned to the same brand mark, scaled to 32 px. Old emerald dot retired.
+- **OG card** rebuilt: M + dot logomark on the left, "mnml" wordmark on the right, warm radial glow behind the mark. Served as `og-v2.png` (suffix-versioned URL busts the 30-day immutable CDN + browser cache + social-platform unfurl cache so re-brands actually propagate).
+- **`--brand-dot` token** introduced in both `src/styles.css` and `site/styles.css`. Dark mode `#fb923c` (orange-400), light mode `#ea580c` (orange-600) for ≥3:1 non-text contrast against the warm cream bg. Used in the site wordmark + footer dots and the Settings panel's about-line.
+- **Two-tier brand documented** as an inline CSS comment: full logomark (M + dot) for icon / OG / marketing; compact wordmark (•mnml) for inline UI surfaces. UI primary actions stay emerald; orange is reserved for identity.
+
+### Fixed — launcher
+- **Real app icons in the launcher.** Previously every Start-Menu shortcut showed Windows' generic shortcut overlay icon (a page with a small arrow). Root cause: `app.getFileIcon()` was called on the `.lnk` path itself, which returns the shortcut overlay. **Fix:** resolve the `.lnk` via `shell.readShortcutLink()` first, then call `getFileIcon()` on the resolved target executable. Falls back to the `.lnk` itself if resolution fails (UWP launchers, corrupted shortcuts). Also bumped icon size from `"small"` (16) to `"large"` (48) — crisper at the 24-px UI tile, especially on HiDPI.
+
+### Fixed — storage migration
+- **Storage migration "Already using this folder" left the Settings button stuck on "Migrating…".** The IPC didn't tell the renderer whether the app was actually going to restart, so the no-op success path got treated like a migration-imminent path and `busy` stayed locked. **Fix:** IPC `storageSet` / `storageReset` now return `changed: boolean`. Renderer handles three branches: error / no-op success (clears busy) / migration-imminent (keeps busy locked for the auto-restart).
+- **Orphaned files on migration rollback.** If the file copy succeeded but the pointer-write failed, the target folder kept the orphan `mnml.sqlite` + `images/`. **Fix:** new `rollbackCopy(target)` helper deletes the copied files on error. Best-effort (each unlink wrapped in try/catch). Skipped when we adopted existing data so we never delete the user's existing canonical data.
+- **Storage IPC migration rollback unconditionally restarted the clipboard monitor.** If the user had `monitoring: false`, rollback turned the 500-ms poller back on against their setting. **Fix:** capture `monitoringWasOn` before stopping; only restart if it was on.
+- **closeDb happened before stopMonitor**, opening a ~1 ms window where an in-flight poll could re-open the DB connection we were trying to drop. **Fix:** swapped order — `stopMonitor()` then `closeDb()`.
+
+### Fixed — shutdown + cleanup
+- **`before-quit` didn't `closeDb()` or `stopMonitor()`.** SQLite left a stale `-wal` sidecar; the clipboard timer kept firing into the shutdown. **Fix:** both calls added at the top of the before-quit handler, each in try/catch so partial shutdown can't block app exit.
+- **Settings panel version footer rendered `"mnml "` (trailing space) before the IPC for `app.getVersion()` resolved.** **Fix:** conditional `version ? "mnml v..." : "mnml"`.
+
+### Fixed — security (hardening)
+- **`fetchTitle` would probe private-network URLs.** Copying `http://192.168.1.1/admin` caused mnml to fetch it and store the response title in clipboard history (SSRF-lite — user-triggered, but a real privacy / info-disclosure surface). **Fix:** new `isPrivateHostname()` guard at the top of `fetchTitle` AND inside the redirect-follow path so a public URL can't 302 us into the intranet. Blocks `localhost`, `*.local`, `127/8`, `10/8`, `192.168/16`, `172.16-31/x`, `169.254/16`, IPv6 `::1`, `fc00::/7`, `fe80::/10`.
+
+### Internal
+- `site/README.md` updated — describes the new brand mark + the `og-v2.png` cache-bust convention + the latest.yml deploy artefact layout.
+- `.gitignore` covers `build/icon.png` — the intermediate file `make-icons.mjs` writes before each rename. Defensive; the script always cleans it up, but if interrupted this prevents accidental commit.
+- All 7 findings from audit pass 5 closed. All 8 findings from the post-v0.2.37 manual bug-hunt closed. Codebase typecheck-clean.
+
+
 ## v0.2.37 — 2026-05-15
 
 Update banner moves out of the footer's way + small cleanup pass.

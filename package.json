@@ -1,6 +1,6 @@
 {
   "name": "mnml",
-  "version": "0.2.37",
+  "version": "0.2.38",
   "description": "mnml — a super minimal clipboard manager for Windows",
   "private": true,
   "main": "dist-electron/main.js",
@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "check:summon": "node scripts/check-window-summon-rules.mjs",
+    "icons": "node scripts/make-icons.mjs",
     "build": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder",
     "build:dir": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --dir",
     "release": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --publish always",
@@ -62,7 +63,19 @@
       "dist-electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build",
+        "filter": [
+          "tray.png",
+          "tray@2x.png",
+          "icon.ico"
+        ]
+      }
+    ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

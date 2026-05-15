@@ -257,15 +257,61 @@ async function getIcon(entry: IndexEntry): Promise<string | null> {
     return null;
   }
 
-  try {
-    const img = await app.getFileIcon(entry.target, { size: "small" });
-    const url = `data:image/png;base64,${img.toPNG().toString("base64")}`;
-    rememberIcon(entry.id, url);
-    return url;
-  } catch {
-    rememberIcon(entry.id, null);
-    return null;
+  // Walk a small list of candidate paths in priority order: the .lnk's
+  // resolved target first (gives us the real app's icon), the .lnk itself
+  // as a final fallback (yields the Windows shortcut overlay, which is
+  // better than nothing).
+  for (const candidate of iconCandidatesFor(entry.target)) {
+    try {
+      // "large" = 48×48 — bigger source means a crisper 24 px tile at
+      // high-DPI scaling. Cached as base64; the per-entry size cost is
+      // ~3–5 KB, well within the 256-entry cache budget.
+      const img = await app.getFileIcon(candidate, { size: "large" });
+      if (img.isEmpty()) continue;
+      const url = `data:image/png;base64,${img.toPNG().toString("base64")}`;
+      rememberIcon(entry.id, url);
+      return url;
+    } catch {
+      // Try the next candidate
+    }
   }
+
+  rememberIcon(entry.id, null);
+  return null;
+}
+
+/**
+ * Resolve a Start-Menu `.lnk` to the icon source(s) we want to try.
+ *
+ * Without this, `app.getFileIcon(<.lnk path>)` returns Windows' generic
+ * shortcut icon (page with a tiny arrow overlay) for every app. Real
+ * icons live on the target executable.
+ *
+ * Returns a small ordered list:
+ *   1. The `.lnk`'s target (the real .exe / image, when resolution succeeds
+ *      and the target file actually exists on disk)
+ *   2. The `.lnk` itself (fallback — at minimum yields *something*, even
+ *      if it's the generic shortcut icon; better than a blank tile)
+ *
+ * UWP / Store apps whose .lnks point at a system launcher like
+ * `WindowsPackageManagerLauncher.exe` will get that launcher's icon
+ * (not the actual UWP app's). Reading the AppX manifest to recover the
+ * real icon would require parsing AppxManifest.xml — out of scope.
+ */
+function iconCandidatesFor(lnkPath: string): string[] {
+  const candidates: string[] = [];
+  if (lnkPath.toLowerCase().endsWith(".lnk")) {
+    try {
+      const info = shell.readShortcutLink(lnkPath);
+      if (info.target && fs.existsSync(info.target)) {
+        candidates.push(info.target);
+      }
+    } catch {
+      // readShortcutLink throws on corrupted / non-standard .lnks
+    }
+  }
+  candidates.push(lnkPath);
+  return candidates;
 }
 
 // ── Launch ─────────────────────────────────────────────────────────────────────

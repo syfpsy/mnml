@@ -167,13 +167,20 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
             </div>
 
             {/* About footer — version + support contact. Kept tiny so it
-                reads as metadata, not as a row. */}
+                reads as metadata, not as a row. Brand dot mirrors the
+                site wordmark's "•mnml" compact-mark style — same hue
+                token in both surfaces (--brand-dot). */}
             <div
               className="flex items-center justify-between text-[10px] pt-3"
               style={{ color: "var(--t3)" }}
             >
-              <span className="tabular-nums">
-                mnml {version ? `v${version}` : ""}
+              <span className="inline-flex items-center gap-1.5 tabular-nums">
+                <span
+                  aria-hidden
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{ background: "var(--brand-dot)" }}
+                />
+                {version ? `mnml v${version}` : "mnml"}
               </span>
               <a
                 href="mailto:info@nxyz.art"
@@ -397,8 +404,16 @@ function StorageSection() {
         setBusy("idle");
         return;
       }
-      // Success — main process restarts the app within ~600 ms. Show a
-      // confirmation in case the restart is delayed.
+      if (!r.changed) {
+        // No-op: user picked the folder we're already using. Main process
+        // didn't restart, so we clear the button state ourselves.
+        flash("ok", r.message);
+        setBusy("idle");
+        return;
+      }
+      // Migration accepted — main process restarts the app within ~600 ms.
+      // Keep `busy = "migrating"` so the button stays locked; the restart
+      // will tear down this React tree before the user can click again.
       flash("ok", r.message, 8000);
     } catch (err) {
       flash("err", String((err as Error)?.message ?? err));
@@ -412,6 +427,11 @@ function StorageSection() {
     const r = await bridge.storageReset();
     if (!r.ok) {
       flash("err", r.message);
+      setBusy("idle");
+      return;
+    }
+    if (!r.changed) {
+      flash("ok", r.message);
       setBusy("idle");
       return;
     }

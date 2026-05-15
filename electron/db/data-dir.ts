@@ -169,6 +169,32 @@ function writeLocationFile(absDir: string): void {
   fs.renameSync(tmp, file);
 }
 
+/**
+ * Best-effort rollback of files we just copied into `dst`. Used when the
+ * migration succeeds at the copy step but FAILS at the pointer-write step
+ * — we don't want to leave an orphaned `mnml.sqlite` + `images/` at a
+ * location the app will never use.
+ *
+ * Silent on individual failures: we're already in an error path, and a
+ * single un-deletable file shouldn't mask the original error. Worst case
+ * is a leftover artefact the user can clean up manually.
+ */
+function rollbackCopy(dst: string): void {
+  for (const file of ["mnml.sqlite", "mnml.sqlite-wal", "mnml.sqlite-shm"]) {
+    const p = path.join(dst, file);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
+  }
+  const imgDir = path.join(dst, "images");
+  if (fs.existsSync(imgDir)) {
+    try {
+      for (const f of fs.readdirSync(imgDir)) {
+        try { fs.unlinkSync(path.join(imgDir, f)); } catch { /* ignore */ }
+      }
+      try { fs.rmdirSync(imgDir); } catch { /* ignore */ }
+    } catch { /* ignore */ }
+  }
+}
+
 /** Delete storage-location.json so the next launch uses the default. */
 export function clearLocationFile(): void {
   const file = locationFilePath();
@@ -250,6 +276,13 @@ export function setDataDir(targetPath: string): MigrationResult {
   try {
     writeLocationFile(target);
   } catch (err) {
+    // The copy step succeeded, but the pointer write failed. Roll back the
+    // copy so the target folder isn't left with orphan files that won't
+    // get used. Best-effort — failure to delete cleanly doesn't change the
+    // outcome (the canonical data still lives at the previous location).
+    if (!adoptExisting) {
+      rollbackCopy(target);
+    }
     return {
       ok: false,
       message: `Couldn't save location: ${String((err as Error).message)}.`,

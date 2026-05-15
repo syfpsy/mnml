@@ -8,7 +8,8 @@ import { autoUpdater } from "electron-updater";
 import { getDb } from "./db/index.js";
 import { getSetting } from "./db/settings.js";
 import { installDoubleAlt, suppressDoubleAltFor } from "./hotkey/double-alt.js";
-import { onNewItem, onItemUpdated, start as startMonitor } from "./clipboard/monitor.js";
+import { onNewItem, onItemUpdated, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
+import { closeDb } from "./db/index.js";
 import { IPC } from "./ipc-channels.js";
 import { registerIpc } from "./ipc.js";
 import { rebuildAppIndex } from "./search/app-search.js";
@@ -464,20 +465,29 @@ function runSummonFocusPass(native = false) {
   void focusSearchInputNow();
 }
 
-/* ── Tray icon ─────────────────────────────────────────────────────────────── */
+/* ── Tray icon ───────────────────────────────────────────────────────────────
+ * Loads the multi-resolution `build/icon.ico` (7 embedded sizes: 16, 24, 32,
+ * 48, 64, 128, 256). Windows picks the appropriate size for the current DPI
+ * scaling — a single 16×16 PNG would upscale-blur on HiDPI tray slots
+ * (24/32/48 actual pixels at 150-200 % scaling).
+ *
+ * Falls back to the single 16-px PNG, then a 1×1 transparent placeholder,
+ * so the tray-init path never crashes even if asset packaging breaks.
+ */
 function createTrayIcon(): Electron.NativeImage {
-  const size = 16;
-  const buf  = Buffer.alloc(size * size * 4, 0);
-  const px   = (x: number, y: number) => {
-    if (x < 0 || x >= size || y < 0 || y >= size) return;
-    const i = (y * size + x) * 4;
-    buf[i] = buf[i + 1] = buf[i + 2] = 255;
-    buf[i + 3] = 255;
-  };
-  for (let y = 2; y <= 13; y++) { px(3, y); px(4, y); px(11, y); px(12, y); }
-  px(5,3); px(5,4); px(6,4); px(6,5); px(7,5); px(7,6);
-  px(10,3); px(10,4); px(9,4); px(9,5); px(8,5); px(8,6);
-  return nativeImage.createFromBitmap(buf, { width: size, height: size, scaleFactor: 1.0 });
+  const buildDir = app.isPackaged
+    ? path.join(process.resourcesPath, "build")
+    : path.join(__dirname, "..", "build");
+  for (const candidate of [
+    path.join(buildDir, "icon.ico"),
+    path.join(buildDir, "tray.png"),
+  ]) {
+    if (fs.existsSync(candidate)) {
+      return nativeImage.createFromPath(candidate);
+    }
+  }
+  log("[tray] no icon asset found in", buildDir, "— using transparent placeholder");
+  return nativeImage.createFromBitmap(Buffer.alloc(4, 0), { width: 1, height: 1, scaleFactor: 1.0 });
 }
 
 function buildTrayMenu(updateVersion?: string) {
@@ -582,9 +592,19 @@ function createWindow() {
   const size     = WINDOW_SIZE;
   const { x, y } = positionNearCursor(size.width, size.height);
 
+  // BrowserWindow's `icon` is what Windows uses for the title-bar icon and
+  // the Alt-Tab thumbnail badge. The executable's icon (taskbar / Start
+  // Menu / file Explorer) is set separately via electron-builder's
+  // `win.icon`. Both point at the same multi-resolution ICO so the brand
+  // mark is consistent everywhere Windows renders it.
+  const winIconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "build", "icon.ico")
+    : path.join(__dirname, "..", "build", "icon.ico");
+
   win = new BrowserWindow({
     ...size,
     x, y,
+    icon:        fs.existsSync(winIconPath) ? winIconPath : undefined,
     show:        false,
     frame:       false,
     transparent: false,
@@ -873,6 +893,13 @@ app.on("window-all-closed", () => { /* stay alive for the global hotkey */ });
 app.on("before-quit", () => {
   log("[lifecycle] before-quit");
   if (updaterInterval) { clearInterval(updaterInterval); updaterInterval = null; }
+  // Stop the clipboard poller first so it can't write into the
+  // about-to-close DB connection. Then checkpoint + close SQLite so
+  // the WAL is merged into the main DB file (otherwise a stale
+  // `mnml.sqlite-wal` sidecar persists). Both wrapped in try/catch —
+  // even a partial shutdown shouldn't block app exit.
+  try { stopMonitor(); } catch (err) { log("[lifecycle] stopMonitor:", String(err)); }
+  try { closeDb();     } catch (err) { log("[lifecycle] closeDb:",     String(err)); }
   try { foregroundHelper?.stdin.write("exit\n"); } catch { /* noop */ }
   try { foregroundHelper?.kill(); } catch { /* noop */ }
   uIOhook.off("mousedown", onGlobalMousedown);

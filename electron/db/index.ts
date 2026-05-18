@@ -1,11 +1,48 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
-import { getDataDir } from "./data-dir.js";
+import { getDataDir, isUsingDefaultDataDir } from "./data-dir.js";
 
 let db: Database.Database | null = null;
 
+/**
+ * Schema migration runs once per process. After an idle-close the on-disk
+ * file is already migrated, so a reopen within the same process skips it.
+ * A `dataDir` change always goes through an app restart (see ipc.ts), so
+ * this flag is never stale across two different DB files.
+ */
+let migrated = false;
+
+/**
+ * Idle-close timer.
+ *
+ * mnml is an always-on tray app, but its DB usage is bursty — a clipboard
+ * capture here, a summon-and-search there, idle the rest of the time.
+ * Holding the SQLite file open continuously blocks a cloud-sync service
+ * (Dropbox / OneDrive / iCloud) from replacing `mnml.sqlite` when the OTHER
+ * device's copy syncs down: the open handle forces a `.conflict` file
+ * instead of a clean overwrite, and the running instance never sees the
+ * remote changes.
+ *
+ * Fix: drop the connection after a short idle window. The file goes "free",
+ * the pending sync lands, and the next `getDb()` reopens fresh. Reopening
+ * costs ~1 ms — imperceptible for a bursty workload.
+ */
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+const IDLE_CLOSE_MS = 5_000;
+
+function armIdleClose(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    closeDb();
+  }, IDLE_CLOSE_MS);
+}
+
 export function getDb(): Database.Database {
+  // Every access pushes the idle-close deadline out. A burst of activity
+  // keeps the connection open; a quiet stretch lets it close.
+  armIdleClose();
   if (db) return db;
 
   const dataDir = getDataDir();
@@ -16,10 +53,22 @@ export function getDb(): Database.Database {
 
   const dbPath = path.join(dataDir, "mnml.sqlite");
   db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
+
+  // Journal mode depends on whether the data lives in a synced folder:
+  //   · Default %APPDATA% location → WAL. Faster; never synced, so the
+  //     `-wal` / `-shm` sidecars are harmless.
+  //   · Custom (likely synced) location → DELETE, the classic rollback
+  //     journal. After every commit the single `mnml.sqlite` file is
+  //     self-consistent, so a cloud service can sync just that one file
+  //     safely. WAL's sidecars would otherwise sync out of step and
+  //     corrupt the DB.
+  db.pragma(isUsingDefaultDataDir() ? "journal_mode = WAL" : "journal_mode = DELETE");
   db.pragma("synchronous = NORMAL");
 
-  migrate(db);
+  if (!migrated) {
+    migrate(db);
+    migrated = true;
+  }
   return db;
 }
 
@@ -28,18 +77,19 @@ export function imagesDir(): string {
 }
 
 /**
- * Cleanly close the SQLite connection (WAL checkpoint + handle release).
- * Used before swapping `dataDir`. After calling this, the next `getDb()`
- * call re-opens at whatever path `getDataDir()` now resolves to.
+ * Cleanly close the SQLite connection (checkpoint + handle release). Called
+ * by the idle timer, before swapping `dataDir`, and on app quit. After this
+ * the next `getDb()` reopens at whatever path `getDataDir()` resolves to.
  *
  * Safe to call when no connection is open — it's a no-op.
  */
 export function closeDb(): void {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
   if (!db) return;
   try {
-    // Force a checkpoint so the -wal file is merged into the main DB before
-    // we close. Otherwise a copy of just the .sqlite file would miss any
-    // not-yet-checkpointed writes.
+    // No-op in DELETE journal mode; in WAL mode it merges the `-wal` back
+    // into the main file so the on-disk `.sqlite` is fully consistent
+    // before the handle is released.
     db.pragma("wal_checkpoint(TRUNCATE)");
     db.close();
   } catch {

@@ -57,7 +57,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const appSearch  = useAppSearch(isSavedTab ? "" : query);
   const appResults = appSearch.results;
 
-  const { snippets } = useSaved(isSavedTab ? query : undefined);
+  const { snippets, refetch: refetchSaved } = useSaved(isSavedTab ? query : undefined);
 
   const [focusedAppIndex,   setFocusedAppIndex]   = useState(-1);
   const [focusedSavedIndex, setFocusedSavedIndex] = useState(-1);
@@ -72,16 +72,24 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
-  // Clear the search query whenever the window hides. Without this, summoning
-  // mnml a second time still shows the previous search — surprising when the
-  // typical mental model is "fresh window every time I press Alt twice".
-  // Doesn't touch the active tab; that's a separate, more opinionated reset
-  // that we leave to the user.
+  // Window visibility drives two things:
+  //  · On HIDE — clear the search query. Summoning mnml again starts fresh
+  //    rather than showing the previous search ("fresh window every Alt-Alt"
+  //    mental model). The active tab is intentionally left alone.
+  //  · On SHOW — re-query the DB. The SQLite connection idle-closes between
+  //    summons (see electron/db/index.ts), so anything another device
+  //    synced into a shared folder is on disk but not yet in React state.
+  //    Refetching on summon makes folder-sync visible without a restart.
   useEffect(() => {
     return bridge.onVisibilityChanged((visible) => {
-      if (!visible) setQuery("");
+      if (!visible) {
+        setQuery("");
+      } else {
+        refetch();
+        refetchSaved();
+      }
     });
-  }, []);
+  }, [refetch, refetchSaved]);
 
   // Reset section focus whenever the underlying lists change.
   useEffect(() => { setFocusedAppIndex(-1);   }, [query, appResults.length, tab]);

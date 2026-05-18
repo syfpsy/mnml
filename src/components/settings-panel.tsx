@@ -451,7 +451,7 @@ function StorageSection() {
       <div>
         <div className="text-[13px] leading-tight" style={{ color: "var(--t1)" }}>Storage folder</div>
         <div className="text-[11px] mt-0.5 leading-snug" style={{ color: "var(--t2)" }}>
-          Where mnml saves clipboard history, snippets, and images. Point this at a Dropbox / OneDrive / iCloud folder to sync across devices. Don't run two devices on the same synced folder at the same time.
+          Where mnml saves clipboard history, snippets, and images. Point this at a Dropbox / OneDrive / iCloud folder and your clipboard follows you across devices — mnml reloads on each summon to pick up what synced in. Best one device at a time; editing on two at once may leave a conflict file.
         </div>
       </div>
 

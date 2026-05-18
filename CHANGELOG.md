@@ -1,5 +1,23 @@
 # mnml Changelog
 
+## v0.2.39 — 2026-05-18
+
+Folder-sync, made to actually work. The v0.2.34 "Storage folder" feature let you point mnml at a Dropbox / OneDrive / iCloud folder, but mnml is an always-on tray app — it held the synced `mnml.sqlite` open 24/7, so the cloud service could never cleanly replace it with another device's copy. You'd get diverging `.conflict` files instead of sync. This release fixes the connection lifecycle so one-device-at-a-time folder sync genuinely works.
+
+### Fixed
+- **The synced DB file is no longer held open.** New idle-close: the SQLite connection drops 5 s after the last access. mnml's DB usage is bursty (a clipboard capture here, a summon-and-search there), so between bursts the `mnml.sqlite` file goes "free" — the cloud-sync service can then replace it with the other device's copy without forcing a `.conflict` file. The next operation reopens the connection fresh (~1 ms). Pairs with a once-per-process `migrate()` guard so reopening stays cheap.
+- **Clipboard monitor no longer pins the connection open.** `poll()` ran every 500 ms and called `getSetting("monitoring")` → `getDb()` on every tick, which kept re-arming the idle-close timer and would have defeated it entirely. Removed the redundant check — the poll timer only runs while monitoring is enabled anyway (`start()` / `stop()` are driven directly by the setting), so `poll()` now touches the DB only when it actually captures an item.
+- **Journal mode adapts to the data location.** Default `%APPDATA%` location keeps WAL (faster, never synced — its `-wal` / `-shm` sidecars are harmless). A custom (likely synced) folder switches to `DELETE`, the classic rollback journal: after every commit the single `mnml.sqlite` file is self-consistent, so a cloud service can sync just that one file safely. WAL's sidecar files would otherwise sync out of step and corrupt the DB.
+
+### Changed
+- **The window reloads its lists on every summon.** The renderer stays mounted between summons, so it used to show whatever it last loaded. Now an `onVisibilityChanged` → visible event re-queries clipboard items + saved snippets. Since the DB connection idle-closes between summons, a summon reopens it fresh — so anything another device synced into a shared folder shows up the moment you press Alt-Alt, no restart needed.
+- **Settings > Storage folder hint reworded.** Dropped the scary "Don't run two devices on the same synced folder at the same time" line. New copy explains the reload-on-summon behavior and keeps an honest "best one device at a time; editing on two at once may leave a conflict file" note.
+
+### Notes
+- This is one-at-a-time sync by design — $0, no server, no account, data only ever in your own cloud storage. Both machines genuinely active at the same instant can still produce an occasional conflict file; that's the trade for zero infrastructure.
+- Works with any folder-sync backend: Dropbox, OneDrive, iCloud Drive, Syncthing, a network share — anything that syncs a folder.
+
+
 ## v0.2.38 — 2026-05-15
 
 Big release. New brand identity (proper app icon, finally), real app icons in the launcher (not generic shortcut overlays), a configurable storage folder rounded into shape, plus the five queued bug-fixes from the post-v0.2.37 hunt.

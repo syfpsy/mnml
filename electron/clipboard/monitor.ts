@@ -78,8 +78,12 @@ function emit(item: Item) {
 }
 
 function poll() {
-  if (!getSetting("monitoring")) return;
-
+  // No `getSetting("monitoring")` gate here. The poll timer only runs while
+  // monitoring is enabled — `start()` / `stop()` are driven directly by the
+  // setting (see ipc.ts + main.ts), so if `poll` is executing, monitoring is
+  // on. Reading the setting every 500 ms would also call `getDb()` every
+  // tick, which would keep re-arming the DB's idle-close timer and pin the
+  // SQLite file open forever — defeating the folder-sync handoff.
   try {
     // image first — when copying screenshots, text is usually empty
     const img = clipboard.readImage();

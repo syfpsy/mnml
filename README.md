@@ -1,118 +1,62 @@
+<img src="build/icon-256.png" width="88" alt="mnml icon" align="left" />
+
 # mnml
 
-A super-minimal, Windows-first clipboard manager. Captures text, images, and
-links; stores them locally; finds them back with smart search; pops up from
-anywhere with a double-tap of `Alt`.
+A keyboard-first clipboard manager for Windows. Press **Alt** twice; paste from history, launch any app or Windows Setting, save reusable snippets. One 440×540 window. Local SQLite. No accounts, no telemetry.
 
-**Status:** MVP. Local-first. No accounts, no sync, no cloud.
+<br clear="left" />
 
-## What's in the MVP
+**[⬇ Download for Windows](https://mnml-bay.vercel.app/)** · MIT licensed · Windows 10 / 11 (x64)
 
-- **Clipboard capture** — text, images, and links (URLs are auto-classified)
-- **Local persistence** — SQLite at `%APPDATA%\mnml\mnml.sqlite`
-- **Smart search** — hybrid FTS5 BM25 + character-trigram similarity (a lean
-  "semantic-ish" layer that handles typos and partial words)
-- **Double-Alt hotkey** — show/hide globally, with guards that keep normal
-  `Alt` usage working
-- **Compact + expanded modes** — compact shows last 10 items, expanded adds
-  tabs (All / Text / Links / Images) and settings
-- **Reuse** — click or press `Enter` to re-copy and dismiss; `Shift+Enter`
-  re-copies without hiding the window
-- **Pin** — pinned items always sort first and are exempt from the trim limit
-- **Full keyboard nav** — `↑/↓` walks the list, `Ctrl+Home/End` jumps to top/bottom,
-  active row scrolls into view
-- **Minimal settings** — monitoring toggle, launch-on-startup, max items,
-  clear history (two-step inline confirm)
+---
 
-## Requirements
+## What it does
 
-- Windows 10/11
-- Node 20+ (tested on 22)
-
-## Run it
-
-```bash
-npm install
-npm run dev
-```
-
-`npm install` runs `electron-rebuild` on `better-sqlite3` so the native binding
-matches Electron's ABI. `uiohook-napi` uses its prebuilt N-API binary as-is.
-
-In dev mode, devtools auto-open in a detached window so the renderer console
-is always visible.
+- **Clipboard history** — text, links (with favicons), and image screenshots (96 px thumbnails). Full-text search (SQLite FTS5 with a LIKE fallback). Pin items to keep them past the rotation cap.
+- **Quick-paste** — press **Ctrl + 1…9** to paste one of the first nine items instantly. Pasting strips formatting, so you always get clean plain text.
+- **Saved snippets** — reusable text (signatures, regexes, commands) that never rotate out. One-click save from any clipboard row.
+- **Launcher** — Start-Menu apps + ~80 curated `ms-settings:` deep links (Bluetooth, Display, Sound, Update…) + classic `.msc` / `.cpl` tools (Task Manager, Device Manager, Registry Editor…), all in the same search.
+- **Never your passwords** — mnml honors the Windows "do not record" clipboard flag, so content from password managers (1Password, KeePass, Bitwarden) and browser password fields is never captured.
+- **Folder sync** — point the storage folder at Dropbox / OneDrive / iCloud and your clipboard follows you across devices (one machine at a time). No server, no account; the data only ever lives in your own cloud storage.
+- **Auto-launch + auto-update** — starts with Windows so the hotkey is always live; updates itself in the background.
+- **Light + dark themes**, WCAG-AA contrast in both.
 
 ## Hotkeys
 
-- **Double-tap `Alt`** — primary toggle (uses a global keyboard hook)
-- **`Ctrl+Shift+V`** — fallback, always works even if the global hook is
-  blocked by Windows policy
+| Key | Action |
+|---|---|
+| **Alt Alt** (double-tap) | Show / hide, anywhere |
+| **Ctrl + Shift + V** | Fallback toggle (if the global hook is blocked by policy) |
+| **Ctrl + 1…9** | Quick-paste the Nth item |
+| **↑ / ↓**, **Ctrl+Home/End** | Navigate the list |
+| **Enter** | Paste · **Shift-click** a row to copy without pasting |
+| **Esc** | Clear the search, or hide |
 
-## Troubleshooting
+## Privacy
 
-Every startup writes to `%APPDATA%\mnml\mnml.log`. If the window doesn't
-appear when you double-tap Alt, check that file — it should show:
+Everything is local by default:
+- `%APPDATA%\mnml\mnml.sqlite` — metadata, text, URLs, FTS index
+- `%APPDATA%\mnml\images\` — captured images as PNG files
 
-```
-[startup] booting · log file: ...\mnml.log
-[hotkey] uiohook started, listening for double-Alt within 380 ms
-[hotkey] fallback shortcut Control+Shift+V registered
-```
+No accounts, no cloud, no telemetry. The only outbound request is a daily update check. Password-manager content is never stored (see above). Use **Clear history** in Settings, or delete those paths, to wipe state.
 
-When you actually double-tap Alt, you should see `[hotkey] double-alt fired`
-followed by `[show] window shown at ...`. If the first line shows up but the
-window stays hidden, Windows blocked the foreground steal — try
-`Ctrl+Shift+V`. If `[hotkey] double-alt fired` never shows, the OS isn't
-delivering Alt events to our hook (rare; usually means another app is
-intercepting first, or `uiohook` failed to attach — the log will say so).
+> The installer is not yet code-signed, so Windows SmartScreen shows an "unrecognized app" prompt on first run — click **More info → Run anyway**. (Code signing via [SignPath Foundation](https://signpath.org/foundation) is in progress.)
 
-A common gotcha: **a stale `electron.exe` from a previous dev run** holds the
-single-instance lock and silently swallows new launches. Kill it with
-`taskkill /F /IM electron.exe` before retrying `npm run dev`.
-
-## Build a Windows installer
+## Build from source
 
 ```bash
-npm run build
+npm install        # runs electron-rebuild on better-sqlite3 to match Electron's ABI
+npm run dev        # dev mode (detached devtools)
+npm run build      # produces release/mnml-setup.exe + latest.yml + .blockmap
+npm run icons      # regenerate the app icon from build/icon.svg
 ```
 
-Output goes to `release/`. First-run will ask for accessibility permission for
-the global keyboard listener (standard Windows prompt).
+Requires Windows 10/11 and Node 20+ (tested on 22).
 
-## How the UI behaves
+## Architecture
 
-**Compact** (`440×540`, frameless, centered):
-- Search input + expand button in the header
-- Last 10 items
-- `↓` to walk the list, `Enter` to paste, `Esc` to clear or hide
+Electron 33 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-Alt hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
 
-**Expanded** (`880×680`):
-- Same search bar
-- Tabs: All / Text / Links / Images
-- Settings button opens a lean in-view panel
+## License
 
-The window auto-hides on blur. Double-tap `Alt` to bring it back.
-
-## Data & privacy
-
-Everything is local:
-- `%APPDATA%\mnml\mnml.sqlite` — metadata, text, URLs, FTS index
-- `%APPDATA%\mnml\images\` — copied images as PNG files
-
-Delete those two paths (or use **Clear history** in Settings) to wipe state.
-
-## Next sensible improvements
-
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md#future) for the replaceable seams,
-but in priority order:
-1. Swap the trigram fallback for a real local embedding backend
-   (`@xenova/transformers` with `all-MiniLM-L6-v2`) — the `SearchService`
-   abstraction already isolates this.
-2. Optional link-metadata fetch (title / og:image) on a worker thread.
-3. Pinning / favorites.
-4. Lightweight image OCR (opt-in) to make screenshots searchable.
-5. Auto-paste after restore (currently we re-copy — user still presses Ctrl+V).
-
-## Test checklist
-
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md#test-checklist).
+[MIT](./LICENSE) © syfpsy

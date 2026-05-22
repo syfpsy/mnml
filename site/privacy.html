@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Privacy — mnml</title>
+
+  <meta name="description" content="mnml's privacy policy. Your clipboard stays on your device. No accounts, no telemetry, no trackers." />
+  <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
+  <meta name="robots" content="index,follow" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+  <!-- Apply the saved theme before first paint (same as the home page). -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("mnml-theme");
+        var prefersLight = window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: light)").matches;
+        var wantsLight = stored ? stored === "light" : prefersLight;
+        document.documentElement.classList.toggle("light", wantsLight);
+      } catch (_) { /* private mode etc. */ }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="page-header">
+    <a class="wordmark" href="/" aria-label="mnml home">
+      <span class="dot" aria-hidden="true"></span>mnml
+    </a>
+    <button
+      id="theme-toggle"
+      class="theme-toggle"
+      type="button"
+      aria-label="Switch to light theme"
+      aria-pressed="false"
+    >
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <section class="legal">
+      <p class="eyebrow">Privacy</p>
+      <h1>Your clipboard stays yours</h1>
+      <p class="updated">Last updated 22 May 2026</p>
+
+      <p>
+        mnml is a local-first clipboard manager for Windows. The short version:
+        what you copy lives on your own computer, in a local database. mnml has
+        no servers that receive your clipboard, no user accounts, no analytics,
+        and no third-party trackers. This page spells out exactly what is stored,
+        what stays local, and the few things that touch the network.
+      </p>
+
+      <h2>What mnml stores, and where</h2>
+      <p>
+        Your clipboard history, saved snippets, and settings are stored locally
+        in an SQLite database, by default at <code>%APPDATA%\mnml\mnml.sqlite</code>,
+        with captured images as PNG files in <code>%APPDATA%\mnml\images\</code>.
+        This data never leaves your machine on its own. You can wipe it any time
+        with <strong>Clear history</strong> in Settings, or by deleting those paths.
+      </p>
+
+      <h2>What mnml never records</h2>
+      <p>
+        mnml honors the Windows "do not record" clipboard markers. Content that a
+        password manager (1Password, KeePass, Bitwarden) or a browser password
+        field marks as sensitive is skipped entirely. It is never read into
+        memory, never stored, and never synced. Turning off
+        <strong>Monitor clipboard</strong> in Settings stops all capture.
+      </p>
+
+      <h2>What touches the network</h2>
+      <p>
+        mnml makes a small, fixed set of outbound requests. None of them carry
+        your clipboard contents, and none are used for tracking or advertising:
+      </p>
+      <ul>
+        <li>
+          <strong>Update check.</strong> About once a day, mnml asks the update
+          server whether a newer version exists. This is a normal web request
+          (your IP address and basic headers are visible to the host, as with
+          any download). No personal data or clipboard content is sent.
+        </li>
+        <li>
+          <strong>Favicons for links.</strong> When a link is shown in your
+          history, mnml fetches that site's small icon from Google's public
+          favicon service. This means the <em>domain</em> of links you copy (for
+          example <code>example.com</code>, not the full URL) is sent to Google
+          to retrieve the icon.
+        </li>
+        <li>
+          <strong>Link titles.</strong> When you copy a URL, mnml fetches that
+          page to read its title, so the entry reads as a real name instead of a
+          raw link. That means mnml briefly visits the address you copied.
+          Requests to private or local network addresses are blocked.
+        </li>
+      </ul>
+      <p>
+        Both link lookups only happen for content that is actually captured, so
+        anything excluded by the sensitive-content rule above never triggers a
+        request. Switching off clipboard monitoring stops them too.
+      </p>
+
+      <h2>Optional folder sync</h2>
+      <p>
+        mnml can store its data folder inside a service you already use, such as
+        Dropbox, OneDrive, or iCloud Drive, so your clipboard follows you across
+        your own devices. If you turn this on, your data is synced by that
+        provider under their terms and privacy policy. mnml itself still never
+        receives or transmits it; the files simply live in a folder that your
+        chosen service happens to sync. This is off by default.
+      </p>
+
+      <h2>This website</h2>
+      <p>
+        The site you are reading (<code>mnml-bay.vercel.app</code>) is a static
+        page hosted on Vercel. It sets no cookies, runs no analytics, and loads
+        no third-party trackers. Vercel, like any web host, keeps standard server
+        access logs (such as IP address and user agent) for security and
+        operations. The download links serve the installer directly.
+      </p>
+
+      <h2>What mnml does not do</h2>
+      <ul>
+        <li>No user accounts or sign-in.</li>
+        <li>No telemetry, usage analytics, or crash reporting sent off-device.</li>
+        <li>No advertising, no third-party marketing SDKs.</li>
+        <li>No selling, renting, or sharing of any data. There is nothing to sell:
+          the data stays on your machine.</li>
+      </ul>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If mnml's data practices change, this page will be updated and the date
+        at the top will change with it. Material changes will be noted in the
+        <a href="https://github.com/syfpsy/mnml/blob/master/CHANGELOG.md" rel="noreferrer">changelog</a>.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about privacy, or anything else: <a href="mailto:info@nxyz.art">info@nxyz.art</a>.
+        The full source is public at
+        <a href="https://github.com/syfpsy/mnml" rel="noreferrer">github.com/syfpsy/mnml</a>,
+        so you can verify any of the above yourself.
+      </p>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <span><span class="dot" aria-hidden="true"></span>mnml</span>
+    <span class="dim"><a href="/">Home</a> · MIT licensed · <a href="mailto:info@nxyz.art">info@nxyz.art</a></span>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

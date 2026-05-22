@@ -747,6 +747,51 @@ section {
   vertical-align: 1px;
 }
 .page-foot .dim { color: var(--t3); }
+.page-foot .dim a { color: var(--t2); text-decoration: none; }
+.page-foot .dim a:hover { color: var(--accent-app); }
+
+/* ── Legal / prose pages (privacy) ─────────────────────────────────────────── */
+.legal {
+  max-width: 68ch;
+}
+.legal h1 {
+  font-size: clamp(30px, 4.5vw, 44px);
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  font-weight: 800;
+  margin: 6px 0 8px;
+  color: var(--t1);
+}
+.legal h2 {
+  font-size: clamp(17px, 2vw, 20px);
+  letter-spacing: -0.01em;
+  margin: 40px 0 10px;
+  color: var(--t1);
+}
+.legal p,
+.legal li {
+  color: var(--t2);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.legal p { margin: 0 0 14px; }
+.legal ul { margin: 0 0 14px; padding-left: 20px; }
+.legal li { margin: 0 0 6px; }
+.legal a { color: var(--accent-app); text-underline-offset: 3px; }
+.legal code {
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  color: var(--t1);
+  border: 1px solid var(--border);
+}
+.legal .updated {
+  color: var(--t3);
+  font-size: 13px;
+  margin: 0 0 28px;
+}
+.legal strong { color: var(--t1); font-weight: 600; }
 
 /* ── Reveal-on-scroll ──────────────────────────────────────────────────────── */
 [data-reveal] {

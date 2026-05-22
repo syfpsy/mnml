@@ -57,6 +57,18 @@ Requires Windows 10/11 and Node 20+ (tested on 22).
 
 Electron 33 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-Alt hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
 
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [`PRODUCT.md`](./PRODUCT.md) | Product intent, users, principles, tone, privacy stance, status |
+| [`DESIGN.md`](./DESIGN.md) | Design system: color tokens, type, brand mark, focus/a11y, anti-patterns |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | How it's built: stack, data model, every subsystem, the IPC contract |
+| [`RELEASING.md`](./RELEASING.md) | Build pipeline, versioning, GitHub-Releases distribution, Vercel deploy, signing |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Release history (Keep-a-Changelog) |
+| [`docs/bug-history.md`](./docs/bug-history.md) | Engineering log of notable bugs and fixes |
+| [`site/README.md`](./site/README.md) | Landing-site structure and deploy |
+
 ## License
 
 [MIT](./LICENSE) © syfpsy

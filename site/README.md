@@ -12,10 +12,13 @@ Self-contained static page at `site/index.html`. No build step — pure HTML, on
 | `favicon.svg`  | 32×32 brand mark — small-caps "M" + orange dot on the cool-tinted dark rounded square. Same geometry as the app icon (`build/icon.svg`), scaled down. |
 | `og.svg`       | 1200×630 Open Graph **source** artwork. Hand-edited; rasterise via `npx sharp-cli` after changes. |
 | `og-v2.png`    | 1200×630 PNG served as `og:image` + `twitter:image`. Twitter/X explicitly rejects SVG cards, so we publish the PNG. Suffix-versioned so re-brands bust the 30-day immutable CDN + browser cache + social-platform unfurl cache — bump `og-vN.png` whenever the artwork actually changes. |
-| `mnml-setup.exe` | The actual installer. Not in git (binary). Built by `npm run build`, copied here, then uploaded via `vercel --prod`. |
-| `latest.yml` + `mnml-setup.exe.blockmap` | electron-updater manifest + delta-update map. Also not in git; rebuilt with each installer. |
-
-The download buttons are static `<a>` links to a local `mnml-setup.exe`. No GitHub Releases fetching — the page works against a private repo because the binary is served from the same origin as the site.
+**Downloads are not in `site/`.** The installer (`mnml-setup.exe`), update manifest
+(`latest.yml`), and blockmap live on **GitHub Releases**. `vercel.json` redirects
+`/mnml-setup.exe`, `/latest.yml`, and `/mnml-setup.exe.blockmap` (307) to
+`…/releases/latest/download/…`, so the static download buttons (they point at
+`/mnml-setup.exe`) always resolve to the newest release. This also means a git
+push can't break the download by deploying a binary-less build. See
+[`../RELEASING.md`](../RELEASING.md) for the full distribution model and why.
 
 ## Themes
 
@@ -38,7 +41,7 @@ npx --yes http-server -p 8080
 
 ## Deploy
 
-The site is hosted on **Vercel**. Project config is at `vercel.json` in the repo root: no build step, `outputDirectory: "site"`, immutable cache on images, short cache on CSS/JS. Production deploys happen via `vercel --prod` from a local checkout — never automatic, never unprompted.
+The site is hosted on **Vercel**. Project config is at `vercel.json` in the repo root: no build step, `outputDirectory: "site"`, immutable cache on images, short cache on CSS/JS, plus the download redirects. Production deploys happen via `vercel --prod` from a local checkout — never automatic, never unprompted. The installer is **not** part of this deploy; it's served from GitHub Releases via those redirects (see [`../RELEASING.md`](../RELEASING.md)). Pushing to the repo can also trigger a Vercel git-integration deploy from source — harmless now that the binary isn't same-origin, but verify deliberate site changes after deploying. `vercel.json` is schema-validated: don't add unknown keys.
 
 ### Custom domain
 

@@ -84,18 +84,34 @@ export function onNewItem(l: Listener): () => void {
 
 export function start() {
   if (timer) return;
-  // initialize baseline so we don't capture whatever was already on the clipboard on launch
-  lastTextHash = sha1(clipboard.readText() ?? "");
-  const img = clipboard.readImage();
-  if (img.isEmpty()) {
+  // Initialize baseline so we don't capture whatever was already on the
+  // clipboard on launch — but honor the sensitive-content guard here too.
+  // Without this check, a password manager that left a concealed item on
+  // the clipboard at boot (or whenever monitoring is toggled on) would
+  // still have its content read into memory and SHA-1'd. The product
+  // promise is "concealed content is never read or hashed", so guard the
+  // baseline reads. Empty hashes mean the next non-concealed clipboard
+  // write — text or image — will be captured normally.
+  if (isClipboardConcealed()) {
+    lastTextHash       = "";
     lastImageHash      = "";
     lastImageSizeKey   = "";
     lastImageCheckedAt = 0;
+    wasConcealed       = true;
+    log("[clipboard] start: skipping baseline read (concealed content present)");
   } else {
-    lastImageHash      = sha1(img.toPNG());
-    const { width, height } = img.getSize();
-    lastImageSizeKey   = `${width}x${height}`;
-    lastImageCheckedAt = Date.now();
+    lastTextHash = sha1(clipboard.readText() ?? "");
+    const img = clipboard.readImage();
+    if (img.isEmpty()) {
+      lastImageHash      = "";
+      lastImageSizeKey   = "";
+      lastImageCheckedAt = 0;
+    } else {
+      lastImageHash      = sha1(img.toPNG());
+      const { width, height } = img.getSize();
+      lastImageSizeKey   = `${width}x${height}`;
+      lastImageCheckedAt = Date.now();
+    }
   }
 
   timer = setInterval(poll, POLL_MS);

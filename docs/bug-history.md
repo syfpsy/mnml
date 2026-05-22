@@ -51,9 +51,12 @@ These are the bugs we kept hitting because Windows protects against background a
 |---|---|---|
 | O1 | Image PNGs leaked when item rows were deleted (v0.2.5) | `deleteById`, `clearAll`, and `trimToMax` now also unlink the file. |
 | O2 | Escape in Settings hid the whole window (v0.2.5) | Settings panel's keydown calls `e.stopImmediatePropagation()` so `app.tsx`'s global Escape handler doesn't fire. |
+| O2b | O2 silently regressed: app.tsx added a global Esc→hide listener at mount, registered BEFORE the Settings sheet's listener (which only attaches on open), so bubble-phase order made the global hide fire first and the sheet's stopImmediatePropagation was too late. | Settings sheet's keydown listener now uses capture phase (`addEventListener("keydown", fn, true)`), so it runs strictly before any bubble-phase listener on window. |
 | O3 | Non-ASCII link titles decoded as Latin-1 (v0.2.5) | HTTP title fetcher buffers raw bytes, decodes as UTF-8. |
 | O4 | Spurious blur fired on focus acquisition (v0.1.13) | Blur guard extended to 500 ms after `windowShownAt`. |
 | O5 | `autoPaste` defaulted to `false` (v0.2.3) | Default is `true`; paste intent passed through IPC explicitly. |
+| O6 | `fetchTitle` SSRF guard ignored bracketed IPv6 hostnames — `URL.hostname` for IPv6 literals comes wrapped in `[...]`, so `startsWith("fc"/"fd"/"fe8"/...)` always returned false and unique-local / link-local IPv6 ranges + IPv4-mapped IPv6 slipped through. | `isPrivateHostname()` strips brackets first, then runs the prefix checks; IPv4-mapped IPv6 recurses into the IPv4 rules. |
+| O7 | Clipboard monitor's `start()` ran `clipboard.readText()` + `readImage().toPNG()` to seed baselines without consulting the sensitive-content markers — a password on the clipboard at boot got SHA-1'd, breaking the "never read or hashed" promise. | `start()` checks `isClipboardConcealed()` first and leaves all baselines empty when concealed; the next non-concealed write seeds normally. |
 
 ---
 
@@ -65,3 +68,5 @@ These are the bugs we kept hitting because Windows protects against background a
 4. **Don't pick one delay — pick a staircase.** Windows focus arrival timing varies wildly.
 5. **Opacity tricks for flicker are incompatible with focus tricks for activation.** Pick one strategy: opaque window + native shim is what we settled on.
 6. **The `check:summon` build script exists because we keep regressing.** When in doubt, run it.
+7. **Bubble-phase order ≠ DOM order.** When a modal needs to suppress a global window-level handler with `stopImmediatePropagation`, attach in **capture phase** (`addEventListener(type, fn, true)`). Registration order alone is fragile: a global listener attached at app mount will always run before a modal's listener attached on open, no matter the source-file ordering.
+8. **Privacy / SSRF guards must run on every code path that touches the input, not just the most-trafficked one.** Both regressions in this round were "we added the check on path A but missed path B": the sensitive-content guard covered `poll()` but not `start()`, and the IPv6 SSRF guard covered the bare-form check but not the `URL.hostname`-bracketed form Node actually hands you.

@@ -29,13 +29,19 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // Stop the event from reaching app.tsx's global Escape→hide handler.
+        // Capture phase + stopImmediatePropagation so this listener runs
+        // BEFORE app.tsx's global Escape→hide handler and short-circuits it.
+        // Earlier we relied on listener-registration order, but app.tsx's
+        // listener is added at app mount while ours only attaches when the
+        // sheet opens — so its bubble-phase listener fired first and
+        // `bridge.hide()` was running before we could stop it (closing the
+        // sheet AND hiding the whole window on a single Esc press).
         e.stopImmediatePropagation();
         onClose();
       }
     };
-    window.addEventListener("keydown", fn);
-    return () => window.removeEventListener("keydown", fn);
+    window.addEventListener("keydown", fn, true);
+    return () => window.removeEventListener("keydown", fn, true);
   }, [onClose]);
 
   return (

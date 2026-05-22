@@ -22,7 +22,14 @@ const MAX_BYTES = 8_192;
  * filter covers the obvious cases.
  */
 function isPrivateHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
+  let h = hostname.toLowerCase();
+  // WHATWG `URL.hostname` wraps IPv6 literals in brackets ("[::1]",
+  // "[fc00::1]", "[fe80::1]"). The IPv6 prefix checks below need the bare
+  // address — without this strip, every `startsWith("fc"/"fd"/"fe8"/...)`
+  // check trivially fails because the string actually starts with "[", and
+  // unique-local + link-local IPv6 addresses slip past the SSRF guard.
+  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+
   if (h === "localhost" || h.endsWith(".local") || h.endsWith(".localhost")) return true;
   // IPv4 — loopback, RFC1918 private, link-local
   if (/^127\./.test(h)) return true;
@@ -31,8 +38,12 @@ function isPrivateHostname(hostname: string): boolean {
   if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return true;
   if (/^169\.254\./.test(h)) return true;
   // IPv6 — loopback, unique-local (fc00::/7), link-local (fe80::/10)
-  if (h === "::1" || h.startsWith("[::1") || h.startsWith("fc") || h.startsWith("fd")) return true;
+  if (h === "::1" || h.startsWith("::1") || h.startsWith("fc") || h.startsWith("fd")) return true;
   if (h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")) return true;
+  // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1, ::ffff:10.0.0.1). Re-check the
+  // tail using the IPv4 rules above so a 302 → ::ffff:192.168.0.1 doesn't
+  // bypass the guard either.
+  if (h.startsWith("::ffff:")) return isPrivateHostname(h.slice(7));
   return false;
 }
 

@@ -26,27 +26,23 @@
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
       ]
-    },
+    }
+  ],
+  "redirects": [
     {
       "source": "/mnml-setup.exe",
-      "headers": [
-        { "key": "Content-Disposition", "value": "attachment; filename=\"mnml-setup.exe\"" },
-        { "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" }
-      ]
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe",
+      "permanent": false
     },
     {
-      "source": "/(latest|alpha|beta)\\.yml",
-      "headers": [
-        { "key": "Content-Type", "value": "application/yaml; charset=utf-8" },
-        { "key": "Cache-Control", "value": "public, max-age=60, must-revalidate" }
-      ]
+      "source": "/latest.yml",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/latest.yml",
+      "permanent": false
     },
     {
-      "source": "/(.*)\\.blockmap",
-      "headers": [
-        { "key": "Content-Type", "value": "application/octet-stream" },
-        { "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" }
-      ]
+      "source": "/mnml-setup.exe.blockmap",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe.blockmap",
+      "permanent": false
     }
   ]
 }

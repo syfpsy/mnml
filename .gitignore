@@ -21,3 +21,10 @@ site/latest.yml
 # before renaming each rasterised size to `icon-NN.png`. If the script is
 # interrupted mid-run, it leaves a stray `icon.png` behind — don't commit it.
 build/icon.png
+
+# Local AI / agent tooling — not part of the product. Stays on disk, kept
+# out of the (now public) repo so we don't ship personal config or
+# third-party skill content.
+.claude/
+.agents/
+skills-lock.json

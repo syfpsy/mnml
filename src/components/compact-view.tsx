@@ -66,30 +66,61 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const listRef      = useRef<HTMLDivElement>(null);
   const appListRef   = useRef<HTMLUListElement>(null);
   const savedListRef = useRef<HTMLUListElement>(null);
+  // Holds the latest quick-paste logic. A stable window-level keydown
+  // listener (registered once, below) calls through this ref so it always
+  // sees current `items` / `snippets` / tab without re-subscribing.
+  const quickPasteRef = useRef<(n: number) => void>(() => {});
 
   useEffect(() => {
     bridge.setBlurLock(settingsOpen);
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
+  // True when mnml's data lives in a custom (likely cloud-synced) folder.
+  // Only then can another device write underneath us, so only then is a
+  // refetch-on-summon worth its cost. For the default %APPDATA% location
+  // (single machine, the common case) nothing external touches the DB, so
+  // we skip the summon refetch entirely and keep that hot path free.
+  const [syncing, setSyncing] = useState(false);
+  useEffect(() => {
+    bridge.storageGet().then((s) => setSyncing(!s.isDefault)).catch(() => {});
+  }, []);
+
   // Window visibility drives two things:
   //  · On HIDE — clear the search query. Summoning mnml again starts fresh
   //    rather than showing the previous search ("fresh window every Alt-Alt"
-  //    mental model). The active tab is intentionally left alone.
-  //  · On SHOW — re-query the DB. The SQLite connection idle-closes between
-  //    summons (see electron/db/index.ts), so anything another device
-  //    synced into a shared folder is on disk but not yet in React state.
-  //    Refetching on summon makes folder-sync visible without a restart.
+  //    mental model). The active tab is intentionally left alone. Always on.
+  //  · On SHOW — only when using a synced folder: re-query the DB. The SQLite
+  //    connection idle-closes between summons (see electron/db/index.ts), so
+  //    anything another device synced in is on disk but not yet in React
+  //    state. Refetching on summon makes folder-sync visible without a
+  //    restart. Skipped for the default location — there's nothing to pick up.
   useEffect(() => {
     return bridge.onVisibilityChanged((visible) => {
       if (!visible) {
         setQuery("");
-      } else {
+      } else if (syncing) {
         refetch();
         refetchSaved();
       }
     });
-  }, [refetch, refetchSaved]);
+  }, [syncing, refetch, refetchSaved]);
+
+  // Quick-paste hotkeys: Ctrl+1..9. Registered once on the window so it
+  // works whether focus is in the search field or the list. Bare digits are
+  // left for typing into search; Alt is avoided (double-Alt summon + Windows
+  // alt-codes). Routes through `quickPasteRef` so it always sees current
+  // state without re-subscribing on every render.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+      if (e.key < "1" || e.key > "9") return;          // single-digit 1..9 only
+      e.preventDefault();
+      quickPasteRef.current(Number(e.key));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Reset section focus whenever the underlying lists change.
   useEffect(() => { setFocusedAppIndex(-1);   }, [query, appResults.length, tab]);
@@ -150,6 +181,23 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const activateApp   = async (result: AppResult) => { try { await bridge.appLaunch(result.target); } finally { await bridge.hide(); } };
   const activateSaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, true); await bridge.hide(); };
   const copyOnly      = async (item: Item)        => { await bridge.restore(item.id); };
+
+  // Quick-paste: Ctrl+1..9 activates the Nth item of the current tab's
+  // primary list (clipboard items, or snippets on the Saved tab). The
+  // window-level listener is registered once; this assignment keeps the
+  // closure current every render.
+  quickPasteRef.current = (n: number) => {
+    if (settingsOpen) return;                          // modal is up — ignore
+    const el = document.activeElement;
+    if (el && el.tagName === "TEXTAREA") return;       // mid snippet-edit — let them type
+    if (isSavedTab) {
+      const s = snippets[n - 1];
+      if (s) void activateSaved(s);
+    } else {
+      const item = items[n - 1];
+      if (item) void activate(item);
+    }
+  };
 
   const togglePin = async (item: Item) => {
     const nowPinned = item.pinned_at == null;
@@ -320,7 +368,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         className="px-3 py-1.5 flex items-center justify-between text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        <span>Click to paste · Shift-click to copy</span>
+        <span>Ctrl 1-9 to paste · Shift-click to copy</span>
         <span>Alt Alt to toggle</span>
       </div>
 

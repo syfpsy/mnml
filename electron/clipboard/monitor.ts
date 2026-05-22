@@ -15,6 +15,42 @@ const POLL_MS = 500;
 const listeners = new Set<Listener>();
 const updateListeners = new Set<Listener>();
 
+/**
+ * Windows clipboard "don't keep this" markers.
+ *
+ * Password managers (1Password, KeePass / KeePassXC, Bitwarden) and browsers
+ * (on password fields) set these so the OS clipboard history (Win+V) and
+ * third-party monitors skip the content. mnml respects them — a clipboard
+ * manager that silently archives your passwords to a local SQLite file (and,
+ * with folder-sync, up to your cloud) is a real liability. The marker is
+ * checked BEFORE the clipboard text/image is read, so concealed content is
+ * never even pulled into memory or hashed.
+ *
+ *   - `ExcludeClipboardContentFromMonitorProcessing` — its mere presence
+ *     means "monitors should not process this". The de-facto standard;
+ *     set by every major password manager.
+ *   - `CanIncludeInClipboardHistory` — a DWORD; value 0 means "keep out of
+ *     clipboard history". Belt-and-suspenders for sources that use it.
+ */
+const EXCLUDE_MARKER = "ExcludeClipboardContentFromMonitorProcessing";
+
+/** Logged once per concealed episode (not every 500 ms poll). */
+let wasConcealed = false;
+
+function isClipboardConcealed(): boolean {
+  try {
+    if (clipboard.has(EXCLUDE_MARKER)) return true;
+    const buf = clipboard.readBuffer("CanIncludeInClipboardHistory");
+    if (buf.length >= 4 && buf.readUInt32LE(0) === 0) return true;
+    if (buf.length >= 1 && buf.readUInt8(0) === 0) return true;
+    return false;
+  } catch {
+    // Fail open: a format-query error (non-Windows, API change) should
+    // behave like today — capture normally — never silently drop content.
+    return false;
+  }
+}
+
 export function onItemUpdated(l: Listener): () => void {
   updateListeners.add(l);
   return () => updateListeners.delete(l);
@@ -84,6 +120,20 @@ function poll() {
   // on. Reading the setting every 500 ms would also call `getDb()` every
   // tick, which would keep re-arming the DB's idle-close timer and pin the
   // SQLite file open forever — defeating the folder-sync handoff.
+
+  // Respect sensitive content the source app asked us not to keep (password
+  // managers, browser password fields). Checked first — concealed content is
+  // never read or hashed. Cheap native format checks; no DB access, so this
+  // doesn't disturb the idle-close timer.
+  if (isClipboardConcealed()) {
+    if (!wasConcealed) {
+      log("[clipboard] skipping content marked sensitive by the source app");
+      wasConcealed = true;
+    }
+    return;
+  }
+  wasConcealed = false;
+
   try {
     // image first — when copying screenshots, text is usually empty
     const img = clipboard.readImage();

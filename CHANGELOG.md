@@ -1,5 +1,22 @@
 # mnml Changelog
 
+## v0.2.40 — 2026-05-22
+
+Two improvements from an 80/20 product pass: mnml stops capturing sensitive content, and adds quick-paste hotkeys. Plus a surfaced "free win" — paste already strips formatting.
+
+### Added
+- **Quick-paste — Ctrl+1 through Ctrl+9.** Summon, then press Ctrl + a number to paste that item instantly, no arrowing. Targets the current tab's primary list (clipboard items, or snippets on the Saved tab). The first nine rows show a subtle index badge so it's discoverable and you can see which number maps to which item. Chosen over bare digits (they're needed for typing into search) and over Alt (collides with the double-Alt summon and Windows alt-codes). Guarded so it never fires while Settings is open or while you're typing into the snippet editor.
+- **Sensitive-content guard — mnml never stores your passwords.** The clipboard monitor now checks the Windows "do not record" markers before reading anything: `ExcludeClipboardContentFromMonitorProcessing` (set by 1Password, KeePass / KeePassXC, Bitwarden, and browsers on password fields) and `CanIncludeInClipboardHistory == 0`. Flagged content is skipped entirely — never read into memory, never hashed, never written to the SQLite file (and so never folder-synced to your cloud). Fail-open: if the format query ever errors, capture behaves exactly as before. Logged once per concealed episode (never *what* was concealed). Validated end-to-end via Electron clipboard spikes.
+
+### Changed
+- **Footer + landing copy** now teach quick-paste ("Ctrl 1-9 to paste") and note that paste strips formatting (a latent feature — mnml stores and re-writes plain text, so you always get clean text out). The "Local only" principle on the site now leads with "never your passwords."
+
+### Internal
+- `QuickNum` index-badge component shared by `items-list` + `saved-list`.
+- The Ctrl+1..9 listener is a single window-level handler routed through a ref, so it sees current state without re-subscribing each render.
+- Also folds in the audit-pass-6 + cleanup work that hadn't shipped yet: refetch-on-summon is now gated behind `!isDefault` (default-location users skip the wasted summon refetch); removed dead code (`CopyIcon`, `SparkleIcon`, `allForIndex()`, `trimToMax`'s unused return, the unreferenced `tray@2x.png` asset, `useSaved`'s unused `all`).
+
+
 ## v0.2.39 — 2026-05-18
 
 Folder-sync, made to actually work. The v0.2.34 "Storage folder" feature let you point mnml at a Dropbox / OneDrive / iCloud folder, but mnml is an always-on tray app — it held the synced `mnml.sqlite` open 24/7, so the cloud service could never cleanly replace it with another device's copy. You'd get diverging `.conflict` files instead of sync. This release fixes the connection lifecycle so one-device-at-a-time folder sync genuinely works.

@@ -170,6 +170,7 @@ export function ItemsList({
                 borderRadius: focused ? 4 : undefined,
               }}
             >
+              <QuickNum idx={idx} />
               <TypeIcon item={item} tint={tint} />
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
                 <span
@@ -213,6 +214,25 @@ export function ItemsList({
 
 function rowId(item: Item): string {
   return `item-row-${item.id}`;
+}
+
+/**
+ * Quick-paste index badge. Shows the digit (1..9) you press with Ctrl to
+ * paste this row instantly — see the window keydown handler in
+ * `compact-view.tsx`. Rows past the 9th keep the gutter width but render
+ * nothing, so every row stays left-aligned. Shared by `items-list` and
+ * `saved-list`.
+ */
+export function QuickNum({ idx }: { idx: number }) {
+  return (
+    <span
+      aria-hidden
+      className="w-3 shrink-0 text-center text-[10px] leading-none tabular-nums"
+      style={{ color: "var(--t3)", visibility: idx < 9 ? "visible" : "hidden" }}
+    >
+      {idx < 9 ? idx + 1 : ""}
+    </span>
+  );
 }
 
 /* ── Action button ────────────────────────────────────────────────────────── */

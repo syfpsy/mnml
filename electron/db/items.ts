@@ -130,7 +130,7 @@ export function updateTitle(id: number, title: string): void {
     .run(title, id);
 }
 
-export function trimToMax(max: number): { deletedIds: number[] } {
+export function trimToMax(max: number): void {
   const db = getDb();
   // Pinned items never get pruned. Apply the limit only to unpinned ones.
   const rows = db
@@ -139,7 +139,7 @@ export function trimToMax(max: number): { deletedIds: number[] } {
     )
     .all(max);
   const ids = rows.map((r) => r.id);
-  if (ids.length === 0) return { deletedIds: [] };
+  if (ids.length === 0) return;
   const placeholders = ids.map(() => "?").join(",");
   db.prepare(`DELETE FROM items WHERE id IN (${placeholders})`).run(...ids);
   for (const row of rows) {
@@ -147,16 +147,4 @@ export function trimToMax(max: number): { deletedIds: number[] } {
       try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
     }
   }
-  return { deletedIds: ids };
-}
-
-export function allForIndex(): Pick<Item, "id" | "preview" | "content_text" | "title" | "hostname">[] {
-  return getDb()
-    .prepare<
-      [],
-      Pick<Item, "id" | "preview" | "content_text" | "title" | "hostname">
-    >(
-      "SELECT id, preview, content_text, title, hostname FROM items",
-    )
-    .all();
 }

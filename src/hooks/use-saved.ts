@@ -31,5 +31,5 @@ export function useSaved(query?: string) {
     );
   }, [snippets, query]);
 
-  return { snippets: filtered, all: snippets, refetch: load };
+  return { snippets: filtered, refetch: load };
 }

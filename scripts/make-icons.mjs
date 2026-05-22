@@ -7,8 +7,9 @@
  *   - `build/icon.ico`  — Windows multi-resolution icon, consumed by
  *                         electron-builder via `package.json:build.win.icon`
  *                         and by BrowserWindow's `icon:` option.
- *   - `build/tray.png` (16) + `build/tray@2x.png` (32) — used by the
- *                         tray code in `electron/main.ts`.
+ *   - `build/tray.png` (16) — fallback the tray code in `electron/main.ts`
+ *                         uses only if `icon.ico` is missing at runtime
+ *                         (the tray loads the multi-size ICO first).
  *
  * Run via `npm run icons` whenever `build/icon.svg` changes. The generated
  * artefacts are committed (they're tiny — ~100 KB total) so the regular
@@ -125,7 +126,8 @@ const icoPath = path.join(BUILD, "icon.ico");
 fs.writeFileSync(icoPath, ico);
 console.log(`✓ icon.ico              (${ico.length} B, ${SIZES.length} sizes)`);
 
-// Tray icons: 16 + 32 for retina. Just copy the already-rendered PNGs.
+// Tray fallback: a single 16-px PNG, used only if `icon.ico` is somehow
+// missing at runtime. `createTrayIcon()` loads the multi-size ICO first, so
+// Windows already picks the right size per DPI — no `@2x` variant needed.
 fs.copyFileSync(path.join(BUILD, "icon-16.png"), path.join(BUILD, "tray.png"));
-fs.copyFileSync(path.join(BUILD, "icon-32.png"), path.join(BUILD, "tray@2x.png"));
-console.log(`✓ tray.png + tray@2x.png (16 + 32)`);
+console.log(`✓ tray.png (16, fallback)`);

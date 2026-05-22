@@ -1,6 +1,6 @@
 {
   "name": "mnml",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "description": "mnml — a super minimal clipboard manager for Windows",
   "private": true,
   "main": "dist-electron/main.js",
@@ -69,7 +69,6 @@
         "to": "build",
         "filter": [
           "tray.png",
-          "tray@2x.png",
           "icon.ico"
         ]
       }

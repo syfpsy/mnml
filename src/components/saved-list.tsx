@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 
 import { bridge } from "../lib/bridge";
 import type { SavedSnippet } from "../types";
 import { BookmarkIcon, PlusIcon, TrashIcon, XIcon } from "./icons";
+import { QuickNum } from "./items-list";
 
 const KEYBOARD_GRACE_MS = 250;
 
@@ -137,6 +138,7 @@ export function SavedList({
               <SavedRow
                 key={snippet.id}
                 snippet={snippet}
+                index={index}
                 selected={selected}
                 onActivate={() => onActivate(snippet)}
                 onMouseEnter={() => {
@@ -155,9 +157,10 @@ export function SavedList({
 // ── Row ───────────────────────────────────────────────────────────────────────
 
 function SavedRow({
-  snippet, selected, onActivate, onMouseEnter,
+  snippet, index, selected, onActivate, onMouseEnter,
 }: {
   snippet: SavedSnippet;
+  index: number;
   selected: boolean;
   onActivate: () => void;
   onMouseEnter: () => void;
@@ -180,6 +183,7 @@ function SavedRow({
         boxShadow:  selected ? "inset 0 0 0 1px var(--accent-saved)" : undefined,
       }}
     >
+      <QuickNum idx={index} />
       <div
         className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center"
         style={{ background: "var(--accent-saved-bg)", color: "var(--accent-saved)" }}

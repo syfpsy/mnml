@@ -57,7 +57,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   const isSavedTab = tab === "saved";
 
-  const { items, setItems, refetch } = useItems({
+  const { items, setItems, refetch, searchPending } = useItems({
     query,
     type:    !isSavedTab ? TYPE_BY_TAB[tab as Exclude<TabKey, "saved">] : undefined,
     limit:   100,
@@ -89,15 +89,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
-  // True when mnml's data lives in a custom (likely cloud-synced) folder.
-  // Only then can another device write underneath us, so only then is a
-  // refetch-on-summon worth its cost. For the default %APPDATA% location
-  // (single machine, the common case) nothing external touches the DB, so
-  // we skip the summon refetch entirely and keep that hot path free.
-  const [syncing, setSyncing] = useState(false);
-  useEffect(() => {
-    bridge.storageGet().then((s) => setSyncing(!s.isDefault)).catch(() => {});
-  }, []);
+  // Summon refetch reads storage fresh on each show (see onVisibilityChanged).
 
   // Window visibility drives two things:
   //  · On HIDE — clear the search query. Summoning mnml again starts fresh
@@ -112,12 +104,18 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return bridge.onVisibilityChanged((visible) => {
       if (!visible) {
         setQuery("");
-      } else if (syncing) {
-        refetch();
-        refetchSaved();
+        return;
       }
+      bridge.storageGet()
+        .then((s) => {
+          if (!s.isDefault) {
+            refetch();
+            refetchSaved();
+          }
+        })
+        .catch(() => {});
     });
-  }, [syncing, refetch, refetchSaved]);
+  }, [refetch, refetchSaved]);
 
   // Quick-paste hotkeys: Ctrl+1..9. Registered once on the window so it
   // works whether focus is in the search field or the list. Bare digits are
@@ -210,6 +208,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     if (settingsOpen) return false;
     const el = document.activeElement;
     if (el?.closest("[data-mnml-snippet-form]")) return false;
+    if (searchPending) return false;
     if (isSavedTab) {
       const s = snippets[n - 1];
       if (!s) return false;
@@ -225,16 +224,25 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const togglePin = async (item: Item) => {
     const nowPinned = item.pinned_at == null;
     const pinnedAt = nowPinned ? Date.now() : null;
-    setItems((prev) => sortItemsLikeDb(
-      prev.map((p) => (p.id === item.id ? { ...p, pinned_at: pinnedAt } : p)),
+    const prev = items;
+    setItems((p) => sortItemsLikeDb(
+      p.map((row) => (row.id === item.id ? { ...row, pinned_at: pinnedAt } : row)),
     ));
-    await bridge.pin(item.id, nowPinned);
+    try {
+      await bridge.pin(item.id, nowPinned);
+    } catch {
+      setItems(prev);
+    }
   };
 
   const handleRemove = async (id: number) => {
-    const next = items.filter((p) => p.id !== id);
-    await bridge.remove(id);
-    setItems(next);
+    const prev = items;
+    setItems(items.filter((p) => p.id !== id));
+    try {
+      await bridge.remove(id);
+    } catch {
+      setItems(prev);
+    }
   };
 
   const handleSave = async (item: Item) => {
@@ -248,6 +256,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // useful content. Otherwise the user sees a misleading "No matches" above
   // a perfectly fine app result.
   const showClipboardList =
+    searchPending ||
     items.length > 0 ||
     !query.trim() ||
     (appResults.length === 0 && !appSearch.isSearching);
@@ -276,6 +285,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
             onHome={() => {}}
             onEnd={() => {}}
             onEnter={(e) => {
+              if (!isSavedTab && searchPending) return;
               if (isSavedTab) {
                 const s = snippets[0];
                 if (s) activateSaved(s);
@@ -290,7 +300,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
               if (r) activateApp(r);
             }}
             onDelete={() => {
-              if (isSavedTab) return;
+              if (isSavedTab || searchPending) return;
               const item = items[0];
               if (item) handleRemove(item.id);
             }}
@@ -349,6 +359,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
                 onPinToggle={togglePin}
                 onSave={handleSave}
                 query={query}
+                isLoading={searchPending}
                 listRef={listRef}
                 onKeyDownCapture={handleClipboardKeyDownCapture}
                 emptyHint={

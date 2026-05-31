@@ -13,6 +13,7 @@ interface Options {
 // and debounces search queries so typing stays smooth.
 export function useItems({ query, type, limit, enabled = true }: Options) {
   const [items, setItems] = useState<Item[]>([]);
+  const [searchPending, setSearchPending] = useState(false);
   const [rev, setRev] = useState(0);
   const seq = useRef(0);
 
@@ -23,18 +24,26 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     const current = ++seq.current;
     if (!enabled) {
       setItems([]);
+      setSearchPending(false);
       return;
     }
 
+    const trimmed = query.trim();
+    if (trimmed) {
+      setSearchPending(true);
+      setItems([]);
+    }
+
     const run = async () => {
-      const results = query.trim()
-        ? await bridge.search(query.trim(), type, limit)
+      const results = trimmed
+        ? await bridge.search(trimmed, type, limit)
         : await bridge.listRecent(limit, type);
       if (current !== seq.current) return;
+      setSearchPending(false);
       setItems(results);
     };
 
-    const timer = setTimeout(run, query.trim() ? 110 : 0);
+    const timer = setTimeout(run, trimmed ? 110 : 0);
     return () => clearTimeout(timer);
   }, [query, type, limit, rev, enabled]);
 
@@ -52,20 +61,19 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     return off;
   }, [query, type, limit, enabled]);
 
-  // Patch in-place when a field like `title` is enriched asynchronously
-  // (e.g. link title fetch). `bridge` is module-level; `setItems` is stable
-  // from useState — neither needs to be in the deps array. `enabled` is.
-  useEffect(() => bridge.onItemUpdated((updated) => {
-    if (!enabled) return;
-    setItems((prev) =>
-      prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
-    );
-  }), [enabled]);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return bridge.onItemUpdated((updated) => {
+      setItems((prev) =>
+        prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
+      );
+    });
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return undefined;
     return bridge.onItemsCleared(() => setItems([]));
   }, [enabled]);
 
-  return { items, setItems, refetch };
+  return { items, setItems, refetch, searchPending };
 }

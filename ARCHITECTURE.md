@@ -209,8 +209,8 @@ One frameless, non-resizable, always-on-top, `skipTaskbar` `BrowserWindow`
   `AttachThreadInput`s around the foreground + our thread, sends a synthetic Alt tap
   to clear the foreground lock, then `SetForegroundWindow`/`SetFocus`; delayed
   passes re-focus the search input.
-- **Hide**: blur (Alt-Tab/click-away, debounced ~500 ms; DevTools excepted), a
-  global `mousedown` outside bounds, or Esc. Single-instance lock; second instance → show.
+- **Hide**: deferred blur (Alt-Tab/click-away, debounced ~500 ms + 150 ms re-check; DevTools excepted; in-window pointer suppressed), a
+  global `mousedown` outside bounds (via `screen.getCursorScreenPoint()`), or Esc. Single-instance lock; second instance → show.
 
 ## Auto-paste — `main.ts`
 

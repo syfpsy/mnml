@@ -52,6 +52,11 @@ let updaterInterval: NodeJS.Timeout | null = null;
  * rather than on whatever Windows promoted in z-order when we hid.
  */
 let prevForegroundHwnd: string | null = null;
+/** True while waiting for helper "ok"/"miss" after a `restore <hwnd>` request. */
+let awaitingHelperRestore = false;
+/** Paste is armed but waiting for foreground restore to complete. */
+let pasteAfterRestorePending = false;
+let pasteAfterRestoreTimer: NodeJS.Timeout | null = null;
 
 /**
  * Tracks whether the window is logically visible.
@@ -74,6 +79,10 @@ let pendingShowAfterRecreate = false;
 let loadRetryCount = 0;
 /** Post-show() visibility verify — at most one self-retry before recreate. */
 let showVerifyAttempts = 0;
+
+/** Suppress blur→hide while an in-window pointer interaction is in flight. */
+let suppressBlurHideUntil = 0;
+let blurHideTimer: NodeJS.Timeout | null = null;
 
 const MAX_LOAD_RETRIES = 2;
 const MAX_RECREATE_ATTEMPTS = 5;
@@ -103,6 +112,8 @@ function resetWindowRuntimeState() {
   loggedSearchFocusForShow = false;
   loggedNativeFocusForShow = false;
   nativeForegroundRequestsForShow = 0;
+  cancelScheduledBlurHide();
+  suppressBlurHideUntil = 0;
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -193,18 +204,58 @@ function safeReloadRenderer(): boolean {
   }
 }
 
-/* ── Click-outside via global mouse hook ──────────────────────────────────── */
-function onGlobalMousedown(e: { x: number; y: number }) {
+/* ── Click-outside + blur-dismiss ─────────────────────────────────────────── */
+
+function cancelScheduledBlurHide() {
+  if (blurHideTimer !== null) {
+    clearTimeout(blurHideTimer);
+    blurHideTimer = null;
+  }
+}
+
+/** In-window clicks (tabs, pin, settings, …) can briefly blur the HWND on
+ *  Windows frameless overlays. Mark them so the deferred blur handler
+ *  doesn't treat every button press as "click away". */
+function markInternalPointerDown(ms = 350) {
+  suppressBlurHideUntil = Math.max(suppressBlurHideUntil, Date.now() + ms);
+  cancelScheduledBlurHide();
+}
+
+function isPointerInsideWindow(): boolean {
+  if (!isWindowUsable() || !win!.isVisible()) return false;
+  const point = screen.getCursorScreenPoint();
+  const b = win!.getBounds();
+  return (
+    point.x >= b.x && point.x <= b.x + b.width &&
+    point.y >= b.y && point.y <= b.y + b.height
+  );
+}
+
+function scheduleBlurHide() {
+  cancelScheduledBlurHide();
+  blurHideTimer = setTimeout(() => {
+    blurHideTimer = null;
+    if (blurLocked || !windowVisible || !isWindowUsable()) return;
+    if (Date.now() < suppressBlurHideUntil) return;
+    if (Date.now() - windowShownAt < 500) return;
+    // Transient blur from an internal click — focus never actually left.
+    if (win!.isFocused() || win!.webContents.isFocused()) return;
+    if (BrowserWindow.getFocusedWindow() === win) return;
+    if (win!.webContents.isDevToolsOpened()) return;
+    log("[blur] hiding — focus left the window");
+    hideWindow();
+  }, 150);
+}
+
+function onGlobalMousedown(_e: { x: number; y: number }) {
   if (!isWindowUsable() || !windowVisible || blurLocked) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
-  const b = win!.getBounds();
-  const inside =
-    e.x >= b.x && e.x <= b.x + b.width &&
-    e.y >= b.y && e.y <= b.y + b.height;
-  if (!inside) {
-    log("[mouse] outside click — hiding");
-    hideWindow();
+  if (isPointerInsideWindow()) {
+    markInternalPointerDown();
+    return;
   }
+  log("[mouse] outside click — hiding");
+  hideWindow();
 }
 
 /* ── Paste helper ──────────────────────────────────────────────────────────── */
@@ -411,6 +462,18 @@ function handleForegroundHelperLine(line: string) {
     return;
   }
   if (line === "ok") {
+    if (awaitingHelperRestore) {
+      awaitingHelperRestore = false;
+      if (pasteAfterRestorePending) {
+        pasteAfterRestorePending = false;
+        if (pasteAfterRestoreTimer !== null) {
+          clearTimeout(pasteAfterRestoreTimer);
+          pasteAfterRestoreTimer = null;
+        }
+        triggerPaste();
+      }
+      return;
+    }
     if (!loggedNativeFocusForShow) {
       loggedNativeFocusForShow = true;
       log("[focus] windows foreground focused");
@@ -419,6 +482,18 @@ function handleForegroundHelperLine(line: string) {
     return;
   }
   if (line === "miss") {
+    if (awaitingHelperRestore) {
+      awaitingHelperRestore = false;
+      if (pasteAfterRestorePending) {
+        pasteAfterRestorePending = false;
+        if (pasteAfterRestoreTimer !== null) {
+          clearTimeout(pasteAfterRestoreTimer);
+          pasteAfterRestoreTimer = null;
+        }
+        // Restore failed — still attempt paste after a short settle delay.
+        setTimeout(triggerPaste, 200);
+      }
+    }
     return;
   }
   log("[focus] foreground helper:", line);
@@ -503,8 +578,10 @@ function requestRestoreForeground(hwnd: string) {
     // Brief detector suppression — the helper sends a synthetic Alt tap to
     // unblock SetForegroundWindow; we don't want it tripping double-Alt.
     suppressDoubleAltFor(600);
+    awaitingHelperRestore = true;
     helper.stdin.write(`restore ${hwnd}\n`);
   } catch (err) {
+    awaitingHelperRestore = false;
     log("[focus] restore request failed:", String(err));
   }
 }
@@ -798,6 +875,11 @@ function createWindow() {
   win.webContents.on("console-message", (_e, level, msg, line, src) => {
     if (level >= 2) log("[renderer] console", level, msg, `${src}:${line}`);
   });
+  win.webContents.on("before-input-event", (_event, input) => {
+    if (input.type === "mouseDown" || input.type === "mouseUp") {
+      markInternalPointerDown();
+    }
+  });
   win.webContents.on("render-process-gone", (_e, details) => {
     log("[renderer] render-process-gone:", details.reason, "exitCode=", details.exitCode);
     const shouldShow = windowVisible || showWhenReady;
@@ -806,14 +888,17 @@ function createWindow() {
 
   // Blur: hide when the user Alt-Tabs or clicks away, but only after the
   // window has had time to acquire focus (guards against Windows' focus-deny
-  // race that used to cause an immediate hide right after show).
+  // race that used to cause an immediate hide right after show). Deferred +
+  // re-checked so in-window button clicks (which can spuriously blur the HWND
+  // on frameless Windows overlays) don't dismiss the panel.
   win.on("blur", () => {
     if (blurLocked || !windowVisible) return;
     if (Date.now() - windowShownAt < 500) return;
     if (!isWindowUsable()) return;
-    if (!win!.webContents.isDevToolsOpened()) hideWindow();
+    scheduleBlurHide();
   });
   win.on("focus", () => {
+    cancelScheduledBlurHide();
     if (!windowVisible) return;
     scheduleSearchFocusVerification("window-focus", [0, 16, 50, 120, 240]);
   });
@@ -857,6 +942,10 @@ function showWindow() {
     return;
   }
   reconcileVisibilityFlag();
+
+  // Fresh summon — discard any HWND from a prior cycle. The helper's next
+  // "prev …" line will capture the app the user was in before this summon.
+  prevForegroundHwnd = null;
 
   if (!rendererReady) {
     showWhenReady = true;
@@ -936,6 +1025,13 @@ function showWindow() {
 }
 
 function hideWindow() {
+  cancelScheduledBlurHide();
+  if (pasteAfterRestoreTimer !== null) {
+    clearTimeout(pasteAfterRestoreTimer);
+    pasteAfterRestoreTimer = null;
+  }
+  pasteAfterRestorePending = false;
+  awaitingHelperRestore = false;
   if (!isWindowUsable()) {
     resetWindowRuntimeState();
     return;
@@ -967,11 +1063,17 @@ function hideWindow() {
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
     const target = prevForegroundHwnd;
     if (target) {
+      pasteAfterRestorePending = true;
       requestRestoreForeground(target);
-      // 150 ms covers helper IPC + Windows' SetForegroundWindow processing
-      // on a typical machine. If it slips, the paste still lands somewhere
-      // reasonable (the user's last foreground app or its replacement).
-      setTimeout(triggerPaste, 150);
+      if (pasteAfterRestoreTimer !== null) clearTimeout(pasteAfterRestoreTimer);
+      pasteAfterRestoreTimer = setTimeout(() => {
+        pasteAfterRestoreTimer = null;
+        if (!pasteAfterRestorePending) return;
+        pasteAfterRestorePending = false;
+        awaitingHelperRestore = false;
+        log("[paste] restore timed out — pasting anyway");
+        triggerPaste();
+      }, 450);
     } else {
       // No captured HWND — fall back to the old behaviour with a slightly
       // longer wait for Windows to settle z-order on its own.
@@ -1081,6 +1183,13 @@ app.whenReady().then(() => {
   onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, item));
 
   uIOhook.on("mousedown", onGlobalMousedown);
+
+  try {
+    uIOhook.start();
+    log("[uiohook] started for click-outside + auto-paste");
+  } catch (err) {
+    log("[uiohook] start failed (click-outside + paste disabled):", String(err));
+  }
 
   try {
     uninstallHotkey = installDoubleAlt(() => {

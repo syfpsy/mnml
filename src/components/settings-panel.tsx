@@ -13,6 +13,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const sheetRef    = useRef<HTMLDivElement>(null);
 
   // Move focus into the sheet on open. Pairs with the `inert` attribute on
   // <CompactView>'s non-modal subtree (set in compact-view.tsx) — together
@@ -44,6 +45,37 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
     return () => window.removeEventListener("keydown", fn, true);
   }, [onClose]);
 
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+
+    const focusables = () =>
+      Array.from(sheet.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href]',
+      )).filter((el) => el.offsetParent !== null);
+
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last  = els[els.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !sheet.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    sheet.addEventListener("keydown", onTab);
+    return () => sheet.removeEventListener("keydown", onTab);
+  }, []);
+
   return (
     /* Scrim — themed via `--scrim` token (was hardcoded `rgba(0,0,0,0.5)`,
        which looked harsh in light mode). */
@@ -61,6 +93,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
 
       {/* Sheet */}
       <div
+        ref={sheetRef}
         role="dialog"
         aria-labelledby="settings-title"
         aria-modal="true"

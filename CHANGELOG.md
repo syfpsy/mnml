@@ -1,5 +1,32 @@
 # mnml Changelog
 
+## v0.2.42 — 2026-05-31
+
+Full bug-hunt release: window stays open when you click buttons, auto-paste lands the right content, and a dozen keyboard/focus/privacy fixes.
+
+### Fixed
+- **Window dismissed on every in-app button click** — deferred blur→hide with in-window pointer suppression.
+- **Text restore pasted screenshot instead of text** — `clipboard.clear()` before every restore write.
+- **App launch command injection** — targets allowlisted against the app index only.
+- **uIOhook never started if double-Alt failed** — hook starts independently for click-outside and paste.
+- **Auto-paste before foreground restore finished** — paste on helper ok/miss with timeout fallback; fresh HWND each summon.
+- **Sensitive-content guard failed open** — fail closed on format-query errors.
+- **Async link titles for deleted items** — re-check row exists before emit.
+- **Thumbnail cache stale after monitor trim** — shared thumb-cache module.
+- **`onItemUpdated` IPC listener leak** on tab toggle.
+- **Stale search rows during debounce** — wrong Ctrl+1..9 / Enter targets; now clears + `searchPending` guard.
+- **Settings Tab focus escaped to Update banner** — focus trap on sheet.
+- **Pin reorder wrong keyboard highlight** — reset focus on order change.
+- **Clipboard listbox missing focus init** — `onFocus` selects first row.
+- **First summon skipped sync refetch** — read storage on each show.
+- **Pin/remove optimistic updates stuck on IPC failure** — rollback on error.
+- **Search debounce hid list with no loading state** — "Searching…" while pending.
+- **In-flight auto-paste timers survived normal hide** — cancel on `hideWindow()`.
+
+### Changed
+- Auto-update and site URL now point at **`https://mnml.nxyz.art/`**.
+
+
 ## v0.2.41 — 2026-05-31
 
 Stability and keyboard polish: mnml recovers when the tray outlives the window, Escape behaves predictably everywhere, and shift-click copy finally works on rows.
@@ -19,11 +46,6 @@ Stability and keyboard polish: mnml recovers when the tray outlives the window, 
 - Saved tab: arrow-up from the first snippet returns focus to search.
 - Quick-paste only intercepts Ctrl+1..9 when it actually pastes.
 
-
-## Unreleased
-
-### Changed
-- **Site URL** moved from `mnml-bay.vercel.app` to **`https://mnml.nxyz.art/`**. Auto-update `publish.url` in `package.json` updated for the next app release; download redirects unchanged (still proxy to GitHub Releases).
 
 ## v0.2.40 — 2026-05-22
 

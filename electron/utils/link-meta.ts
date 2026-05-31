@@ -79,7 +79,7 @@ export function fetchTitle(
           port: parsed.port || undefined,
           path: parsed.pathname + parsed.search,
           headers: {
-            "User-Agent": "mnml/0.1 (clipboard manager; title fetch)",
+            "User-Agent": "mnml (clipboard manager; title fetch)",
             Accept: "text/html,application/xhtml+xml",
             "Accept-Language": "en",
             Connection: "close",

@@ -46,6 +46,8 @@ interface Props {
   onSave?: (item: Item) => void;
   query: string;
   emptyHint?: string;
+  /** True while a debounced search fetch is in flight. */
+  isLoading?: boolean;
   listRef?: React.RefObject<HTMLDivElement | null>;
   onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>;
 }
@@ -65,13 +67,13 @@ const TYPE_VARS: Record<ItemType, {
 
 export function ItemsList({
   items, onActivate, onCopyOnly, onRemove, onPinToggle, onSave,
-  query, emptyHint, listRef, onKeyDownCapture,
+  query, emptyHint, isLoading = false, listRef, onKeyDownCapture,
 }: Props) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const lastKbdAt = useRef(0);
   const listEl    = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setFocusedIndex(-1); }, [items.length, query]);
+  useEffect(() => { setFocusedIndex(-1); }, [items.length, query, items.map((i) => `${i.id}:${i.pinned_at ?? ""}`).join("|")]);
 
   const activeId =
     focusedIndex >= 0 && focusedIndex < items.length
@@ -120,10 +122,14 @@ export function ItemsList({
           className="flex flex-col items-center gap-1 text-center py-6 rounded-md"
         >
           <p className="text-[13px]" style={{ color: "var(--t2)" }}>
-            {query ? "No matches" : "Nothing here yet"}
+            {query
+              ? (isLoading ? "Searching…" : "No matches")
+              : "Nothing here yet"}
           </p>
           <p className="text-[12px]" style={{ color: "var(--t3)" }}>
-            {query ? "Try different words." : emptyHint ?? "Copy any text, link, or image."}
+            {query
+              ? (isLoading ? "Hang on a moment." : "Try different words.")
+              : emptyHint ?? "Copy any text, link, or image."}
           </p>
         </div>
       </div>
@@ -142,6 +148,9 @@ export function ItemsList({
         aria-label="Clipboard history"
         aria-activedescendant={activeId}
         tabIndex={0}
+        onFocus={() => {
+          if (focusedIndex < 0 && items.length > 0) setFocusedIndex(0);
+        }}
         onKeyDown={onKeyDown}
         className="rounded-md"
       >

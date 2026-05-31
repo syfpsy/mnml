@@ -130,7 +130,7 @@ export function updateTitle(id: number, title: string): void {
     .run(title, id);
 }
 
-export function trimToMax(max: number): void {
+export function trimToMax(max: number): number[] {
   const db = getDb();
   // Pinned items never get pruned. Apply the limit only to unpinned ones.
   const rows = db
@@ -139,7 +139,7 @@ export function trimToMax(max: number): void {
     )
     .all(max);
   const ids = rows.map((r) => r.id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
   db.prepare(`DELETE FROM items WHERE id IN (${placeholders})`).run(...ids);
   for (const row of rows) {
@@ -147,4 +147,5 @@ export function trimToMax(max: number): void {
       try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
     }
   }
+  return ids;
 }

@@ -1,12 +1,13 @@
 import { clipboard, nativeImage } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { insertOrTouch, trimToMax, updateTitle, type Item } from "../db/items.js";
+import { insertOrTouch, trimToMax, updateTitle, getById, type Item } from "../db/items.js";
 import { getSetting } from "../db/settings.js";
 import { imagesDir } from "../db/index.js";
 import { sha1 } from "../utils/hash.js";
 import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
+import { evictThumb } from "../thumb-cache.js";
 import { log } from "../utils/log.js";
 
 type Listener = (item: Item) => void;
@@ -45,9 +46,9 @@ function isClipboardConcealed(): boolean {
     if (buf.length >= 1 && buf.readUInt8(0) === 0) return true;
     return false;
   } catch {
-    // Fail open: a format-query error (non-Windows, API change) should
-    // behave like today — capture normally — never silently drop content.
-    return false;
+    // Fail closed: if we can't read the markers, skip capture rather than
+    // risk archiving concealed content (passwords, OTP fields).
+    return true;
   }
 }
 
@@ -201,8 +202,10 @@ function poll() {
       fetchTitle(c.url)
         .then((title) => {
           if (!title) return;
+          if (!getById(item.id)) return;
           updateTitle(item.id, title);
-          emitUpdate({ ...item, title });
+          const current = getById(item.id);
+          if (current) emitUpdate({ ...current, title });
         })
         .catch(() => {});
     } else {
@@ -246,23 +249,28 @@ function saveImage(png: Buffer, img: Electron.NativeImage, hash: string) {
 function trim() {
   const max = getSetting("maxItems");
   if (!max || max <= 0) return;
-  trimToMax(max);
+  for (const id of trimToMax(max)) evictThumb(id);
 }
 
 // Re-copy an item back to the system clipboard.
 export function restoreItem(item: Item) {
   if (item.type === "image" && item.image_path && fs.existsSync(item.image_path)) {
+    clipboard.clear();
     const nImg = nativeImage.createFromPath(item.image_path);
     clipboard.writeImage(nImg);
     const { width, height } = nImg.getSize();
     lastImageHash = sha1(nImg.toPNG());
     lastImageSizeKey = `${width}x${height}`;
     lastImageCheckedAt = Date.now();
+    lastTextHash = "";
     return;
   }
   const value = item.content_text ?? item.content_url ?? item.preview;
+  clipboard.clear();
   clipboard.writeText(value);
   lastTextHash = sha1(value);
+  lastImageHash = "";
+  lastImageSizeKey = "";
 }
 
 /**
@@ -271,6 +279,9 @@ export function restoreItem(item: Item) {
  * re-capture our own write as a new clipboard entry.
  */
 export function restoreText(text: string) {
+  clipboard.clear();
   clipboard.writeText(text);
   lastTextHash = sha1(text);
+  lastImageHash = "";
+  lastImageSizeKey = "";
 }

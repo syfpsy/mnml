@@ -24,7 +24,6 @@ export function installDoubleAlt(listener: Listener): () => void {
   let lastAltUp = 0;
   let pressedDuringAlt = false;
   let altIsDown = false;
-  let started = false;
 
   const resetTapState = () => {
     lastAltUp = 0;
@@ -78,22 +77,19 @@ export function installDoubleAlt(listener: Listener): () => void {
   try {
     uIOhook.on("keydown", keydown);
     uIOhook.on("keyup", keyup);
-    uIOhook.start();
-    started = true;
     log(
-      "[hotkey] uiohook started, listening for double-Alt within",
+      "[hotkey] double-Alt detector registered (",
       TAP_WINDOW_MS,
-      "ms",
+      "ms window)",
     );
   } catch (err) {
-    log("[hotkey] FAILED to start uiohook:", String(err));
+    log("[hotkey] FAILED to register double-Alt:", String(err));
   }
 
   return () => {
     try {
       uIOhook.off("keydown", keydown);
       uIOhook.off("keyup", keyup);
-      if (started) uIOhook.stop();
     } catch {
       // noop
     }

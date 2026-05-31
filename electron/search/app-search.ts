@@ -316,6 +316,13 @@ function iconCandidatesFor(lnkPath: string): string[] {
 
 // ── Launch ─────────────────────────────────────────────────────────────────────
 
+/** Only targets present in the startup index may be launched via IPC. */
+export function isKnownLaunchTarget(target: string): boolean {
+  if (!target) return false;
+  if (!_indexed) rebuildAppIndex();
+  return _index.some((e) => e.target === target);
+}
+
 /**
  * Launch a previously-returned target. Returns false on failure.
  *
@@ -327,6 +334,10 @@ function iconCandidatesFor(lnkPath: string): string[] {
  */
 export async function launchAppResult(target: string): Promise<boolean> {
   if (!target) return false;
+  if (!isKnownLaunchTarget(target)) {
+    log(`[app-search] rejected unknown launch target: ${target.slice(0, 120)}`);
+    return false;
+  }
 
   if (target.toLowerCase().startsWith("ms-settings:")) {
     try { await shell.openExternal(target); return true; }
@@ -341,8 +352,9 @@ export async function launchAppResult(target: string): Promise<boolean> {
   }
 
   // Bare command name — let the shell resolve PATH + registered handlers.
+  const quoted = target.replace(/"/g, '""');
   return new Promise<boolean>((resolve) => {
-    exec(`start "" ${target}`, { windowsHide: true }, (err) => {
+    exec(`start "" "${quoted}"`, { windowsHide: true }, (err) => {
       if (err) {
         log(`[app-search] start failed: ${err.message}`);
         resolve(false);

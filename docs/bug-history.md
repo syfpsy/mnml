@@ -64,6 +64,19 @@ These are the bugs we kept hitting because Windows protects against background a
 | O12 | `restoreItem()` for images set `lastImageHash` but not `lastImageSizeKey` — same-dimension replacement images could be missed for up to 4 s. | Restore syncs size key + recheck timestamp with the hash. |
 | O13 | Shift-click to copy was documented but row clicks always pasted — only search Enter honoured Shift. | `items-list` / `saved-list` wire Shift-click and Shift+Enter to `onCopyOnly`. |
 | O14 | Pin toggle refetched the whole list after an optimistic update — visible flicker/reorder jump. | Re-sort in-place with the DB's pinned-first order; no post-pin refetch. |
+| O15 | Every in-app button click dismissed the window — frameless `blur` hid on spurious HWND focus loss from internal clicks. | Defer blur→hide with focus re-check; suppress via `before-input-event` + cursor-in-bounds on global mousedown. |
+| O16 | Text restore left image on clipboard — auto-paste pasted screenshot instead of restored text. | `clipboard.clear()` before every restore write. |
+| O17 | `appLaunch` IPC allowed arbitrary shell commands. | Allowlist targets against app index; quote bare commands. |
+| O18 | uIOhook only started inside double-Alt install — click-outside + paste broke when hotkey failed. | Start uIOhook independently in main. |
+| O19 | Auto-paste used fixed 150 ms timer, ignored foreground-restore result; stale `prevForegroundHwnd` reused. | Paste on helper ok/miss; clear HWND each summon. |
+| O20 | Concealed-content guard failed open on format-query error. | Fail closed — skip capture. |
+| O21 | Async `fetchTitle` emitted updates for trimmed/deleted items. | Re-check `getById` before emit. |
+| O22 | Thumb LRU not evicted on monitor `trimToMax`. | Shared thumb-cache; trim returns deleted ids. |
+| O23 | `onItemUpdated` listeners leaked on tab toggle. | Return unsubscribe from effect. |
+| O24 | Stale search rows during debounce — wrong quick-paste/Enter targets. | Clear list + `searchPending` guard. |
+| O25 | Settings Tab focus escaped to Update banner. | Focus trap on sheet. |
+| O26 | Pin reorder left wrong keyboard highlight. | Reset focus on pin order change. |
+| O27 | First summon skipped sync refetch race. | Read storage on each show. |
 
 ---
 

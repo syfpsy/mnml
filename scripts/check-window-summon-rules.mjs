@@ -74,6 +74,22 @@ if (!main.includes("safeSendToRenderer")) {
   failures.push("Main process must guard renderer IPC with safeSendToRenderer() so dead webContents don't throw.");
 }
 
+if (!main.includes("before-input-event") || !main.includes("markInternalPointerDown")) {
+  failures.push("Blur hide must suppress on in-window pointer down (before-input-event + markInternalPointerDown).");
+}
+
+if (!main.includes("scheduleBlurHide") || !main.includes("isPointerInsideWindow")) {
+  failures.push("Click-outside must use screen.getCursorScreenPoint() and a deferred blur hide with focus re-check.");
+}
+
+if (!main.includes("uIOhook.start()")) {
+  failures.push("uIOhook must start independently of double-Alt so click-outside and paste work when hotkey install fails.");
+}
+
+if (!readFileSync(join(root, "electron", "clipboard", "monitor.ts"), "utf8").includes("clipboard.clear()")) {
+  failures.push("Clipboard restore must clear existing formats before write (text-over-image auto-paste bug).");
+}
+
 if (!searchBar.includes("autoFocus = false")) {
   failures.push("SearchBar must not autoFocus while the hidden renderer is booting; main owns summon focus.");
 }

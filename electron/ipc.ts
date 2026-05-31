@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow, dialog, nativeImage, shell } from "electron";
+import { ipcMain, app, BrowserWindow, dialog, shell, type OpenDialogOptions } from "electron";
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import { IPC } from "./ipc-channels.js";
@@ -17,6 +17,7 @@ import { addSaved, deleteSaved, getSavedById, listSaved, touchSaved, updateSaved
 import { search } from "./search/service.js";
 import { launchAppResult, searchApps, type AppSearchResponse } from "./search/app-search.js";
 import { restoreItem, restoreText, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
+import { evictAllThumbs, evictThumb, getThumbDataUrl } from "./thumb-cache.js";
 import { log } from "./utils/log.js";
 
 interface WindowControl {
@@ -58,24 +59,6 @@ export function registerIpc(windowControl: WindowControl) {
     },
   );
 
-  // Image thumbnails are tiny (24 px in compact rows, max ~96 px in any UI),
-  // so sending the full-resolution PNG over IPC and into the renderer's React
-  // state was the dominant source of renderer-side memory bloat — a 25-item
-  // history of 4 K screenshots cached ~100 MB of base64 strings in the DOM.
-  // Resize to a small thumbnail in the main process and LRU-cache the
-  // encoded result, keyed by item id.
-  const THUMB_SIZE     = 96;
-  const THUMB_CACHE_CAP = 64;
-  const thumbCache     = new Map<number, string>();
-  const rememberThumb  = (id: number, dataUrl: string) => {
-    if (thumbCache.has(id)) thumbCache.delete(id);
-    thumbCache.set(id, dataUrl);
-    if (thumbCache.size > THUMB_CACHE_CAP) {
-      const oldest = thumbCache.keys().next().value;
-      if (oldest !== undefined) thumbCache.delete(oldest);
-    }
-  };
-
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
     const item = getById(id);
     if (item) {
@@ -86,44 +69,18 @@ export function registerIpc(windowControl: WindowControl) {
 
   ipcMain.handle(IPC.remove, (_, id: number) => {
     deleteById(id);
-    thumbCache.delete(id);
+    evictThumb(id);
   });
   ipcMain.handle(IPC.clear, () => {
     clearAll();
-    thumbCache.clear();
+    evictAllThumbs();
     broadcastItemsCleared();
   });
   ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) =>
     setPinned(id, pinned),
   );
 
-  ipcMain.handle(IPC.getImage, (_, id: number): string | null => {
-    if (thumbCache.has(id)) {
-      const cached = thumbCache.get(id)!;
-      thumbCache.delete(id); thumbCache.set(id, cached); // touch
-      return cached;
-    }
-    const item = getById(id);
-    if (!item || item.type !== "image" || !item.image_path) return null;
-    if (!fs.existsSync(item.image_path)) return null;
-    try {
-      const img  = nativeImage.createFromPath(item.image_path);
-      if (img.isEmpty()) return null;
-      const { width, height } = img.getSize();
-      // Preserve aspect: scale so the larger side hits THUMB_SIZE.
-      const scaled =
-        width > THUMB_SIZE || height > THUMB_SIZE
-          ? img.resize(width >= height
-              ? { width: THUMB_SIZE, quality: "good" }
-              : { height: THUMB_SIZE, quality: "good" })
-          : img;
-      const url = `data:image/png;base64,${scaled.toPNG().toString("base64")}`;
-      rememberThumb(id, url);
-      return url;
-    } catch {
-      return null;
-    }
-  });
+  ipcMain.handle(IPC.getImage, (_, id: number): string | null => getThumbDataUrl(id));
 
   // ── App launcher (Start-Menu apps + Windows Settings + classic tools) ────
 
@@ -254,14 +211,19 @@ export function registerIpc(windowControl: WindowControl) {
   }));
 
   ipcMain.handle(IPC.storagePick, async () => {
-    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-    const result = await dialog.showOpenDialog(win!, {
+    const parent =
+      BrowserWindow.getFocusedWindow() ??
+      BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+    const opts: OpenDialogOptions = {
       title: "Choose a folder for mnml data",
       message:
         "Pick a folder (e.g. inside Dropbox or OneDrive) to keep your clipboard history, snippets, and images. Existing mnml data in the picked folder will be used as-is.",
       properties: ["openDirectory", "createDirectory", "promptToCreate"],
       defaultPath: getDataDir(),
-    });
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, opts)
+      : await dialog.showOpenDialog(opts);
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });

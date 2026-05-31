@@ -1,33 +1,26 @@
 # mnml Changelog
 
-## Unreleased
+## v0.2.41 — 2026-05-31
 
-Bug-hunt pass: three privacy/focus fixes plus main-process hardening for "tray icon alive but Alt-Alt does nothing."
+Stability and keyboard polish: mnml recovers when the tray outlives the window, Escape behaves predictably everywhere, and shift-click copy finally works on rows.
 
 ### Fixed
-- **Sensitive-content guard now also covers the clipboard monitor's baseline init.** `isClipboardConcealed()` was checked on every poll tick (good), but `start()` ran an unconditional `clipboard.readText()` + `clipboard.readImage().toPNG()` at boot / after a `dataDir` migration / whenever `monitoring` was toggled on. If a password manager left a concealed item on the clipboard at that exact moment, mnml read it into memory and SHA-1'd it — directly contradicting the v0.2.40 promise that "concealed content is never read or hashed." **Fix:** baseline init in `electron/clipboard/monitor.ts` checks the markers first and leaves all `lastTextHash` / `lastImage*` baselines empty when concealed (so the next non-concealed clipboard write is captured normally). Logged once per concealed start episode, never *what*.
-- **`fetchTitle` SSRF guard now blocks bracketed IPv6 hosts.** v0.2.38's `isPrivateHostname()` listed unique-local (fc00::/7) and link-local (fe80::/10) IPv6 prefixes, but `URL.hostname` for an IPv6 literal returns the address wrapped in brackets ("[fc00::1]", "[fe80::1]"), so every `startsWith("fc"/"fd"/"fe8"/...)` check trivially failed and a copied URL like `http://[fc00::1]/` would have been probed. **Fix:** `isPrivateHostname()` now strips the surrounding brackets before the prefix checks and recurses into the IPv4 rules for IPv4-mapped IPv6 (`::ffff:127.0.0.1`, `::ffff:10.0.0.1`, …). Applies at entry and on every redirect, same as before.
-- **Esc inside the Settings sheet no longer hides the whole window.** v0.2.5 closed this with `e.stopImmediatePropagation()`, but a later refactor added `app.tsx`'s global Esc→hide listener at app mount — which registers BEFORE the sheet's own Esc listener, so in bubble phase the global one fired first and `bridge.hide()` was already running by the time the sheet got a chance to stop propagation. The window would close along with the sheet on a single Esc press. **Fix:** the sheet's listener moves to capture phase (`addEventListener("keydown", fn, true)`), so it runs strictly before any bubble-phase handler on `window` and `stopImmediatePropagation()` actually short-circuits the global one.
-- **Tray icon alive but Alt-Alt does nothing (renderer crash / visibility desync).** The main process kept running with a dead or hidden HWND while the logical `windowVisible` flag said "shown", so `toggleWindow()` kept calling `hideWindow()` instead of `showWindow()`. **Fix:** `reconcileVisibilityFlag()` syncs the flag with `win.isVisible()` before every toggle; `showWindow()` verifies the HWND actually appeared and retries once; `render-process-gone` / `did-fail-load` / `unresponsive` handlers reload or recreate the `BrowserWindow`; unexpected `closed` respawns a fresh window (unless `before-quit`); all renderer IPC goes through `safeSendToRenderer()`; main-process `uncaughtException` / `unhandledRejection` are logged without killing the tray app.
-- **Esc with a non-empty search query hid the window instead of clearing the query.** The search field cleared on Escape, but `app.tsx`'s global Esc→hide listener ran on the same keypress and dismissed mnml. **Fix:** global Esc skips hide when the search input still has text; the search bar also stops propagation on Escape.
-- **Esc in the snippet add form's label field hid the window.** Global Esc only exempted `<textarea>` elements; the optional label is an `<input>`. **Fix:** capture-phase Esc on the add form (same pattern as Settings) plus `[data-mnml-snippet-form]` guards on global Esc and Ctrl+1..9 quick-paste.
-- **Clear history left stale rows in the list.** Settings → Clear history wiped the DB but the renderer kept showing cached items until the next summon. **Fix:** main process broadcasts `onItemsCleared` after `clearAll()`; `useItems` subscribes and empties React state immediately.
-- **Restoring an image didn't update the monitor's dimension fingerprint.** `restoreItem()` set `lastImageHash` but not `lastImageSizeKey`, so the next poll could skip re-encoding a same-size replacement image for up to 4 s. **Fix:** restore now syncs size key + recheck timestamp alongside the hash.
-- **Shift-click to copy did nothing on list rows.** Footer and search Enter advertised "Shift-click to copy", but row clicks always ran the paste path. **Fix:** `items-list` and `saved-list` honour Shift-click and Shift+Enter via a shared `onCopyOnly` handler (clipboard copy / snippet restore without auto-paste or hiding).
-- **Pin toggle flickered the list.** Optimistic pin state was immediately overwritten by a full refetch. **Fix:** reorder in-place with the same pinned-first sort the DB uses; drop the post-pin refetch.
+- **Tray icon alive but Alt-Alt does nothing** — renderer crash / visibility desync no longer leaves a zombie tray app; the main process reloads or recreates the window and reconciles the visibility flag.
+- **Escape key conflicts** — Settings sheet, search (clear then dismiss), and snippet add form no longer fight the global hide handler.
+- **Clear history left stale rows** — list empties immediately after Settings → Clear history.
+- **Sensitive-content guard gap at monitor start** — concealed clipboard content is never read when monitoring boots or is toggled on.
+- **IPv6 SSRF gap in link title fetch** — bracketed IPv6 hostnames in copied URLs are blocked.
+- **Shift-click to copy on rows** — footer promise now matches behaviour on clipboard items and saved snippets.
+- **Pin toggle flicker** — pinned items reorder smoothly without a full refetch.
+- **Image restore monitor fingerprint** — restoring an image updates the poll baseline so same-size replacements aren't missed.
 
 ### Changed
-- **Global Esc** in the renderer skips hide when Settings (`aria-modal`), a snippet form, or the search field is focused (search owns Esc: clear query, then dismiss).
-- **Summon focus backup** no longer steals focus from an open Settings sheet or snippet add form.
-- **Footer hints** trimmed to `Ctrl 1-9 paste · Shift-click copy · Esc dismiss`.
-- **Saved tab keyboard nav:** Arrow-up from the first snippet returns focus to the search field.
-- **Quick-paste (Ctrl+1..9)** only calls `preventDefault` when it actually triggers a paste (so it no longer swallows the chord while Settings is open).
+- Footer hints: `Ctrl 1-9 paste · Shift-click copy · Esc dismiss`.
+- Saved tab: arrow-up from the first snippet returns focus to search.
+- Quick-paste only intercepts Ctrl+1..9 when it actually pastes.
 
-### Internal
-- `docs/bug-history.md` updated with IPv6-brackets, Settings-Esc, tray-alive, search-Esc, and clear-history patterns.
-- `check:summon` now guards renderer-crash recovery, visibility reconciliation, and safe IPC sends.
-- Image thumbnail LRU cache evicts entries on item remove/clear.
 
+## Unreleased
 
 ## v0.2.40 — 2026-05-22
 

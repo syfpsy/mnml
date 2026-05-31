@@ -45,7 +45,7 @@ The site is hosted on **Vercel**. Project config is at `vercel.json` in the repo
 
 ### Custom domain
 
-In the Vercel dashboard: **Project → Settings → Domains → Add**. Point a CNAME / ALIAS record at `cname.vercel-dns.com`.
+In the Vercel dashboard: **Project → Settings → Domains → Add**. Point a CNAME / ALIAS record at `cname.vercel-dns.com`. Production domain: **`mnml.nxyz.art`** (A record `76.76.21.21` on the `mnml` subdomain when using external DNS).
 
 ## Editing
 

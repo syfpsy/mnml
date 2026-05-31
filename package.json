@@ -48,7 +48,7 @@
     "copyright": "Copyright © 2026 mnml",
     "publish": {
       "provider": "generic",
-      "url": "https://mnml-bay.vercel.app/",
+      "url": "https://mnml.nxyz.art/",
       "channel": "latest",
       "useMultipleRangeRequest": false
     },

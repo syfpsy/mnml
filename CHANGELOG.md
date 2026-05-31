@@ -22,6 +22,9 @@ Stability and keyboard polish: mnml recovers when the tray outlives the window, 
 
 ## Unreleased
 
+### Changed
+- **Site URL** moved from `mnml-bay.vercel.app` to **`https://mnml.nxyz.art/`**. Auto-update `publish.url` in `package.json` updated for the next app release; download redirects unchanged (still proxy to GitHub Releases).
+
 ## v0.2.40 — 2026-05-22
 
 Two improvements from an 80/20 product pass: mnml stops capturing sensitive content, and adds quick-paste hotkeys. Plus a surfaced "free win" — paste already strips formatting.

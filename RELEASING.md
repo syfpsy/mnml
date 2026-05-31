@@ -77,7 +77,7 @@ tracks the newest release, so **future releases need no `vercel.json` change**.
 in `package.json` `build.publish`:
 
 ```jsonc
-{ "provider": "generic", "url": "https://mnml-bay.vercel.app/", "channel": "latest" }
+{ "provider": "generic", "url": "https://mnml.nxyz.art/", "channel": "latest" }
 ```
 
 So it fetches `…/latest.yml`, which **redirects** to the GitHub manifest. (Planned:
@@ -96,7 +96,7 @@ switch to `provider: "github"` once signed builds publish to Releases directly.)
      --title "vX.Y.Z" --notes "…" --latest
    ```
    `--latest` is what makes the redirects resolve to this build.
-5. **Verify**: `https://mnml-bay.vercel.app/mnml-setup.exe` → 307 → GitHub → 200;
+5. **Verify**: `https://mnml.nxyz.art/mnml-setup.exe` → 307 → GitHub → 200;
    `…/latest.yml` shows the new version.
 6. **Keep only the latest release live.** After publishing, delete superseded
    releases (and their tags) so the Releases page shows only the current version —

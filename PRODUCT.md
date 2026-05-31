@@ -80,7 +80,7 @@ cookies, runs no analytics. Full policy: [`site/privacy.html`](./site/privacy.ht
 
 ## Status (v0.2.40)
 
-- **Public**, MIT, `github.com/syfpsy/mnml`. Site: `https://mnml-bay.vercel.app/`.
+- **Public**, MIT, `github.com/syfpsy/mnml`. Site: `https://mnml.nxyz.art/`.
 - **Distribution**: installer + update manifest on **GitHub Releases**; the site's
   download links redirect there. Auto-update polls the published `latest.yml` daily.
   Only the latest release is kept live.

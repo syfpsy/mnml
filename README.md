@@ -6,7 +6,7 @@ A keyboard-first clipboard manager for Windows. Press **Alt** twice; paste from 
 
 <br clear="left" />
 
-**[⬇ Download for Windows](https://mnml-bay.vercel.app/)** · MIT licensed · Windows 10 / 11 (x64)
+**[⬇ Download for Windows](https://mnml.nxyz.art/)** · MIT licensed · Windows 10 / 11 (x64)
 
 ---
 

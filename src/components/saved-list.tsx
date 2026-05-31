@@ -301,6 +301,8 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
       <input
         ref={labelRef}
         type="text"
+        name="snippet-label"
+        autoComplete="off"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="Label (optional)"

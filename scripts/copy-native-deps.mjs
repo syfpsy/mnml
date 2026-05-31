@@ -10,10 +10,11 @@
 import fs   from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertSafeBasename, resolvePathWithinBase } from './lib/safe-path.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT      = path.join(__dirname, '..');
-const SRC_MODS  = path.join(ROOT, 'node_modules');
+const ROOT      = path.resolve(__dirname, '..');
+const SRC_MODS  = resolvePathWithinBase(ROOT, 'node_modules');
 
 const MODULES = [
   'better-sqlite3',
@@ -29,19 +30,22 @@ const MODULES = [
  */
 export default async function afterPack(ctx) {
   // With asar:false the app content lives at <appOutDir>/resources/app/
-  const destMods = path.join(ctx.appOutDir, 'resources', 'app', 'node_modules');
+  const destMods = resolvePathWithinBase(
+    resolvePathWithinBase(ctx.appOutDir, 'resources', 'app'),
+    'node_modules',
+  );
   copyModules(destMods);
 }
 
 // ── standalone CLI ────────────────────────────────────────────────────────────
 // Invoked directly: `node scripts/copy-native-deps.mjs`
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const winUnpacked = path.join(ROOT, 'release', 'win-unpacked');
+  const winUnpacked = resolvePathWithinBase(ROOT, 'release', 'win-unpacked');
   if (!fs.existsSync(winUnpacked)) {
     console.log('[copy-native-deps] win-unpacked not found — skipping');
     process.exit(0);
   }
-  const destMods = path.join(winUnpacked, 'resources', 'app', 'node_modules');
+  const destMods = resolvePathWithinBase(winUnpacked, 'resources', 'app', 'node_modules');
   copyModules(destMods);
 }
 
@@ -51,8 +55,8 @@ function copyModules(destBase) {
   fs.mkdirSync(destBase, { recursive: true });
 
   for (const mod of MODULES) {
-    const srcDir  = path.join(SRC_MODS, mod);
-    const destDir = path.join(destBase, mod);
+    const srcDir  = resolvePathWithinBase(SRC_MODS, mod);
+    const destDir = resolvePathWithinBase(destBase, mod);
 
     if (!fs.existsSync(srcDir)) {
       console.warn(`[copy-native-deps] WARNING: source not found: ${srcDir}`);
@@ -68,9 +72,14 @@ function copyModules(destBase) {
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-    const s = path.join(from, entry.name);
-    const d = path.join(to,   entry.name);
-    if (entry.isDirectory()) copyDir(s, d);
-    else                     fs.copyFileSync(s, d);
+    try {
+      assertSafeBasename(entry.name);
+      const s = resolvePathWithinBase(from, entry.name);
+      const d = resolvePathWithinBase(to, entry.name);
+      if (entry.isDirectory()) copyDir(s, d);
+      else                     fs.copyFileSync(s, d);
+    } catch (err) {
+      console.warn(`[copy-native-deps] skip unsafe entry: ${entry.name}`, err);
+    }
   }
 }

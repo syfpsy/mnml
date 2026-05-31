@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { getDb } from "./index.js";
+import { getDb, imagesDir } from "./index.js";
+import { assertResolvedWithinBase } from "../utils/safe-path.js";
 
 export type ItemType = "text" | "image" | "link";
 
@@ -98,15 +99,21 @@ export function getById(id: number): Item | undefined {
     .get(id);
 }
 
+function unlinkManagedImage(imagePath: string): void {
+  try {
+    fs.unlinkSync(assertResolvedWithinBase(imagePath, imagesDir()));
+  } catch {
+    /* outside managed dir, missing, or already gone */
+  }
+}
+
 export function deleteById(id: number): void {
   const db = getDb();
   const row = db
     .prepare<[number], { image_path: string | null }>("SELECT image_path FROM items WHERE id = ?")
     .get(id);
   db.prepare("DELETE FROM items WHERE id = ?").run(id);
-  if (row?.image_path) {
-    try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
-  }
+  if (row?.image_path) unlinkManagedImage(row.image_path);
 }
 
 export function clearAll(): void {
@@ -118,9 +125,7 @@ export function clearAll(): void {
     .all();
   db.exec("DELETE FROM items");
   for (const row of rows) {
-    if (row.image_path) {
-      try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
-    }
+    if (row.image_path) unlinkManagedImage(row.image_path);
   }
 }
 
@@ -143,9 +148,7 @@ export function trimToMax(max: number): number[] {
   const placeholders = ids.map(() => "?").join(",");
   db.prepare(`DELETE FROM items WHERE id IN (${placeholders})`).run(...ids);
   for (const row of rows) {
-    if (row.image_path) {
-      try { fs.unlinkSync(row.image_path); } catch { /* already gone */ }
-    }
+    if (row.image_path) unlinkManagedImage(row.image_path);
   }
   return ids;
 }

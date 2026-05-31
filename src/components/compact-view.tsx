@@ -469,7 +469,7 @@ function TabBtn({ label, active, onClick, panelId }: {
     <button
       type="button"
       role="tab"
-      id={panelId.replace("-panel-", "-")}
+      id={panelId.replace(/-panel-/g, "-")}
       aria-selected={active}
       aria-controls={panelId}
       tabIndex={active ? 0 : -1}

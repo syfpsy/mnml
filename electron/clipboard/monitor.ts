@@ -1,6 +1,5 @@
 import { clipboard, nativeImage } from "electron";
 import fs from "node:fs";
-import path from "node:path";
 import { insertOrTouch, trimToMax, updateTitle, getById, type Item } from "../db/items.js";
 import { getSetting } from "../db/settings.js";
 import { imagesDir } from "../db/index.js";
@@ -9,6 +8,7 @@ import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
 import { evictThumb } from "../thumb-cache.js";
 import { log } from "../utils/log.js";
+import { resolveImagePath } from "../utils/safe-path.js";
 
 type Listener = (item: Item) => void;
 
@@ -227,8 +227,7 @@ function poll() {
 
 function saveImage(png: Buffer, img: Electron.NativeImage, hash: string) {
   const dir = imagesDir();
-  const filename = `${hash}.png`;
-  const filepath = path.join(dir, filename);
+  const filepath = resolveImagePath(dir, hash);
   if (!fs.existsSync(filepath)) fs.writeFileSync(filepath, png);
 
   const { width, height } = img.getSize();

@@ -1,5 +1,16 @@
 # mnml Changelog
 
+## v0.2.43 — 2026-05-31
+
+Security hardening from static analysis: path traversal guards, CI runner pin, and string-replacement hygiene.
+
+### Security
+- **Path traversal hardening** — shared `resolvePathWithinBase` / `assertSafeBasename` guards on DB paths, image files, Start Menu walks, build scripts, and log file location; image deletes and thumbnail reads validate paths stay under the managed `images/` directory.
+- **CI runner pin** — release workflow uses `windows-2022` instead of floating `windows-latest`.
+
+### Fixed
+- **Incomplete string replacement** — global regex in tab `id` derivation; `replaceAll` for ISO timestamps in logs.
+
 ## v0.2.42 — 2026-05-31
 
 Full bug-hunt release: window stays open when you click buttons, auto-paste lands the right content, and a dozen keyboard/focus/privacy fixes.

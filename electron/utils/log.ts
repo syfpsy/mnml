@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import path from "node:path";
 import { app } from "electron";
+import { resolvePathWithinBase } from "./safe-path.js";
 
 let logPath: string | null = null;
 
@@ -8,13 +8,13 @@ function ensurePath(): string {
   if (logPath) return logPath;
   const dir = app.getPath("userData");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  logPath = path.join(dir, "mnml.log");
+  logPath = resolvePathWithinBase(dir, "mnml.log");
   return logPath;
 }
 
 function ts() {
   const d = new Date();
-  return d.toISOString().replace("T", " ").slice(0, 19);
+  return d.toISOString().replaceAll("T", " ").slice(0, 19);
 }
 
 export function log(...args: unknown[]) {

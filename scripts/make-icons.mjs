@@ -27,11 +27,12 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolvePathWithinBase } from "./lib/safe-path.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT      = path.resolve(__dirname, "..");
-const BUILD     = path.join(ROOT, "build");
-const SVG       = path.join(BUILD, "icon.svg");
+const BUILD     = path.resolve(ROOT, "build");
+const SVG       = path.resolve(BUILD, "icon.svg");
 const SIZES     = [16, 24, 32, 48, 64, 128, 256];
 
 if (!fs.existsSync(SVG)) {
@@ -48,9 +49,9 @@ function renderPng(size) {
   // sharp-cli writes the output using the input filename + the requested
   // format extension. For our `icon.svg`, that's always `icon.png`. We
   // rename to `icon-NN.png` after each invocation to keep a per-size copy.
-  const intermediate = path.join(BUILD, "icon.png");
+  const intermediate = resolvePathWithinBase(BUILD, "icon.png");
   const outName      = `icon-${size}.png`;
-  const finalPath    = path.join(BUILD, outName);
+  const finalPath    = resolvePathWithinBase(BUILD, outName);
 
   const r = spawnSync(
     "npx",
@@ -122,12 +123,15 @@ for (const size of SIZES) {
 }
 
 const ico = buildIco(entries);
-const icoPath = path.join(BUILD, "icon.ico");
+const icoPath = resolvePathWithinBase(BUILD, "icon.ico");
 fs.writeFileSync(icoPath, ico);
 console.log(`✓ icon.ico              (${ico.length} B, ${SIZES.length} sizes)`);
 
 // Tray fallback: a single 16-px PNG, used only if `icon.ico` is somehow
 // missing at runtime. `createTrayIcon()` loads the multi-size ICO first, so
 // Windows already picks the right size per DPI — no `@2x` variant needed.
-fs.copyFileSync(path.join(BUILD, "icon-16.png"), path.join(BUILD, "tray.png"));
+fs.copyFileSync(
+  resolvePathWithinBase(BUILD, "icon-16.png"),
+  resolvePathWithinBase(BUILD, "tray.png"),
+);
 console.log(`✓ tray.png (16, fallback)`);

@@ -19,6 +19,7 @@ import { exec } from "node:child_process";
 import { app, shell } from "electron";
 import { log } from "../utils/log.js";
 import { WINDOWS_SHORTCUTS } from "./windows-settings.js";
+import { assertSafeBasename, resolvePathWithinBase } from "../utils/safe-path.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,13 @@ function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>): void {
   catch { return; }
 
   for (const e of dirents) {
-    const full = path.join(dir, e.name);
+    let full: string;
+    try {
+      assertSafeBasename(e.name);
+      full = resolvePathWithinBase(dir, e.name);
+    } catch {
+      continue;
+    }
     if (e.isDirectory()) { walkLnk(full, out, seen); continue; }
     if (!e.isFile() || !e.name.toLowerCase().endsWith(".lnk")) continue;
 

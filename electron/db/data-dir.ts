@@ -35,6 +35,10 @@ import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { log } from "../utils/log.js";
+import {
+  assertSafeBasename,
+  resolvePathWithinBase,
+} from "../utils/safe-path.js";
 
 const LOCATION_FILE = "storage-location.json";
 
@@ -50,7 +54,7 @@ let cachedDataDir: string | null = null;
 
 /** Where storage-location.json lives. Always in userData. */
 function locationFilePath(): string {
-  return path.join(app.getPath("userData"), LOCATION_FILE);
+  return resolvePathWithinBase(app.getPath("userData"), LOCATION_FILE);
 }
 
 /** Default data dir = userData. The unconfigured baseline. */
@@ -119,7 +123,7 @@ export function isUsingDefaultDataDir(): boolean {
  * up after itself. Returns true on success, false on any error.
  */
 function isWritable(dir: string): boolean {
-  const probe = path.join(dir, `.mnml-probe-${Date.now()}`);
+  const probe = resolvePathWithinBase(dir, `.mnml-probe-${Date.now()}`);
   try {
     fs.writeFileSync(probe, "ok", "utf-8");
     fs.unlinkSync(probe);
@@ -139,20 +143,23 @@ function copyDataFiles(src: string, dst: string): void {
   if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true });
 
   for (const file of ["mnml.sqlite", "mnml.sqlite-wal", "mnml.sqlite-shm"]) {
-    const from = path.join(src, file);
+    const from = resolvePathWithinBase(src, file);
     if (!fs.existsSync(from)) continue;
-    fs.copyFileSync(from, path.join(dst, file));
+    fs.copyFileSync(from, resolvePathWithinBase(dst, file));
   }
 
-  const srcImages = path.join(src, "images");
+  const srcImages = resolvePathWithinBase(src, "images");
   if (fs.existsSync(srcImages)) {
-    const dstImages = path.join(dst, "images");
+    const dstImages = resolvePathWithinBase(dst, "images");
     if (!fs.existsSync(dstImages)) fs.mkdirSync(dstImages, { recursive: true });
     for (const f of fs.readdirSync(srcImages)) {
-      const fromImg = path.join(srcImages, f);
-      const stat = fs.statSync(fromImg);
-      if (stat.isFile()) {
-        fs.copyFileSync(fromImg, path.join(dstImages, f));
+      try {
+        assertSafeBasename(f);
+        const fromImg = resolvePathWithinBase(srcImages, f);
+        if (!fs.statSync(fromImg).isFile()) continue;
+        fs.copyFileSync(fromImg, resolvePathWithinBase(dstImages, f));
+      } catch {
+        /* skip unsafe or unreadable entries */
       }
     }
   }
@@ -181,14 +188,16 @@ function writeLocationFile(absDir: string): void {
  */
 function rollbackCopy(dst: string): void {
   for (const file of ["mnml.sqlite", "mnml.sqlite-wal", "mnml.sqlite-shm"]) {
-    const p = path.join(dst, file);
+    const p = resolvePathWithinBase(dst, file);
     try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
   }
-  const imgDir = path.join(dst, "images");
+  const imgDir = resolvePathWithinBase(dst, "images");
   if (fs.existsSync(imgDir)) {
     try {
       for (const f of fs.readdirSync(imgDir)) {
-        try { fs.unlinkSync(path.join(imgDir, f)); } catch { /* ignore */ }
+        try {
+          fs.unlinkSync(resolvePathWithinBase(imgDir, f));
+        } catch { /* ignore */ }
       }
       try { fs.rmdirSync(imgDir); } catch { /* ignore */ }
     } catch { /* ignore */ }
@@ -257,7 +266,7 @@ export function setDataDir(targetPath: string): MigrationResult {
   }
 
   // 3. Existing data at target?
-  const targetDb = path.join(target, "mnml.sqlite");
+  const targetDb = resolvePathWithinBase(target, "mnml.sqlite");
   const adoptExisting = fs.existsSync(targetDb);
 
   // 4. Copy (only if target is fresh).

@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
-import path from "node:path";
 import fs from "node:fs";
 import { getDataDir, isUsingDefaultDataDir } from "./data-dir.js";
+import { resolvePathWithinBase } from "../utils/safe-path.js";
 
 let db: Database.Database | null = null;
 
@@ -48,10 +48,10 @@ export function getDb(): Database.Database {
   const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-  const imgDir = path.join(dataDir, "images");
+  const imgDir = resolvePathWithinBase(dataDir, "images");
   if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
 
-  const dbPath = path.join(dataDir, "mnml.sqlite");
+  const dbPath = resolvePathWithinBase(dataDir, "mnml.sqlite");
   db = new Database(dbPath);
 
   // Journal mode depends on whether the data lives in a synced folder:
@@ -73,7 +73,7 @@ export function getDb(): Database.Database {
 }
 
 export function imagesDir(): string {
-  return path.join(getDataDir(), "images");
+  return resolvePathWithinBase(getDataDir(), "images");
 }
 
 /**

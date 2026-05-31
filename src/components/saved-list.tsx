@@ -10,7 +10,7 @@
  *   - Keyboard: Tab into the list, Arrow up/down navigates, Enter activates.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { bridge } from "../lib/bridge";
 import type { SavedSnippet } from "../types";
 import { BookmarkIcon, PlusIcon, TrashIcon, XIcon } from "./icons";
@@ -24,6 +24,8 @@ interface Props {
   onFocusedIndexChange: (index: number) => void;
   /** Called when user activates a snippet (paste). */
   onActivate: (snippet: SavedSnippet) => void;
+  /** Copy to clipboard without auto-paste or hiding (Shift-click / Shift+Enter). */
+  onCopyOnly?: (snippet: SavedSnippet) => void;
   /** Called when the up arrow is pressed at index 0 — lets the parent return focus to a prior section. */
   onArrowUpFromFirst?: () => void;
   /** Optional: filter context, displayed when the list is empty due to a query. */
@@ -36,6 +38,7 @@ export function SavedList({
   focusedIndex,
   onFocusedIndexChange,
   onActivate,
+  onCopyOnly,
   onArrowUpFromFirst,
   query,
   listRef,
@@ -52,7 +55,7 @@ export function SavedList({
   // an empty "Snippets" header with no rows is just visual noise.
   if (empty && !!trimmedQuery && !adding) return null;
 
-  const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>) => {
     lastKbdAt.current = Date.now();
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -75,7 +78,9 @@ export function SavedList({
     if (event.key === "Enter") {
       event.preventDefault();
       if (snippets.length === 0) return;
-      onActivate(snippets[activeIndex >= 0 ? activeIndex : 0]);
+      const s = snippets[activeIndex >= 0 ? activeIndex : 0];
+      if (event.shiftKey && onCopyOnly) onCopyOnly(s);
+      else onActivate(s);
     }
   };
 
@@ -141,6 +146,7 @@ export function SavedList({
                 index={index}
                 selected={selected}
                 onActivate={() => onActivate(snippet)}
+                onCopyOnly={onCopyOnly ? () => onCopyOnly(snippet) : undefined}
                 onMouseEnter={() => {
                   if (Date.now() - lastKbdAt.current < KEYBOARD_GRACE_MS) return;
                   onFocusedIndexChange(index);
@@ -157,12 +163,13 @@ export function SavedList({
 // ── Row ───────────────────────────────────────────────────────────────────────
 
 function SavedRow({
-  snippet, index, selected, onActivate, onMouseEnter,
+  snippet, index, selected, onActivate, onCopyOnly, onMouseEnter,
 }: {
   snippet: SavedSnippet;
   index: number;
   selected: boolean;
   onActivate: () => void;
+  onCopyOnly?: () => void;
   onMouseEnter: () => void;
 }) {
   const preview = snippet.content.split(/\r?\n/)[0]?.slice(0, 80) ?? "";
@@ -173,7 +180,10 @@ function SavedRow({
       role="option"
       aria-selected={selected}
       tabIndex={-1}
-      onClick={onActivate}
+      onClick={(e) => {
+        if (e.shiftKey && onCopyOnly) { onCopyOnly(); return; }
+        onActivate();
+      }}
       onMouseEnter={onMouseEnter}
       className="group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors"
       style={{
@@ -264,16 +274,15 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
 
   useEffect(() => { labelRef.current?.focus(); }, []);
 
-  // Settings panel suppresses the global Escape handler with stopImmediatePropagation;
-  // here we just call onCancel which lifts the form. Escape on either field
-  // routes through `onKeyDown` below.
-  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
       onCancel();
-    }
-  };
+    };
+    window.addEventListener("keydown", fn, true);
+    return () => window.removeEventListener("keydown", fn, true);
+  }, [onCancel]);
 
   const submit = async () => {
     if (!content.trim()) return;
@@ -284,10 +293,10 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
 
   return (
     <form
+      data-mnml-snippet-form="true"
       className="px-2 py-2 flex flex-col gap-1.5 rounded-md"
       style={{ background: "var(--bg-raised)", boxShadow: "0 0 0 1px var(--border)" }}
       onSubmit={(e) => { e.preventDefault(); void submit(); }}
-      onKeyDown={onKeyDown}
     >
       <input
         ref={labelRef}

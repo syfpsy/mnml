@@ -27,7 +27,17 @@ interface WindowControl {
 
 function broadcastSavedChanged() {
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send(IPC.onSavedChanged);
+    if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
+    try { w.webContents.send(IPC.onSavedChanged); }
+    catch (err) { log("[ipc] saved-changed broadcast failed:", String(err)); }
+  }
+}
+
+function broadcastItemsCleared() {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
+    try { w.webContents.send(IPC.onItemsCleared); }
+    catch (err) { log("[ipc] items-cleared broadcast failed:", String(err)); }
   }
 }
 
@@ -48,20 +58,6 @@ export function registerIpc(windowControl: WindowControl) {
     },
   );
 
-  ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
-    const item = getById(id);
-    if (item) {
-      restoreItem(item);
-      if (paste && getSetting("autoPaste")) windowControl.setPastePending();
-    }
-  });
-
-  ipcMain.handle(IPC.remove, (_, id: number) => deleteById(id));
-  ipcMain.handle(IPC.clear,  () => clearAll());
-  ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) =>
-    setPinned(id, pinned),
-  );
-
   // Image thumbnails are tiny (24 px in compact rows, max ~96 px in any UI),
   // so sending the full-resolution PNG over IPC and into the renderer's React
   // state was the dominant source of renderer-side memory bloat — a 25-item
@@ -79,6 +75,27 @@ export function registerIpc(windowControl: WindowControl) {
       if (oldest !== undefined) thumbCache.delete(oldest);
     }
   };
+
+  ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
+    const item = getById(id);
+    if (item) {
+      restoreItem(item);
+      if (paste && getSetting("autoPaste")) windowControl.setPastePending();
+    }
+  });
+
+  ipcMain.handle(IPC.remove, (_, id: number) => {
+    deleteById(id);
+    thumbCache.delete(id);
+  });
+  ipcMain.handle(IPC.clear, () => {
+    clearAll();
+    thumbCache.clear();
+    broadcastItemsCleared();
+  });
+  ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) =>
+    setPinned(id, pinned),
+  );
 
   ipcMain.handle(IPC.getImage, (_, id: number): string | null => {
     if (thumbCache.has(id)) {

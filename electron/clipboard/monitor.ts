@@ -254,7 +254,10 @@ export function restoreItem(item: Item) {
   if (item.type === "image" && item.image_path && fs.existsSync(item.image_path)) {
     const nImg = nativeImage.createFromPath(item.image_path);
     clipboard.writeImage(nImg);
+    const { width, height } = nImg.getSize();
     lastImageHash = sha1(nImg.toPNG());
+    lastImageSizeKey = `${width}x${height}`;
+    lastImageCheckedAt = Date.now();
     return;
   }
   const value = item.content_text ?? item.content_url ?? item.preview;

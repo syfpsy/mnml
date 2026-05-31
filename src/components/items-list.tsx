@@ -38,6 +38,8 @@ const KEYBOARD_GRACE_MS = 250;
 interface Props {
   items: Item[];
   onActivate: (item: Item) => void;
+  /** Copy to clipboard without auto-paste or hiding (Shift-click / Shift+Enter). */
+  onCopyOnly?: (item: Item) => void;
   onRemove: (id: number) => void;
   onPinToggle: (item: Item) => void;
   /** Optional quick-save: clipboard item → saved snippet. */
@@ -62,7 +64,7 @@ const TYPE_VARS: Record<ItemType, {
 };
 
 export function ItemsList({
-  items, onActivate, onRemove, onPinToggle, onSave,
+  items, onActivate, onCopyOnly, onRemove, onPinToggle, onSave,
   query, emptyHint, listRef, onKeyDownCapture,
 }: Props) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -95,7 +97,9 @@ export function ItemsList({
       e.preventDefault();
       const i = focusedIndex >= 0 ? focusedIndex : 0;
       const item = items[i];
-      if (item) onActivate(item);
+      if (!item) return;
+      if (e.shiftKey && onCopyOnly) onCopyOnly(item);
+      else onActivate(item);
     }
   };
 
@@ -151,7 +155,10 @@ export function ItemsList({
               role="option"
               aria-selected={focused}
               tabIndex={-1}
-              onClick={() => onActivate(item)}
+              onClick={(e) => {
+                if (e.shiftKey && onCopyOnly) { onCopyOnly(item); return; }
+                onActivate(item);
+              }}
               onMouseEnter={() => {
                 if (Date.now() - lastKbdAt.current < KEYBOARD_GRACE_MS) return;
                 setFocusedIndex(idx);

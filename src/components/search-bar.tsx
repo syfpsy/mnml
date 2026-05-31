@@ -72,6 +72,8 @@ export function SearchBar({
           else if (e.key === "Enter") { e.preventDefault(); onEnter?.(e); }
           else if (e.key === "Delete" && !value) { e.preventDefault(); onDelete?.(); }
           else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
             if (value) onChange("");
             else onEscape?.();
           }

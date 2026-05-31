@@ -63,11 +63,141 @@ let windowVisible = false;
 /** Timestamp set by showWindow(); used to debounce spurious blur/mousedown. */
 let windowShownAt = 0;
 
+/** Set in before-quit so an unexpected `closed` event doesn't respawn a window. */
+let appQuitting = false;
+
+/** Guard against recreate storms when the renderer keeps dying. */
+let recreateAttempts = 0;
+let recreateInProgress = false;
+let pendingShowAfterRecreate = false;
+/** Per-window load retries after did-fail-load. Reset on successful load. */
+let loadRetryCount = 0;
+/** Post-show() visibility verify — at most one self-retry before recreate. */
+let showVerifyAttempts = 0;
+
+const MAX_LOAD_RETRIES = 2;
+const MAX_RECREATE_ATTEMPTS = 5;
+const RECREATE_BACKOFF_MS = 60_000;
+
+// Log main-process fatals but keep the tray + hotkey alive — quitting on every
+// stray exception is how users end up with "mnml is in the tray but dead."
+process.on("uncaughtException", (err) => {
+  log("[fatal] uncaughtException:", err instanceof Error ? err.stack ?? err.message : String(err));
+});
+process.on("unhandledRejection", (reason) => {
+  log("[fatal] unhandledRejection:", reason instanceof Error ? reason.stack ?? reason.message : String(reason));
+});
+
+/* ── Window health / recovery ─────────────────────────────────────────────── */
+
+function isWindowUsable(): boolean {
+  return !!win && !win.isDestroyed() && !win.webContents.isDestroyed();
+}
+
+function resetWindowRuntimeState() {
+  windowVisible = false;
+  rendererReady = false;
+  blurLocked = false;
+  focusRunId += 1;
+  showWhenReady = false;
+  loggedSearchFocusForShow = false;
+  loggedNativeFocusForShow = false;
+  nativeForegroundRequestsForShow = 0;
+}
+
+function safeSendToRenderer(channel: string, payload?: unknown) {
+  if (!isWindowUsable()) return;
+  try {
+    if (payload === undefined) win!.webContents.send(channel);
+    else win!.webContents.send(channel, payload);
+  } catch (err) {
+    log("[ipc] send failed:", channel, String(err));
+  }
+}
+
+/**
+ * The logical `windowVisible` flag can drift from the OS HWND state when
+ * Windows hides/minimizes us without going through hideWindow(), or when a
+ * show() is rejected without throwing. If we trust the flag alone, Alt-Alt
+ * can call hideWindow() while the HWND is already gone — then the next
+ * Alt-Alt thinks we're hidden and show() no-ops, leaving a tray icon with
+ * no summonable overlay.
+ */
+function reconcileVisibilityFlag() {
+  if (!isWindowUsable()) {
+    if (windowVisible) {
+      log("[window] visibility flag reset — window handle gone");
+      windowVisible = false;
+    }
+    return;
+  }
+  const osVisible = win!.isVisible();
+  if (windowVisible !== osVisible) {
+    log("[window] visibility desync reconciled", { flag: windowVisible, os: osVisible });
+    windowVisible = osVisible;
+  }
+}
+
+function destroyWindowSafe() {
+  if (!win) return;
+  try {
+    if (!win.isDestroyed()) win.destroy();
+  } catch (err) {
+    log("[window] destroy failed:", String(err));
+  }
+  win = null;
+  resetWindowRuntimeState();
+}
+
+function recreateWindow(showAfter = false) {
+  if (recreateInProgress) {
+    pendingShowAfterRecreate = pendingShowAfterRecreate || showAfter;
+    return;
+  }
+  recreateAttempts += 1;
+  if (recreateAttempts > MAX_RECREATE_ATTEMPTS) {
+    log("[window] recreate backoff — too many attempts");
+    setTimeout(() => { recreateAttempts = 0; }, RECREATE_BACKOFF_MS);
+    return;
+  }
+
+  recreateInProgress = true;
+  log("[window] recreating BrowserWindow", { showAfter, attempt: recreateAttempts });
+  loadRetryCount = 0;
+  destroyWindowSafe();
+  try {
+    createWindow();
+    if (showAfter) showWhenReady = true;
+  } catch (err) {
+    log("[window] recreate failed:", String(err));
+  } finally {
+    recreateInProgress = false;
+    if (pendingShowAfterRecreate) {
+      pendingShowAfterRecreate = false;
+      showWhenReady = true;
+    }
+  }
+}
+
+function safeReloadRenderer(): boolean {
+  if (!isWindowUsable()) return false;
+  try {
+    if (win!.webContents.isLoading()) return false;
+    rendererReady = false;
+    win!.webContents.reload();
+    log("[renderer] reload requested");
+    return true;
+  } catch (err) {
+    log("[renderer] reload failed:", String(err));
+    return false;
+  }
+}
+
 /* ── Click-outside via global mouse hook ──────────────────────────────────── */
 function onGlobalMousedown(e: { x: number; y: number }) {
-  if (!win || !windowVisible || blurLocked) return;
+  if (!isWindowUsable() || !windowVisible || blurLocked) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
-  const b = win.getBounds();
+  const b = win!.getBounds();
   const inside =
     e.x >= b.x && e.x <= b.x + b.width &&
     e.y >= b.y && e.y <= b.y + b.height;
@@ -529,7 +659,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     log("[updater] update available:", info.version);
-    win?.webContents.send(IPC.onUpdateAvailable, info.version);
+    safeSendToRenderer(IPC.onUpdateAvailable, info.version);
     tray?.setToolTip(`mnml — update v${info.version} downloading…`);
   });
 
@@ -543,7 +673,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-downloaded", (info) => {
     log("[updater] ready to install:", info.version);
-    win?.webContents.send(IPC.onUpdateDownloaded, info.version);
+    safeSendToRenderer(IPC.onUpdateDownloaded, info.version);
     tray?.setToolTip(`mnml — update v${info.version} ready`);
     tray?.setContextMenu(buildTrayMenu(info.version));
   });
@@ -626,12 +756,52 @@ function createWindow() {
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  // Diagnostics
-  win.webContents.on("did-fail-load", (_e, code, desc, url) => {
+  win.on("closed", () => {
+    log("[window] closed");
+    win = null;
+    resetWindowRuntimeState();
+    // recreateWindow() already respawns; don't double-create.
+    if (!appQuitting && !recreateInProgress) {
+      log("[window] unexpected close — respawning for hotkey");
+      setImmediate(() => {
+        try { createWindow(); }
+        catch (err) { log("[window] respawn after close failed:", String(err)); }
+      });
+    }
+  });
+
+  win.on("unresponsive", () => {
+    log("[renderer] unresponsive — attempting reload");
+    if (!safeReloadRenderer()) recreateWindow(windowVisible);
+  });
+
+  win.on("responsive", () => {
+    log("[renderer] responsive again");
+  });
+
+  // Diagnostics + self-heal
+  win.webContents.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
     log("[renderer] did-fail-load", code, desc, url);
+    if (!isMainFrame || !isWindowUsable()) return;
+    if (loadRetryCount >= MAX_LOAD_RETRIES) {
+      log("[renderer] load failed permanently — recreating window");
+      recreateWindow(windowVisible || showWhenReady);
+      return;
+    }
+    loadRetryCount += 1;
+    setTimeout(() => {
+      if (!isWindowUsable()) return;
+      log("[renderer] reloading after failed load, attempt", loadRetryCount);
+      safeReloadRenderer();
+    }, 400);
   });
   win.webContents.on("console-message", (_e, level, msg, line, src) => {
     if (level >= 2) log("[renderer] console", level, msg, `${src}:${line}`);
+  });
+  win.webContents.on("render-process-gone", (_e, details) => {
+    log("[renderer] render-process-gone:", details.reason, "exitCode=", details.exitCode);
+    const shouldShow = windowVisible || showWhenReady;
+    recreateWindow(shouldShow);
   });
 
   // Blur: hide when the user Alt-Tabs or clicks away, but only after the
@@ -640,7 +810,8 @@ function createWindow() {
   win.on("blur", () => {
     if (blurLocked || !windowVisible) return;
     if (Date.now() - windowShownAt < 500) return;
-    if (!win?.webContents.isDevToolsOpened()) hideWindow();
+    if (!isWindowUsable()) return;
+    if (!win!.webContents.isDevToolsOpened()) hideWindow();
   });
   win.on("focus", () => {
     if (!windowVisible) return;
@@ -665,9 +836,12 @@ function createWindow() {
   // window truly hidden between summons gives the next hidden->shown transition
   // the best chance of foreground activation on Windows.
   win.webContents.once("did-finish-load", () => {
-    if (!win || win.isDestroyed()) return;
+    if (!isWindowUsable()) return;
+    loadRetryCount = 0;
+    recreateAttempts = 0;
     rendererReady = true;
-    win.setIgnoreMouseEvents(true, { forward: true });
+    try { win!.setIgnoreMouseEvents(true, { forward: true }); }
+    catch (err) { log("[window] setIgnoreMouseEvents failed:", String(err)); }
     log("[startup] renderer ready");
     if (showWhenReady) {
       showWhenReady = false;
@@ -677,62 +851,104 @@ function createWindow() {
 }
 
 function showWindow() {
-  if (!win) { log("[show] no window"); return; }
+  if (!isWindowUsable()) {
+    log("[show] window missing — recreating");
+    recreateWindow(true);
+    return;
+  }
+  reconcileVisibilityFlag();
+
   if (!rendererReady) {
     showWhenReady = true;
     return;
   }
-  if (windowVisible && win.isVisible()) {
+  if (windowVisible && win!.isVisible()) {
     focusRunId += 1;
     loggedSearchFocusForShow = false;
     loggedNativeFocusForShow = false;
     nativeForegroundRequestsForShow = 0;
     runSummonFocusPass(true);
     scheduleSearchFocusVerification("visible-window", [16, 50, 120, 240, 420]);
-    win.webContents.send(IPC.onVisibilityChanged, true);
+    safeSendToRenderer(IPC.onVisibilityChanged, true);
     return;
   }
 
   const size     = WINDOW_SIZE;
   const { x, y } = positionNearCursor(size.width, size.height);
 
-  win.setBounds({ ...size, x, y }, false);
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.setFocusable(true);
+  try {
+    win!.setBounds({ ...size, x, y }, false);
+    win!.setAlwaysOnTop(true, "screen-saver");
+    win!.setFocusable(true);
+  } catch (err) {
+    log("[show] pre-show setup failed:", String(err));
+    recreateWindow(true);
+    return;
+  }
 
   windowShownAt = Date.now();
   windowVisible = true;
+  showVerifyAttempts = 0;
   focusRunId += 1;
   loggedSearchFocusForShow = false;
   loggedNativeFocusForShow = false;
   nativeForegroundRequestsForShow = 0;
-  win.setIgnoreMouseEvents(false);
+  try { win!.setIgnoreMouseEvents(false); }
+  catch (err) { log("[show] setIgnoreMouseEvents(false) failed:", String(err)); }
 
   // win.show() gives Electron its normal activation path. The follow-up focus
   // passes also request native foreground activation because uIOhook callbacks
   // are not treated like OS-registered global shortcuts by Windows.
-  win.show();
+  try {
+    win!.show();
+  } catch (err) {
+    log("[show] win.show() threw:", String(err));
+    windowVisible = false;
+    recreateWindow(true);
+    return;
+  }
   runSummonFocusPass(true);
   scheduleSearchFocusVerification("show", [16, 50, 100, 180, 300, 500, 800, 1_200]);
 
   setImmediate(() => {
-    if (!win || win.isDestroyed() || !windowVisible) return;
-    win.webContents.send(IPC.onVisibilityChanged, true);
+    if (!isWindowUsable() || !windowVisible) return;
+    safeSendToRenderer(IPC.onVisibilityChanged, true);
   });
+
+  // Windows occasionally rejects ShowWindow without throwing — verify and retry once.
+  setTimeout(() => {
+    if (!windowVisible || !isWindowUsable()) return;
+    if (!win!.isVisible()) {
+      if (showVerifyAttempts >= 1) {
+        log("[show] still hidden after retry — recreating window");
+        windowVisible = false;
+        recreateWindow(true);
+        return;
+      }
+      showVerifyAttempts += 1;
+      log("[show] still hidden after show() — retrying once");
+      windowVisible = false;
+      showWindow();
+    }
+  }, 150);
 
   log("[show] window shown at", { x, y, ...size });
 }
 
 function hideWindow() {
-  if (!win) return;
+  if (!isWindowUsable()) {
+    resetWindowRuntimeState();
+    return;
+  }
   blurLocked    = false;
   windowVisible = false;
   focusRunId += 1;
 
-  win.setIgnoreMouseEvents(true, { forward: true });
+  try { win!.setIgnoreMouseEvents(true, { forward: true }); }
+  catch (err) { log("[hide] setIgnoreMouseEvents failed:", String(err)); }
 
   // Notify renderer
-  win.webContents.send(IPC.onVisibilityChanged, false);
+  safeSendToRenderer(IPC.onVisibilityChanged, false);
 
   if (pastePending) {
     // Auto-paste path. Old approach was just blur + hide + setTimeout(paste,
@@ -748,7 +964,7 @@ function hideWindow() {
     //      whatever window currently has foreground — which is now the
     //      previous app.
     pastePending = false;
-    win.hide();
+    try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
     const target = prevForegroundHwnd;
     if (target) {
       requestRestoreForeground(target);
@@ -759,19 +975,25 @@ function hideWindow() {
     } else {
       // No captured HWND — fall back to the old behaviour with a slightly
       // longer wait for Windows to settle z-order on its own.
-      win.blur();
+      try { win!.blur(); } catch { /* noop */ }
       setTimeout(triggerPaste, 300);
     }
   } else {
     // Normal hide (Escape / click-outside).
     // Truly hide so the next showWindow() operates on a hidden HWND and gets
     // OS focus unconditionally via ShowWindow(SW_SHOW).
-    win.hide();
+    try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
   }
 }
 
 function toggleWindow() {
-  if (!win) return;
+  if (!isWindowUsable()) {
+    log("[toggle] window missing — recreating and showing");
+    recreateWindow(true);
+    return;
+  }
+  reconcileVisibilityFlag();
+
   const now = Date.now();
   if (now < toggleLockedUntil) {
     log("[toggle] ignored repeat");
@@ -855,14 +1077,14 @@ app.whenReady().then(() => {
 
   if (getSetting("monitoring")) startMonitor();
 
-  onNewItem((item)    => win?.webContents.send(IPC.onItemAdded,   item));
-  onItemUpdated((item) => win?.webContents.send(IPC.onItemUpdated, item));
+  onNewItem((item)    => safeSendToRenderer(IPC.onItemAdded,   item));
+  onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, item));
 
   uIOhook.on("mousedown", onGlobalMousedown);
 
   try {
     uninstallHotkey = installDoubleAlt(() => {
-      setTimeout(() => { if (win) toggleWindow(); }, 80);
+      setTimeout(() => { toggleWindow(); }, 80);
     });
   } catch (err) {
     log("[startup] double-alt failed (non-fatal):", String(err));
@@ -880,17 +1102,25 @@ app.whenReady().then(() => {
   }
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    else showWindow();
+    if (!isWindowUsable()) {
+      recreateWindow(true);
+      return;
+    }
+    showWindow();
   });
 }).catch((err) => {
   try { log("[startup] unhandled rejection:", String(err)); } catch { /**/ }
   app.quit();
 });
 
-app.on("second-instance", () => { log("[lifecycle] second instance → show"); showWindow(); });
+app.on("second-instance", () => {
+  log("[lifecycle] second instance → show");
+  if (!isWindowUsable()) recreateWindow(true);
+  else showWindow();
+});
 app.on("window-all-closed", () => { /* stay alive for the global hotkey */ });
 app.on("before-quit", () => {
+  appQuitting = true;
   log("[lifecycle] before-quit");
   if (updaterInterval) { clearInterval(updaterInterval); updaterInterval = null; }
   // Stop the clipboard poller first so it can't write into the

@@ -88,6 +88,12 @@ const api = {
     return () => { ipcRenderer.off(IPC.onSavedChanged, listener); };
   },
 
+  onItemsCleared: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on(IPC.onItemsCleared, listener);
+    return () => { ipcRenderer.off(IPC.onItemsCleared, listener); };
+  },
+
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.installUpdate),
   checkUpdate:   (): Promise<{ ok: boolean; available?: boolean; version?: string | null; message?: string }> =>
     ipcRenderer.invoke(IPC.checkUpdate),

@@ -37,6 +37,19 @@ const TYPE_BY_TAB: Record<Exclude<TabKey, "saved">, ItemType | undefined> = {
   image: "image",
 };
 
+/** Mirror `ORDER BY` in electron/db/items.ts so pin toggles reorder without refetch. */
+function sortItemsLikeDb(items: Item[]): Item[] {
+  return [...items].sort((a, b) => {
+    const aPin = a.pinned_at != null;
+    const bPin = b.pinned_at != null;
+    if (aPin !== bPin) return aPin ? -1 : 1;
+    if (aPin && bPin && a.pinned_at !== b.pinned_at) {
+      return (b.pinned_at ?? 0) - (a.pinned_at ?? 0);
+    }
+    return b.updated_at - a.updated_at;
+  });
+}
+
 export function CompactView({ onThemeChange, updateState, updateVersion, onInstallUpdate }: Props) {
   const [query,        setQuery]        = useState("");
   const [tab,          setTab]          = useState<TabKey>("all");
@@ -69,7 +82,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // Holds the latest quick-paste logic. A stable window-level keydown
   // listener (registered once, below) calls through this ref so it always
   // sees current `items` / `snippets` / tab without re-subscribing.
-  const quickPasteRef = useRef<(n: number) => void>(() => {});
+  const quickPasteRef = useRef<(n: number) => boolean>(() => false);
 
   useEffect(() => {
     bridge.setBlurLock(settingsOpen);
@@ -115,8 +128,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
       if (e.key < "1" || e.key > "9") return;          // single-digit 1..9 only
-      e.preventDefault();
-      quickPasteRef.current(Number(e.key));
+      if (quickPasteRef.current(Number(e.key))) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -181,31 +193,42 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const activateApp   = async (result: AppResult) => { try { await bridge.appLaunch(result.target); } finally { await bridge.hide(); } };
   const activateSaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, true); await bridge.hide(); };
   const copyOnly      = async (item: Item)        => { await bridge.restore(item.id); };
+  const copyOnlySaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, false); };
+
+  const focusSearch = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.select();
+  };
 
   // Quick-paste: Ctrl+1..9 activates the Nth item of the current tab's
   // primary list (clipboard items, or snippets on the Saved tab). The
   // window-level listener is registered once; this assignment keeps the
-  // closure current every render.
+  // closure current every render. Returns true when a paste was triggered.
   quickPasteRef.current = (n: number) => {
-    if (settingsOpen) return;                          // modal is up — ignore
+    if (settingsOpen) return false;
     const el = document.activeElement;
-    if (el && el.tagName === "TEXTAREA") return;       // mid snippet-edit — let them type
+    if (el?.closest("[data-mnml-snippet-form]")) return false;
     if (isSavedTab) {
       const s = snippets[n - 1];
-      if (s) void activateSaved(s);
-    } else {
-      const item = items[n - 1];
-      if (item) void activate(item);
+      if (!s) return false;
+      void activateSaved(s);
+      return true;
     }
+    const item = items[n - 1];
+    if (!item) return false;
+    void activate(item);
+    return true;
   };
 
   const togglePin = async (item: Item) => {
     const nowPinned = item.pinned_at == null;
-    setItems((prev) => prev.map((p) =>
-      p.id === item.id ? { ...p, pinned_at: nowPinned ? Date.now() : null } : p,
+    const pinnedAt = nowPinned ? Date.now() : null;
+    setItems((prev) => sortItemsLikeDb(
+      prev.map((p) => (p.id === item.id ? { ...p, pinned_at: pinnedAt } : p)),
     ));
     await bridge.pin(item.id, nowPinned);
-    refetch();
   };
 
   const handleRemove = async (id: number) => {
@@ -310,6 +333,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
             focusedIndex={focusedSavedIndex}
             onFocusedIndexChange={setFocusedSavedIndex}
             onActivate={activateSaved}
+            onCopyOnly={copyOnlySaved}
+            onArrowUpFromFirst={focusSearch}
             query={query}
             listRef={savedListRef}
           />
@@ -319,6 +344,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
               <ItemsList
                 items={items}
                 onActivate={activate}
+                onCopyOnly={copyOnly}
                 onRemove={handleRemove}
                 onPinToggle={togglePin}
                 onSave={handleSave}
@@ -368,7 +394,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         className="px-3 py-1.5 flex items-center justify-between text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        <span>Ctrl 1-9 to paste · Shift-click to copy</span>
+        <span>Ctrl 1-9 paste · Shift-click copy · Esc dismiss</span>
         <span>Alt Alt to toggle</span>
       </div>
 

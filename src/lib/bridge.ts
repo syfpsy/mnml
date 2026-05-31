@@ -47,6 +47,7 @@ export const bridge = {
   onUpdateAvailable:  (cb: (version: string) => void) => window.mnml.onUpdateAvailable(cb),
   onUpdateDownloaded: (cb: (version: string) => void) => window.mnml.onUpdateDownloaded(cb),
   onSavedChanged:     (cb: () => void) => window.mnml.onSavedChanged(cb),
+  onItemsCleared:     (cb: () => void) => window.mnml.onItemsCleared(cb),
   installUpdate:      () => window.mnml.installUpdate(),
   checkUpdate:        () => window.mnml.checkUpdate() as Promise<{
     ok: boolean; available?: boolean; version?: string | null; message?: string;

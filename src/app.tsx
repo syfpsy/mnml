@@ -33,6 +33,8 @@ export default function App() {
     };
 
     const focusInput = () => {
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (document.querySelector("[data-mnml-snippet-form]")) return;
       const el = document.querySelector<HTMLInputElement>("input[data-mnml-search='true']");
       if (!el) return;
       el.focus({ preventScroll: true });
@@ -71,9 +73,18 @@ export default function App() {
     };
   }, []);
 
-  // Esc always hides.
+  // Esc hides — unless a modal sheet, snippet form, or the search field is active.
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") bridge.hide(); };
+    const fn = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLTextAreaElement) return;
+      if (active?.closest("[data-mnml-snippet-form]")) return;
+      // Search bar owns Escape while focused (clear query, then hide).
+      if (active instanceof HTMLInputElement && active.dataset.mnmlSearch === "true") return;
+      bridge.hide();
+    };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, []);

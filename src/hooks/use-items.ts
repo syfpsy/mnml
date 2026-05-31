@@ -62,5 +62,10 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     );
   }), [enabled]);
 
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return bridge.onItemsCleared(() => setItems([]));
+  }, [enabled]);
+
   return { items, setItems, refetch };
 }

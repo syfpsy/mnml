@@ -44,7 +44,7 @@ if (!main.includes("nativeForegroundRequestsForShow >= 1") ||
   failures.push("Native foreground activation must be one-shot per summon with a repeat-toggle guard.");
 }
 
-if (!/setTimeout\(\(\)\s*=>\s*{\s*if \(win\) toggleWindow\(\);\s*},\s*(?:[8-9]\d|[1-9]\d{2,})\)/.test(main)) {
+if (!/setTimeout\(\(\)\s*=>\s*{\s*(?:if \(win\) )?toggleWindow\(\);\s*},\s*(?:[8-9]\d|[1-9]\d{2,})\)/.test(main)) {
   failures.push("Double-Alt must wait at least 80ms after Alt key-up before toggling focus.");
 }
 
@@ -60,6 +60,18 @@ if (!main.includes("document.hasFocus() && document.activeElement === input") ||
 
 if (!readFileSync(join(root, "electron", "hotkey", "double-alt.ts"), "utf8").includes("SUPPRESS_AFTER_FIRE_MS")) {
   failures.push("Double-Alt detector must suppress repeats immediately after a real fire.");
+}
+
+if (!main.includes("render-process-gone") || !main.includes("recreateWindow(")) {
+  failures.push("Main process must recover from renderer crashes via render-process-gone → recreateWindow().");
+}
+
+if (!main.includes("reconcileVisibilityFlag") || !main.includes("uncaughtException")) {
+  failures.push("Main process must reconcile windowVisible with the OS HWND and log uncaught exceptions without quitting.");
+}
+
+if (!main.includes("safeSendToRenderer")) {
+  failures.push("Main process must guard renderer IPC with safeSendToRenderer() so dead webContents don't throw.");
 }
 
 if (!searchBar.includes("autoFocus = false")) {

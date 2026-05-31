@@ -53,5 +53,6 @@ export const IPC = {
   onUpdateAvailable:   "mnml:event:update-available",
   onUpdateDownloaded:  "mnml:event:update-downloaded",
   onSavedChanged:      "mnml:event:saved-changed",
+  onItemsCleared:      "mnml:event:items-cleared",
 } as const;
 

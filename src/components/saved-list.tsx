@@ -270,6 +270,7 @@ function DeleteSnippetBtn({ id }: { id: number }) {
 function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
   const [label, setLabel]     = useState("");
   const [content, setContent] = useState("");
+  const [saving, setSaving]   = useState(false);
   const labelRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { labelRef.current?.focus(); }, []);
@@ -285,10 +286,15 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
   }, [onCancel]);
 
   const submit = async () => {
-    if (!content.trim()) return;
-    await bridge.savedAdd(label, content);
-    setLabel(""); setContent("");
-    onSaved();
+    if (!content.trim() || saving) return;
+    setSaving(true);
+    try {
+      await bridge.savedAdd(label, content);
+      setLabel(""); setContent("");
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -338,7 +344,7 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
         </button>
         <button
           type="submit"
-          disabled={!content.trim()}
+          disabled={!content.trim() || saving}
           className="text-[11px] px-2.5 py-1 rounded-md font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: "var(--accent-saved-bg)", color: "var(--accent-saved-text)" }}
         >

@@ -1,5 +1,24 @@
 # mnml Changelog
 
+## v0.2.44 — 2026-05-31
+
+Reliability release: click-to-paste and window close work together, security hardening, and a full bug-hunt pass.
+
+### Fixed
+- **Row click did not reliably paste and close** — `restore` / `savedRestore` with `paste: true` copy, hide, and arm paste atomically in the main process (respects **Auto-paste** setting).
+- **Click-to-paste reopened mnml instead of pasting** — capture the previous app's HWND before `win.show()`; native `focus` no longer overwrites it with mnml's own HWND.
+- **Dismiss during summon could reopen the window** — cancel in-flight `capture` on hide; ignore stale helper `prev` replies.
+- **Paste restore cancelled by a second hide** — only clear the foreground-restore timer when the hide is not arming auto-paste.
+- **Summon `focus-ok` could trigger paste early** — helper now emits `focus-ok` / `restore-ok` so paste only follows a restore response.
+- **Stuck “Searching…” state** — `use-items` clears `searchPending` in `finally` and on IPC errors.
+- **Rapid delete restored wrong rows** — delete uses a functional state update; failed remove refetches.
+- **App launch failure still hid mnml** — hide only after successful `appLaunch`.
+- **Image restore read unsafe/missing paths** — validate under `images/`; skip missing/unreadable files instead of pasting preview text.
+- **Snippet double-submit** — add form disables Save while saving.
+- **Settings load/update races** — sequence guard on updates; failed settings fetch handled.
+- **ArrowUp from first clipboard row** — returns focus to search (matches snippets/apps lists).
+- **`maxItems` ≤ 0** — clamped to 1–10000 on save.
+
 ## v0.2.43 — 2026-05-31
 
 Security hardening from static analysis: path traversal guards, CI runner pin, and string-replacement hygiene.

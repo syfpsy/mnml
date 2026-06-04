@@ -26,6 +26,13 @@ interface WindowControl {
   setPastePending: () => void;
 }
 
+/** Copy to clipboard; optional activate closes mnml and pastes when auto-paste is on. */
+function finishActivate(paste: boolean, windowControl: WindowControl) {
+  if (!paste) return;
+  if (getSetting("autoPaste")) windowControl.setPastePending();
+  windowControl.hide();
+}
+
 function broadcastSavedChanged() {
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
@@ -61,10 +68,9 @@ export function registerIpc(windowControl: WindowControl) {
 
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
     const item = getById(id);
-    if (item) {
-      restoreItem(item);
-      if (paste && getSetting("autoPaste")) windowControl.setPastePending();
-    }
+    if (!item) return;
+    if (!restoreItem(item)) return;
+    finishActivate(paste, windowControl);
   });
 
   ipcMain.handle(IPC.remove, (_, id: number) => {
@@ -132,7 +138,7 @@ export function registerIpc(windowControl: WindowControl) {
       restoreText(snippet.content);
       touchSaved(id);
       broadcastSavedChanged();
-      if (paste && getSetting("autoPaste")) windowControl.setPastePending();
+      finishActivate(paste, windowControl);
     },
   );
 
@@ -156,7 +162,11 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.updateSetting,
     (_, { key, value }: { key: keyof AppSettings; value: AppSettings[keyof AppSettings] }) => {
-      setSetting(key, value as never);
+      let next = value;
+      if (key === "maxItems" && typeof value === "number") {
+        next = Math.min(10_000, Math.max(1, Math.floor(value))) as AppSettings["maxItems"];
+      }
+      setSetting(key, next as never);
       if (key === "monitoring") {
         if (value) startMonitor();
         else stopMonitor();

@@ -77,6 +77,14 @@ These are the bugs we kept hitting because Windows protects against background a
 | O25 | Settings Tab focus escaped to Update banner. | Focus trap on sheet. |
 | O26 | Pin reorder left wrong keyboard highlight. | Reset focus on pin order change. |
 | O27 | First summon skipped sync refetch race. | Read storage on each show. |
+| O28 | Clicking a row reopened mnml instead of pasting — helper emitted `prev` during `focus mnml` after `win.show()`, so `prevForegroundHwnd` pointed at mnml and auto-paste restored ourselves. | `capture` before `win.show()`; `focus` no longer overwrites prev; skip restore-to-self. |
+| O29 | Esc during summon still showed the window — late `capture` callback ran after hide. | `cancelCapturePrev()` on hide/reset; ignore `prev` when no pending capture. |
+| O30 | Second `hideWindow()` without paste cleared `pasteAfterRestorePending` mid-restore. | Only cancel paste timers when `!pastePending`. |
+| O31 | Summon `focus-ok` raced paste-restore and fired Ctrl+V early. | Helper emits `focus-ok` / `restore-ok`; handler only pastes on `restore-*`. |
+| O32 | `searchPending` stuck after search IPC error or stale completion. | `try/catch/finally` in `use-items`. |
+| O33 | Rapid delete used closure snapshot — wrong row reappeared. | Functional `setItems` filter; refetch on IPC failure. |
+| O34 | Image restore skipped path guard / pasted preview when PNG missing. | `assertResolvedWithinBase`; fail closed on missing image. |
+| O35 | `autoPaste` setting ignored after atomic activate. | `finishActivate()` gates `setPastePending` on setting; always hides on activate. |
 
 ---
 

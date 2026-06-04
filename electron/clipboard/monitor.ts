@@ -8,7 +8,7 @@ import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
 import { evictThumb } from "../thumb-cache.js";
 import { log } from "../utils/log.js";
-import { resolveImagePath } from "../utils/safe-path.js";
+import { assertResolvedWithinBase, resolveImagePath } from "../utils/safe-path.js";
 
 type Listener = (item: Item) => void;
 
@@ -251,25 +251,42 @@ function trim() {
   for (const id of trimToMax(max)) evictThumb(id);
 }
 
-// Re-copy an item back to the system clipboard.
-export function restoreItem(item: Item) {
-  if (item.type === "image" && item.image_path && fs.existsSync(item.image_path)) {
+// Re-copy an item back to the system clipboard. Returns false if nothing was written.
+export function restoreItem(item: Item): boolean {
+  if (item.type === "image" && item.image_path) {
+    let imagePath: string;
+    try {
+      imagePath = assertResolvedWithinBase(item.image_path, imagesDir());
+    } catch {
+      log("[clipboard] restore: image path outside managed dir — skipping");
+      return false;
+    }
+    if (!fs.existsSync(imagePath)) {
+      log("[clipboard] restore: image file missing — skipping");
+      return false;
+    }
     clipboard.clear();
-    const nImg = nativeImage.createFromPath(item.image_path);
+    const nImg = nativeImage.createFromPath(imagePath);
+    if (nImg.isEmpty()) {
+      log("[clipboard] restore: image unreadable — skipping");
+      return false;
+    }
     clipboard.writeImage(nImg);
     const { width, height } = nImg.getSize();
     lastImageHash = sha1(nImg.toPNG());
     lastImageSizeKey = `${width}x${height}`;
     lastImageCheckedAt = Date.now();
     lastTextHash = "";
-    return;
+    return true;
   }
   const value = item.content_text ?? item.content_url ?? item.preview;
+  if (!value) return false;
   clipboard.clear();
   clipboard.writeText(value);
   lastTextHash = sha1(value);
   lastImageHash = "";
   lastImageSizeKey = "";
+  return true;
 }
 
 /**

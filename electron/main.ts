@@ -47,7 +47,7 @@ let foregroundHelperBuffer = "";
 let updaterInterval: NodeJS.Timeout | null = null;
 /**
  * Decimal string of the Win32 HWND that owned foreground focus right before
- * mnml was summoned. Captured each summon via the helper's "prev <hwnd>" line.
+ * mnml was summoned. Captured via helper `capture` *before* win.show() steals focus.
  * Used by the auto-paste path to ensure Ctrl+V lands on the originating app
  * rather than on whatever Windows promoted in z-order when we hid.
  */
@@ -57,6 +57,10 @@ let awaitingHelperRestore = false;
 /** Paste is armed but waiting for foreground restore to complete. */
 let pasteAfterRestorePending = false;
 let pasteAfterRestoreTimer: NodeJS.Timeout | null = null;
+/** Callback + timer while waiting for `capture` → `prev` before the first show(). */
+let capturePrevCallback: (() => void) | null = null;
+let capturePrevTimer: NodeJS.Timeout | null = null;
+let capturePrevGeneration = 0;
 
 /**
  * Tracks whether the window is logically visible.
@@ -114,6 +118,7 @@ function resetWindowRuntimeState() {
   nativeForegroundRequestsForShow = 0;
   cancelScheduledBlurHide();
   suppressBlurHideUntil = 0;
+  cancelCapturePrev();
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -400,24 +405,27 @@ public static class MnmlForeground {
 "@
 
 # Protocol:
-#   <hwnd>                  → capture current foreground (print "prev <hwnd>"),
-#                             then bring <hwnd> to front (print "ok" / "miss")
-#   restore <hwnd>          → SetForegroundWindow on <hwnd> (print "ok" / "miss")
+#   capture                 → print "prev <hwnd>" for current foreground only
+#   focus <hwnd>            → bring <hwnd> to front (print "focus-ok" / "focus-miss")
+#   restore <hwnd>          → SetForegroundWindow on <hwnd> (print "restore-ok" / "restore-miss")
 #   exit                    → quit
 while (($line = [Console]::In.ReadLine()) -ne $null) {
   $line = $line.Trim()
   if ($line -eq "exit") { break }
   try {
-    if ($line.StartsWith("restore ")) {
-      $hwnd = [IntPtr]([Int64]($line.Substring(8)))
-      $ok = [MnmlForeground]::Restore($hwnd)
-      [Console]::Out.WriteLine($(if ($ok) { "ok" } else { "miss" }))
-    } else {
-      $hwnd = [IntPtr]([Int64]$line)
+    if ($line -eq "capture") {
       $prev = [MnmlForeground]::CapturePrevious()
       [Console]::Out.WriteLine("prev " + $prev.ToInt64())
+    } elseif ($line.StartsWith("restore ")) {
+      $hwnd = [IntPtr]([Int64]($line.Substring(8)))
+      $ok = [MnmlForeground]::Restore($hwnd)
+      [Console]::Out.WriteLine($(if ($ok) { "restore-ok" } else { "restore-miss" }))
+    } elseif ($line.StartsWith("focus ")) {
+      $hwnd = [IntPtr]([Int64]($line.Substring(6).Trim()))
       $ok = [MnmlForeground]::Focus($hwnd)
-      [Console]::Out.WriteLine($(if ($ok) { "ok" } else { "miss" }))
+      [Console]::Out.WriteLine($(if ($ok) { "focus-ok" } else { "focus-miss" }))
+    } else {
+      [Console]::Out.WriteLine("error: unknown command")
     }
     [Console]::Out.Flush()
   } catch {
@@ -452,28 +460,107 @@ function windowHandleAsDecimal(w: BrowserWindow): string | null {
   return null;
 }
 
+function mnmlWindowHandle(): string | null {
+  if (!isWindowUsable()) return null;
+  return windowHandleAsDecimal(win!);
+}
+
+function acceptPrevForegroundHwnd(hwnd: string): void {
+  const ours = mnmlWindowHandle();
+  if (!hwnd || hwnd === "0" || (ours && hwnd === ours)) {
+    prevForegroundHwnd = null;
+    if (ours && hwnd === ours) {
+      log("[focus] prev HWND was mnml — not using for auto-paste restore");
+    }
+    return;
+  }
+  prevForegroundHwnd = hwnd;
+}
+
+function cancelCapturePrev() {
+  capturePrevGeneration += 1;
+  if (capturePrevTimer !== null) {
+    clearTimeout(capturePrevTimer);
+    capturePrevTimer = null;
+  }
+  capturePrevCallback = null;
+}
+
+function finishCapturePrev() {
+  if (capturePrevTimer !== null) {
+    clearTimeout(capturePrevTimer);
+    capturePrevTimer = null;
+  }
+  const cb = capturePrevCallback;
+  capturePrevCallback = null;
+  cb?.();
+}
+
+/** Capture the HWND that owns foreground *before* we call win.show(). */
+function requestCapturePrev(onDone: () => void) {
+  cancelCapturePrev();
+  const gen = capturePrevGeneration;
+  capturePrevCallback = () => {
+    if (gen !== capturePrevGeneration) return;
+    onDone();
+  };
+  capturePrevTimer = setTimeout(() => {
+    capturePrevTimer = null;
+    log("[focus] capture prev timed out — showing anyway");
+    finishCapturePrev();
+  }, 150);
+
+  const helper = ensureForegroundHelper();
+  if (!helper || helper.stdin.destroyed) {
+    finishCapturePrev();
+    return;
+  }
+  try {
+    helper.stdin.write("capture\n");
+  } catch (err) {
+    log("[focus] capture request failed:", String(err));
+    finishCapturePrev();
+  }
+}
+
 function handleForegroundHelperLine(line: string) {
   if (!line) return;
   if (line.startsWith("prev ")) {
-    // Helper reports the foreground HWND it observed *before* it acted.
-    // Save it so the paste path can restore it as the target for Ctrl+V.
-    const hwnd = line.slice(5).trim();
-    prevForegroundHwnd = hwnd && hwnd !== "0" ? hwnd : null;
+    // Ignore stale helper replies after hide/cancel — they must not
+    // overwrite prevForegroundHwnd or resurrect a cancelled show().
+    if (!capturePrevCallback) return;
+    acceptPrevForegroundHwnd(line.slice(5).trim());
+    finishCapturePrev();
     return;
   }
-  if (line === "ok") {
-    if (awaitingHelperRestore) {
-      awaitingHelperRestore = false;
-      if (pasteAfterRestorePending) {
-        pasteAfterRestorePending = false;
-        if (pasteAfterRestoreTimer !== null) {
-          clearTimeout(pasteAfterRestoreTimer);
-          pasteAfterRestoreTimer = null;
-        }
-        triggerPaste();
+  if (line === "restore-ok") {
+    if (!awaitingHelperRestore) return;
+    awaitingHelperRestore = false;
+    if (pasteAfterRestorePending) {
+      pasteAfterRestorePending = false;
+      if (pasteAfterRestoreTimer !== null) {
+        clearTimeout(pasteAfterRestoreTimer);
+        pasteAfterRestoreTimer = null;
       }
-      return;
+      triggerPaste();
     }
+    return;
+  }
+  if (line === "restore-miss") {
+    if (!awaitingHelperRestore) return;
+    awaitingHelperRestore = false;
+    if (pasteAfterRestorePending) {
+      pasteAfterRestorePending = false;
+      if (pasteAfterRestoreTimer !== null) {
+        clearTimeout(pasteAfterRestoreTimer);
+        pasteAfterRestoreTimer = null;
+      }
+      setTimeout(triggerPaste, 200);
+    }
+    return;
+  }
+  if (line === "focus-ok") {
+    if (awaitingHelperRestore) return;
     if (!loggedNativeFocusForShow) {
       loggedNativeFocusForShow = true;
       log("[focus] windows foreground focused");
@@ -481,19 +568,8 @@ function handleForegroundHelperLine(line: string) {
     scheduleSearchFocusVerification("native-foreground", [0, 16, 50, 120, 240]);
     return;
   }
-  if (line === "miss") {
-    if (awaitingHelperRestore) {
-      awaitingHelperRestore = false;
-      if (pasteAfterRestorePending) {
-        pasteAfterRestorePending = false;
-        if (pasteAfterRestoreTimer !== null) {
-          clearTimeout(pasteAfterRestoreTimer);
-          pasteAfterRestoreTimer = null;
-        }
-        // Restore failed — still attempt paste after a short settle delay.
-        setTimeout(triggerPaste, 200);
-      }
-    }
+  if (line === "focus-miss") {
+    if (awaitingHelperRestore) return;
     return;
   }
   log("[focus] foreground helper:", line);
@@ -560,7 +636,7 @@ function requestNativeForeground() {
   try {
     nativeForegroundRequestsForShow += 1;
     suppressDoubleAltFor(1_200);
-    helper.stdin.write(`${hwnd}\n`);
+    helper.stdin.write(`focus ${hwnd}\n`);
   } catch (err) {
     log("[focus] foreground request failed:", String(err));
   }
@@ -943,10 +1019,6 @@ function showWindow() {
   }
   reconcileVisibilityFlag();
 
-  // Fresh summon — discard any HWND from a prior cycle. The helper's next
-  // "prev …" line will capture the app the user was in before this summon.
-  prevForegroundHwnd = null;
-
   if (!rendererReady) {
     showWhenReady = true;
     return;
@@ -962,76 +1034,83 @@ function showWindow() {
     return;
   }
 
-  const size     = WINDOW_SIZE;
-  const { x, y } = positionNearCursor(size.width, size.height);
+  const revealWindow = () => {
+    const size     = WINDOW_SIZE;
+    const { x, y } = positionNearCursor(size.width, size.height);
 
-  try {
-    win!.setBounds({ ...size, x, y }, false);
-    win!.setAlwaysOnTop(true, "screen-saver");
-    win!.setFocusable(true);
-  } catch (err) {
-    log("[show] pre-show setup failed:", String(err));
-    recreateWindow(true);
-    return;
-  }
-
-  windowShownAt = Date.now();
-  windowVisible = true;
-  showVerifyAttempts = 0;
-  focusRunId += 1;
-  loggedSearchFocusForShow = false;
-  loggedNativeFocusForShow = false;
-  nativeForegroundRequestsForShow = 0;
-  try { win!.setIgnoreMouseEvents(false); }
-  catch (err) { log("[show] setIgnoreMouseEvents(false) failed:", String(err)); }
-
-  // win.show() gives Electron its normal activation path. The follow-up focus
-  // passes also request native foreground activation because uIOhook callbacks
-  // are not treated like OS-registered global shortcuts by Windows.
-  try {
-    win!.show();
-  } catch (err) {
-    log("[show] win.show() threw:", String(err));
-    windowVisible = false;
-    recreateWindow(true);
-    return;
-  }
-  runSummonFocusPass(true);
-  scheduleSearchFocusVerification("show", [16, 50, 100, 180, 300, 500, 800, 1_200]);
-
-  setImmediate(() => {
-    if (!isWindowUsable() || !windowVisible) return;
-    safeSendToRenderer(IPC.onVisibilityChanged, true);
-  });
-
-  // Windows occasionally rejects ShowWindow without throwing — verify and retry once.
-  setTimeout(() => {
-    if (!windowVisible || !isWindowUsable()) return;
-    if (!win!.isVisible()) {
-      if (showVerifyAttempts >= 1) {
-        log("[show] still hidden after retry — recreating window");
-        windowVisible = false;
-        recreateWindow(true);
-        return;
-      }
-      showVerifyAttempts += 1;
-      log("[show] still hidden after show() — retrying once");
-      windowVisible = false;
-      showWindow();
+    try {
+      win!.setBounds({ ...size, x, y }, false);
+      win!.setAlwaysOnTop(true, "screen-saver");
+      win!.setFocusable(true);
+    } catch (err) {
+      log("[show] pre-show setup failed:", String(err));
+      recreateWindow(true);
+      return;
     }
-  }, 150);
 
-  log("[show] window shown at", { x, y, ...size });
+    windowShownAt = Date.now();
+    windowVisible = true;
+    showVerifyAttempts = 0;
+    focusRunId += 1;
+    loggedSearchFocusForShow = false;
+    loggedNativeFocusForShow = false;
+    nativeForegroundRequestsForShow = 0;
+    try { win!.setIgnoreMouseEvents(false); }
+    catch (err) { log("[show] setIgnoreMouseEvents(false) failed:", String(err)); }
+
+    try {
+      win!.show();
+    } catch (err) {
+      log("[show] win.show() threw:", String(err));
+      windowVisible = false;
+      recreateWindow(true);
+      return;
+    }
+    runSummonFocusPass(true);
+    scheduleSearchFocusVerification("show", [16, 50, 100, 180, 300, 500, 800, 1_200]);
+
+    setImmediate(() => {
+      if (!isWindowUsable() || !windowVisible) return;
+      safeSendToRenderer(IPC.onVisibilityChanged, true);
+    });
+
+    setTimeout(() => {
+      if (!windowVisible || !isWindowUsable()) return;
+      if (!win!.isVisible()) {
+        if (showVerifyAttempts >= 1) {
+          log("[show] still hidden after retry — recreating window");
+          windowVisible = false;
+          recreateWindow(true);
+          return;
+        }
+        showVerifyAttempts += 1;
+        log("[show] still hidden after show() — retrying once");
+        windowVisible = false;
+        showWindow();
+      }
+    }, 150);
+
+    log("[show] window shown at", { x, y, ...size });
+  };
+
+  // Capture the app the user was in *before* win.show() steals foreground.
+  prevForegroundHwnd = null;
+  requestCapturePrev(revealWindow);
 }
 
 function hideWindow() {
   cancelScheduledBlurHide();
-  if (pasteAfterRestoreTimer !== null) {
-    clearTimeout(pasteAfterRestoreTimer);
-    pasteAfterRestoreTimer = null;
+  cancelCapturePrev();
+  // A non-paste hide (Esc, click-outside) must not tear down an in-flight
+  // restore→paste started by a row click a moment earlier.
+  if (!pastePending) {
+    if (pasteAfterRestoreTimer !== null) {
+      clearTimeout(pasteAfterRestoreTimer);
+      pasteAfterRestoreTimer = null;
+    }
+    pasteAfterRestorePending = false;
+    awaitingHelperRestore = false;
   }
-  pasteAfterRestorePending = false;
-  awaitingHelperRestore = false;
   if (!isWindowUsable()) {
     resetWindowRuntimeState();
     return;
@@ -1062,7 +1141,11 @@ function hideWindow() {
     pastePending = false;
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
     const target = prevForegroundHwnd;
-    if (target) {
+    const ours = mnmlWindowHandle();
+    if (target && ours && target === ours) {
+      try { win!.blur(); } catch { /* noop */ }
+      setTimeout(triggerPaste, 300);
+    } else if (target) {
       pasteAfterRestorePending = true;
       requestRestoreForeground(target);
       if (pasteAfterRestoreTimer !== null) clearTimeout(pasteAfterRestoreTimer);

@@ -187,9 +187,12 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // ── Activation ──────────────────────────────────────────────────────────
 
-  const activate      = async (item: Item)        => { await bridge.restore(item.id, true); await bridge.hide(); };
-  const activateApp   = async (result: AppResult) => { try { await bridge.appLaunch(result.target); } finally { await bridge.hide(); } };
-  const activateSaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, true); await bridge.hide(); };
+  const activate      = async (item: Item)        => { await bridge.restore(item.id, true); };
+  const activateApp   = async (result: AppResult) => {
+    const ok = await bridge.appLaunch(result.target);
+    if (ok) await bridge.hide();
+  };
+  const activateSaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, true); };
   const copyOnly      = async (item: Item)        => { await bridge.restore(item.id); };
   const copyOnlySaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, false); };
 
@@ -236,12 +239,11 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   };
 
   const handleRemove = async (id: number) => {
-    const prev = items;
-    setItems(items.filter((p) => p.id !== id));
+    setItems((prev) => prev.filter((p) => p.id !== id));
     try {
       await bridge.remove(id);
     } catch {
-      setItems(prev);
+      refetch();
     }
   };
 
@@ -360,6 +362,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
                 onSave={handleSave}
                 query={query}
                 isLoading={searchPending}
+                onArrowUpFromFirst={focusSearch}
                 listRef={listRef}
                 onKeyDownCapture={handleClipboardKeyDownCapture}
                 emptyHint={

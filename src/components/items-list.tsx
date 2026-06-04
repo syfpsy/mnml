@@ -48,6 +48,8 @@ interface Props {
   emptyHint?: string;
   /** True while a debounced search fetch is in flight. */
   isLoading?: boolean;
+  /** When ArrowUp is pressed on the first row, return focus to search (etc.). */
+  onArrowUpFromFirst?: () => void;
   listRef?: React.RefObject<HTMLDivElement | null>;
   onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>;
 }
@@ -67,7 +69,7 @@ const TYPE_VARS: Record<ItemType, {
 
 export function ItemsList({
   items, onActivate, onCopyOnly, onRemove, onPinToggle, onSave,
-  query, emptyHint, isLoading = false, listRef, onKeyDownCapture,
+  query, emptyHint, isLoading = false, onArrowUpFromFirst, listRef, onKeyDownCapture,
 }: Props) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const lastKbdAt = useRef(0);
@@ -88,6 +90,11 @@ export function ItemsList({
       setFocusedIndex((i) => (i < 0 ? 0 : Math.min(i + 1, items.length - 1)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      if (focusedIndex <= 0 && onArrowUpFromFirst) {
+        setFocusedIndex(-1);
+        onArrowUpFromFirst();
+        return;
+      }
       setFocusedIndex((i) => (i <= 0 ? 0 : i - 1));
     } else if (e.key === "Home") {
       e.preventDefault();

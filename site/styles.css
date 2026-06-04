@@ -699,6 +699,54 @@ section {
   border: 1px solid var(--border);
 }
 
+/* ── Recent updates ────────────────────────────────────────────────────────── */
+.updates {
+  border-top: 1px solid var(--border);
+  padding-top: clamp(48px, 7vw, 96px);
+  padding-bottom: clamp(24px, 4vw, 48px);
+  max-width: 72ch;
+}
+.updates-lede {
+  color: var(--t2);
+  margin: 0 0 32px;
+  line-height: 1.6;
+}
+.updates-lede a { color: var(--t1); }
+.release {
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.release:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.release h3 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: var(--t1);
+}
+.release ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--t2);
+  line-height: 1.65;
+}
+.release li { margin-bottom: 8px; }
+.release li:last-child { margin-bottom: 0; }
+.release strong { color: var(--t1); font-weight: 600; }
+.release a { color: var(--t1); }
+.release code {
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
 /* ── Install ───────────────────────────────────────────────────────────────── */
 .install {
   text-align: center;

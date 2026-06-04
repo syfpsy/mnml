@@ -38,6 +38,15 @@ if (!main.includes("WINDOWS_FOREGROUND_HELPER") ||
   failures.push("Double-Alt summon must include native Windows foreground activation, not DOM focus alone.");
 }
 
+if (!main.includes('if ($line -eq "capture")') ||
+    !main.includes('focus ${hwnd}') ||
+    !main.includes("requestCapturePrev(") ||
+    !main.includes("cancelCapturePrev(") ||
+    !main.includes('"restore-ok"') ||
+    !main.includes('"focus-ok"')) {
+  failures.push("Auto-paste must capture prev foreground via helper capture before win.show(), not during focus mnml.");
+}
+
 if (!main.includes("nativeForegroundRequestsForShow >= 1") ||
     !main.includes("runSummonFocusPass(true)") ||
     !main.includes("toggleLockedUntil")) {

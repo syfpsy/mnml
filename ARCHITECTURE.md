@@ -214,11 +214,12 @@ One frameless, non-resizable, always-on-top, `skipTaskbar` `BrowserWindow`
 
 ## Auto-paste — `main.ts`
 
-Opt-in (`autoPaste`, default **true**). `restore(id, paste=true)` sets
-`pastePending`; on hide, the helper restores the HWND captured *before* the summon
-(`prevForegroundHwnd`), waits ~150 ms, then synthesizes Ctrl+V via `uIOhook.keyTap`
-(fallback: a one-shot `wscript` VBS `SendKeys "^v"`). Shift+Enter / Shift-click copy
-without pasting.
+Opt-in (`autoPaste`, default **true**). `restore(id, paste=true)` copies to the
+clipboard, hides mnml, and (when auto-paste is on) sets `pastePending`. On hide, the
+helper restores the HWND captured *before* the summon (`prevForegroundHwnd`) via a
+tagged `restore-ok` response (distinct from summon `focus-ok`), then synthesizes
+Ctrl+V via `uIOhook.keyTap` (fallback: one-shot `wscript` VBS `SendKeys "^v"`).
+Shift+Enter / Shift-click copy without pasting or hiding.
 
 ## Tray, updater, auto-launch
 

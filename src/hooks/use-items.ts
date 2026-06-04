@@ -35,12 +35,18 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     }
 
     const run = async () => {
-      const results = trimmed
-        ? await bridge.search(trimmed, type, limit)
-        : await bridge.listRecent(limit, type);
-      if (current !== seq.current) return;
-      setSearchPending(false);
-      setItems(results);
+      try {
+        const results = trimmed
+          ? await bridge.search(trimmed, type, limit)
+          : await bridge.listRecent(limit, type);
+        if (current !== seq.current) return;
+        setItems(results);
+      } catch {
+        if (current !== seq.current) return;
+        setItems([]);
+      } finally {
+        if (current === seq.current) setSearchPending(false);
+      }
     };
 
     const timer = setTimeout(run, trimmed ? 110 : 0);

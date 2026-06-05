@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "check:summon": "node scripts/check-window-summon-rules.mjs",
+    "check:site-headers": "node scripts/check-site-security-headers.mjs",
     "icons": "node scripts/make-icons.mjs",
     "build": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder",
     "build:dir": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --dir",
@@ -25,20 +26,20 @@
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
+    "@electron/rebuild": "^4.0.4",
     "@tailwindcss/vite": "^4.2.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.3.1",
+    "electron": "^42.3.3",
     "electron-builder": "^25.1.8",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "tailwindcss": "^4.2.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7",
+    "vite": "^6.4.3",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6"
   },

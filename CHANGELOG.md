@@ -1,5 +1,12 @@
 # mnml Changelog
 
+## Unreleased
+
+### Security
+- **Dependency patches** — `vite` pinned to `^6.4.3` (CVE-2025-62522 / dev-server `fs.deny` bypass on Windows); `electron` upgraded to `^42.3.3` (patched Chromium/Electron advisories).
+- **Marketing site headers** — `vercel.json` now sends `X-Frame-Options: DENY` and a scoped `Content-Security-Policy` (clickjacking + CSP findings on the Vercel site).
+- **Header verification** — `npm run check:site-headers` validates `vercel.json`; optional live check via `MNML_SITE_URL`.
+
 ## v0.2.44 — 2026-05-31
 
 Reliability release: click-to-paste and window close work together, security hardening, and a full bug-hunt pass.

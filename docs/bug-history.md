@@ -98,6 +98,7 @@ These are the bugs we kept hitting because Windows protects against background a
 | O46 | Ctrl+1-9 quick-paste ignored app-search-in-flight guard. | `appSearch.isSearching` check in quick-paste ref. |
 | O47 | Snippet delete disarmed on failed IPC remove. | try/catch around `savedRemove`. |
 | O48 | `savedUpdate` skipped id validation; list/search limits unbounded. | `requirePositiveInt` on update; `clampListLimit()`. |
+| O49 | v0.2.45 installer failed to start — `better_sqlite3.node` missing after Electron 42 bump without native rebuild. | Revert Electron to 33.4.11; `verify-native-bindings.mjs` + rebuild before pack; CI `build:release`. |
 
 ---
 

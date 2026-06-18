@@ -1,5 +1,16 @@
 # mnml Changelog
 
+## v0.2.46 — 2026-05-31
+
+Hotfix: v0.2.45 installers failed to start because native SQLite bindings were not packaged for Electron 42.
+
+### Fixed
+- **App did not start after updating to v0.2.45** — `better_sqlite3.node` was missing from the installer (Electron bumped without a successful native rebuild). Reverted to Electron 33.4.11 and added `npm run rebuild` + `verify-native-bindings.mjs` gates before every release build.
+- **Packaging guard** — `copy-native-deps` now fails the build if `.node` binaries are absent from the packaged app.
+
+### Internal
+- **CI release workflow** — `windows-2022` runs `npm run build:release` (rebuild + verify + pack) on version tags.
+
 ## v0.2.45 — 2026-06-05
 
 Reliability and security release: dismiss/paste hardening, dependency patches, and site security headers.

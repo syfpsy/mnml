@@ -67,6 +67,45 @@ function copyModules(destBase) {
     copyDir(srcDir, destDir);
     console.log(`[copy-native-deps] ✓  ${mod}`);
   }
+
+  verifyCopiedModules(destBase);
+}
+
+function verifyCopiedModules(destBase) {
+  const failures = [];
+  const sqlite = findNode(path.join(destBase, "better-sqlite3"), "better_sqlite3.node");
+  const uiohook = findAnyNode(path.join(destBase, "uiohook-napi"));
+  if (!sqlite) failures.push("better-sqlite3: better_sqlite3.node missing in packaged app");
+  if (!uiohook) failures.push("uiohook-napi: .node binary missing in packaged app");
+  if (failures.length) {
+    console.error("[copy-native-deps] packaged native bindings missing:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+}
+
+function findNode(dir, name) {
+  if (!fs.existsSync(dir)) return null;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const hit = findNode(full, name);
+      if (hit) return hit;
+    } else if (entry.name === name) return full;
+  }
+  return null;
+}
+
+function findAnyNode(dir) {
+  if (!fs.existsSync(dir)) return null;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const hit = findAnyNode(full);
+      if (hit) return hit;
+    } else if (entry.name.endsWith(".node")) return full;
+  }
+  return null;
 }
 
 function copyDir(from, to) {

@@ -1,6 +1,6 @@
 {
   "name": "mnml",
-  "version": "0.2.45",
+  "version": "0.2.46",
   "description": "mnml — a super minimal clipboard manager for Windows",
   "private": true,
   "main": "dist-electron/main.js",
@@ -14,11 +14,12 @@
     "check:summon": "node scripts/check-window-summon-rules.mjs",
     "check:site-headers": "node scripts/check-site-security-headers.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "build": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder",
-    "build:dir": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --dir",
-    "release": "npm run check:summon && node scripts/bump-version.mjs && tsc -b && vite build && electron-builder --publish always",
-    "postinstall": "electron-rebuild -f -o better-sqlite3",
-    "rebuild": "electron-rebuild -f -o better-sqlite3"
+    "build": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder",
+    "build:dir": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --dir",
+    "build:release": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder",
+    "release": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --publish always",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 uiohook-napi",
+    "rebuild": "electron-rebuild -f -w better-sqlite3 uiohook-napi"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
@@ -33,7 +34,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^42.3.3",
+    "electron": "33.4.11",
     "electron-builder": "^25.1.8",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

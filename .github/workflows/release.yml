@@ -1,6 +1,6 @@
 name: Release
 
-# Triggers when a version tag is pushed (e.g. v0.2.5)
+# Build and publish the Windows installer when a version tag is pushed.
 on:
   push:
     tags:
@@ -9,9 +9,9 @@ on:
 jobs:
   release:
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
-      contents: write   # required to create a GitHub Release and upload assets
+      contents: write
 
     steps:
       - name: Checkout
@@ -24,25 +24,18 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-          npm ci
+        run: npm ci
 
-      # Restore the heroui-pro dist from the vendored archive.
-      # The package's postinstall requires a licensed auth token to download
-      # the dist at install time; we vendor it instead so CI stays self-contained.
-      # The tarball also includes package.json, because the npm-published package
-      # ships without the exports map — the postinstall adds it after CDN download.
-      - name: Restore @heroui-pro/react dist
+      - name: Build installer
+        run: npm run build:release
+
+      - name: Publish to GitHub Releases
         shell: bash
-        run: tar -xzf vendor/heroui-pro-react-dist.tgz -C node_modules/@heroui-pro/react
-
-      # build:publish skips bump-version.mjs and tsc — the version is whatever
-      # is already committed in package.json at the time the tag was pushed.
-      # Type-checking is done locally before tagging (npm run build).
-      - name: Build & publish to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run build:publish
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release/mnml-setup.exe release/latest.yml release/mnml-setup.exe.blockmap \
+            --title "${{ github.ref_name }}" \
+            --notes "Hotfix: restores startup after v0.2.45 (native SQLite bindings were missing). See CHANGELOG.md for v0.2.46." \
+            --latest

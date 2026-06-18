@@ -14,10 +14,16 @@ export function useSettings() {
 
   const update = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     const seq = ++updateSeq.current;
-    const next = await bridge.updateSetting(key, value);
-    if (seq !== updateSeq.current) return next;
-    setSettings(next);
-    return next;
+    try {
+      const next = await bridge.updateSetting(key, value);
+      if (seq !== updateSeq.current) return next;
+      setSettings(next);
+      return next;
+    } catch {
+      const current = await bridge.getSettings().catch(() => null);
+      if (current && seq === updateSeq.current) setSettings(current);
+      return null;
+    }
   };
 
   return { settings, update };

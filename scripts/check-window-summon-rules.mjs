@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const main = readFileSync(join(root, "electron", "main.ts"), "utf8");
+const ipc = readFileSync(join(root, "electron", "ipc.ts"), "utf8");
 const app = readFileSync(join(root, "src", "app.tsx"), "utf8");
 const searchBar = readFileSync(join(root, "src", "components", "search-bar.tsx"), "utf8");
 const styles = readFileSync(join(root, "src", "styles.css"), "utf8");
@@ -87,8 +88,28 @@ if (!main.includes("before-input-event") || !main.includes("markInternalPointerD
   failures.push("Blur hide must suppress on in-window pointer down (before-input-event + markInternalPointerDown).");
 }
 
-if (!main.includes("scheduleBlurHide") || !main.includes("isPointerInsideWindow")) {
-  failures.push("Click-outside must use screen.getCursorScreenPoint() and a deferred blur hide with focus re-check.");
+if (!main.includes("scheduleBlurHide") || !main.includes("isPointInsideWindow")) {
+  failures.push("Click-outside must use uIOhook screen coords + isPointInsideWindow() and a deferred blur hide with focus re-check.");
+}
+
+if (!main.includes("pasteFlowActive") || !main.includes("startFocusWatchdog")) {
+  failures.push("Auto-paste must lock pasteFlowActive during restore→paste and run a focus watchdog while the window is visible.");
+}
+
+if (!main.includes("armPasteFlowSafety")) {
+  failures.push("Paste flow must have a safety timeout so dismiss is not blocked forever.");
+}
+
+if (!main.includes('if (!windowVisible && (pasteFlowActive')) {
+  failures.push("toggleWindow must ignore show while paste flow is in flight.");
+}
+
+if (!ipc.includes("clampListLimit")) {
+  failures.push("IPC list/search handlers must clamp limits via clampListLimit().");
+}
+
+if (!main.includes('onGlobalMouseOutside(e, "mouseup")') || !main.includes("onGlobalMousedownHandler")) {
+  failures.push("Click-outside must listen to both uIOhook mousedown and mouseup with stable handler refs for cleanup.");
 }
 
 if (!main.includes("uIOhook.start()")) {

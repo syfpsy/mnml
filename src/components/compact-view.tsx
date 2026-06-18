@@ -74,6 +74,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   const [focusedAppIndex,   setFocusedAppIndex]   = useState(-1);
   const [focusedSavedIndex, setFocusedSavedIndex] = useState(-1);
+  /** Bumped on hide so SavedList remounts and drops any open add form. */
+  const [savedListEpoch,    setSavedListEpoch]    = useState(0);
 
   const inputRef     = useRef<HTMLInputElement>(null);
   const listRef      = useRef<HTMLDivElement>(null);
@@ -104,6 +106,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return bridge.onVisibilityChanged((visible) => {
       if (!visible) {
         setQuery("");
+        setSettingsOpen(false);
+        setSavedListEpoch((n) => n + 1);
         return;
       }
       bridge.storageGet()
@@ -212,6 +216,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     const el = document.activeElement;
     if (el?.closest("[data-mnml-snippet-form]")) return false;
     if (searchPending) return false;
+    if (!isSavedTab && appSearch.isSearching) return false;
     if (isSavedTab) {
       const s = snippets[n - 1];
       if (!s) return false;
@@ -248,7 +253,11 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   };
 
   const handleSave = async (item: Item) => {
-    await bridge.savedFromItem(item.id);
+    try {
+      await bridge.savedFromItem(item.id);
+    } catch {
+      /* SaveBtn handles confirmation — errors stay silent here */
+    }
   };
 
   const ariaLabel   = isSavedTab ? "Filter saved snippets" : "Search clipboard";
@@ -287,7 +296,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
             onHome={() => {}}
             onEnd={() => {}}
             onEnter={(e) => {
-              if (!isSavedTab && searchPending) return;
+              if (!isSavedTab && (searchPending || appSearch.isSearching)) return;
               if (isSavedTab) {
                 const s = snippets[0];
                 if (s) activateSaved(s);
@@ -341,6 +350,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
       >
         {isSavedTab ? (
           <SavedList
+            key={savedListEpoch}
             snippets={snippets}
             focusedIndex={focusedSavedIndex}
             onFocusedIndexChange={setFocusedSavedIndex}

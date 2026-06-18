@@ -298,10 +298,14 @@ function SaveBtn({ onSave }: { onSave: () => void | Promise<void> }) {
   const trigger = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (saved) return;
-    await onSave();
-    setSaved(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setSaved(false), 1500);
+    try {
+      await onSave();
+      setSaved(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setSaved(false), 1500);
+    } catch {
+      /* keep unsaved state — no false confirmation */
+    }
   };
 
   return (

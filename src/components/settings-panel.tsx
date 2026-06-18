@@ -143,7 +143,10 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
             <Row label="Light theme" hint="Switch to a light colour scheme.">
               <Toggle
                 isSelected={settings.lightTheme}
-                onChange={async (v) => { await update("lightTheme", v); onThemeChange(v); }}
+                onChange={async (v) => {
+                  const next = await update("lightTheme", v);
+                  if (next) onThemeChange(v);
+                }}
                 label="Light theme"
               />
             </Row>

@@ -57,6 +57,12 @@ let awaitingHelperRestore = false;
 /** Paste is armed but waiting for foreground restore to complete. */
 let pasteAfterRestorePending = false;
 let pasteAfterRestoreTimer: NodeJS.Timeout | null = null;
+/** True from paste-arming hide until Ctrl+V fires — blocks blur/outside from canceling restore. */
+let pasteFlowActive = false;
+/** Failsafe if restore/paste stalls — clears pasteFlowActive so dismiss works again. */
+let pasteFlowSafetyTimer: NodeJS.Timeout | null = null;
+/** Polls for focus loss when blur/mousedown paths miss (always-on-top edge cases). */
+let focusWatchTimer: NodeJS.Timeout | null = null;
 /** Callback + timer while waiting for `capture` → `prev` before the first show(). */
 let capturePrevCallback: (() => void) | null = null;
 let capturePrevTimer: NodeJS.Timeout | null = null;
@@ -119,6 +125,8 @@ function resetWindowRuntimeState() {
   cancelScheduledBlurHide();
   suppressBlurHideUntil = 0;
   cancelCapturePrev();
+  stopFocusWatchdog();
+  cancelInFlightPaste();
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -221,14 +229,16 @@ function cancelScheduledBlurHide() {
 /** In-window clicks (tabs, pin, settings, …) can briefly blur the HWND on
  *  Windows frameless overlays. Mark them so the deferred blur handler
  *  doesn't treat every button press as "click away". */
-function markInternalPointerDown(ms = 350) {
+function markInternalPointerDown(ms = 500) {
   suppressBlurHideUntil = Math.max(suppressBlurHideUntil, Date.now() + ms);
   cancelScheduledBlurHide();
 }
 
-function isPointerInsideWindow(): boolean {
+function isPointInsideWindow(x?: number, y?: number): boolean {
   if (!isWindowUsable() || !win!.isVisible()) return false;
-  const point = screen.getCursorScreenPoint();
+  const point = x != null && y != null
+    ? { x, y }
+    : screen.getCursorScreenPoint();
   const b = win!.getBounds();
   return (
     point.x >= b.x && point.x <= b.x + b.width &&
@@ -236,11 +246,60 @@ function isPointerInsideWindow(): boolean {
   );
 }
 
+function cancelInFlightPaste() {
+  if (pasteAfterRestoreTimer !== null) {
+    clearTimeout(pasteAfterRestoreTimer);
+    pasteAfterRestoreTimer = null;
+  }
+  if (pasteFlowSafetyTimer !== null) {
+    clearTimeout(pasteFlowSafetyTimer);
+    pasteFlowSafetyTimer = null;
+  }
+  pasteAfterRestorePending = false;
+  awaitingHelperRestore = false;
+  pasteFlowActive = false;
+}
+
+function armPasteFlowSafety() {
+  if (pasteFlowSafetyTimer !== null) clearTimeout(pasteFlowSafetyTimer);
+  pasteFlowSafetyTimer = setTimeout(() => {
+    pasteFlowSafetyTimer = null;
+    if (!pasteFlowActive) return;
+    log("[paste] safety timeout — clearing stalled paste flow");
+    cancelInFlightPaste();
+  }, 2_500);
+}
+
+function stopFocusWatchdog() {
+  if (focusWatchTimer !== null) {
+    clearInterval(focusWatchTimer);
+    focusWatchTimer = null;
+  }
+}
+
+function startFocusWatchdog() {
+  stopFocusWatchdog();
+  focusWatchTimer = setInterval(() => {
+    if (!windowVisible || blurLocked || !isWindowUsable()) return;
+    if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
+    if (Date.now() < suppressBlurHideUntil) return;
+    if (Date.now() - windowShownAt < 500) return;
+    if (win!.isFocused() || win!.webContents.isFocused()) return;
+    if (BrowserWindow.getFocusedWindow() === win) return;
+    if (win!.webContents.isDevToolsOpened()) return;
+    // Do not gate on cursor position — Alt-Tab away leaves the pointer over
+    // the always-on-top panel while focus is already gone (O38).
+    log("[focus-watch] hiding — focus left the window");
+    hideWindow();
+  }, 250);
+}
+
 function scheduleBlurHide() {
   cancelScheduledBlurHide();
   blurHideTimer = setTimeout(() => {
     blurHideTimer = null;
     if (blurLocked || !windowVisible || !isWindowUsable()) return;
+    if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
     if (Date.now() < suppressBlurHideUntil) return;
     if (Date.now() - windowShownAt < 500) return;
     // Transient blur from an internal click — focus never actually left.
@@ -252,16 +311,22 @@ function scheduleBlurHide() {
   }, 150);
 }
 
-function onGlobalMousedown(_e: { x: number; y: number }) {
+function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" | "mouseup") {
   if (!isWindowUsable() || !windowVisible || blurLocked) return;
+  if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
-  if (isPointerInsideWindow()) {
+  if (isPointInsideWindow(e.x, e.y)) {
     markInternalPointerDown();
     return;
   }
-  log("[mouse] outside click — hiding");
+  log(`[mouse] outside ${source} — hiding`);
   hideWindow();
 }
+
+const onGlobalMousedownHandler = (e: { x: number; y: number }) =>
+  onGlobalMouseOutside(e, "mousedown");
+const onGlobalMouseupHandler = (e: { x: number; y: number }) =>
+  onGlobalMouseOutside(e, "mouseup");
 
 /* ── Paste helper ──────────────────────────────────────────────────────────── */
 function ensurePasteScript(): string {
@@ -285,27 +350,32 @@ function ensurePasteScript(): string {
  * Caller is responsible for ensuring the *correct* window has focus first —
  * see `requestRestoreForeground()` and the `hideWindow()` paste path.
  */
-function triggerPaste() {
-  try {
-    // Suppress our own double-Alt detector and any other Ctrl/V observers
-    // briefly — the synthetic input would otherwise look like a real user
-    // keystroke.
-    suppressDoubleAltFor(600);
-    uIOhook.keyTap(UiohookKey.V, [UiohookKey.Ctrl]);
-    log("[paste] uIOhook Ctrl+V sent");
-    return;
-  } catch (err) {
-    log("[paste] uIOhook.keyTap failed, falling back to VBS:", String(err));
-  }
-  // Fallback: write a tiny VBS to userData and run it via wscript.
-  const script = ensurePasteScript();
-  exec(`wscript //nologo "${script}"`, (err) => {
-    if (err) log("[paste] wscript error:", err.message);
-    else      log("[paste] VBS auto-paste sent");
-  });
+function triggerPaste(settleMs = 0) {
+  const fire = () => {
+    try {
+      suppressDoubleAltFor(600);
+      uIOhook.keyTap(UiohookKey.V, [UiohookKey.Ctrl]);
+      log("[paste] uIOhook Ctrl+V sent");
+      pasteFlowActive = false;
+      return;
+    } catch (err) {
+      log("[paste] uIOhook.keyTap failed, falling back to VBS:", String(err));
+    }
+    const script = ensurePasteScript();
+    exec(`wscript //nologo "${script}"`, (err) => {
+      pasteFlowActive = false;
+      if (err) log("[paste] wscript error:", err.message);
+      else      log("[paste] VBS auto-paste sent");
+    });
+  };
+  if (settleMs > 0) setTimeout(fire, settleMs);
+  else fire();
 }
 
-function setPastePending() { pastePending = true; }
+function setPastePending() {
+  pastePending = true;
+  markInternalPointerDown(800);
+}
 
 /* Windows foreground activation
  *
@@ -508,7 +578,7 @@ function requestCapturePrev(onDone: () => void) {
     capturePrevTimer = null;
     log("[focus] capture prev timed out — showing anyway");
     finishCapturePrev();
-  }, 150);
+  }, 250);
 
   const helper = ensureForegroundHelper();
   if (!helper || helper.stdin.destroyed) {
@@ -542,7 +612,7 @@ function handleForegroundHelperLine(line: string) {
         clearTimeout(pasteAfterRestoreTimer);
         pasteAfterRestoreTimer = null;
       }
-      triggerPaste();
+      triggerPaste(80);
     }
     return;
   }
@@ -555,7 +625,8 @@ function handleForegroundHelperLine(line: string) {
         clearTimeout(pasteAfterRestoreTimer);
         pasteAfterRestoreTimer = null;
       }
-      setTimeout(triggerPaste, 200);
+      // Foreground restore failed — give Windows longer to settle z-order.
+      triggerPaste(400);
     }
     return;
   }
@@ -1031,6 +1102,7 @@ function showWindow() {
     runSummonFocusPass(true);
     scheduleSearchFocusVerification("visible-window", [16, 50, 120, 240, 420]);
     safeSendToRenderer(IPC.onVisibilityChanged, true);
+    startFocusWatchdog();
     return;
   }
 
@@ -1091,6 +1163,7 @@ function showWindow() {
     }, 150);
 
     log("[show] window shown at", { x, y, ...size });
+    startFocusWatchdog();
   };
 
   // Capture the app the user was in *before* win.show() steals foreground.
@@ -1101,15 +1174,12 @@ function showWindow() {
 function hideWindow() {
   cancelScheduledBlurHide();
   cancelCapturePrev();
+  const armingPaste = pastePending;
   // A non-paste hide (Esc, click-outside) must not tear down an in-flight
-  // restore→paste started by a row click a moment earlier.
-  if (!pastePending) {
-    if (pasteAfterRestoreTimer !== null) {
-      clearTimeout(pasteAfterRestoreTimer);
-      pasteAfterRestoreTimer = null;
-    }
-    pasteAfterRestorePending = false;
-    awaitingHelperRestore = false;
+  // restore→paste started by a row click a moment earlier — but *do* cancel
+  // when the user explicitly dismisses without arming a new paste.
+  if (!armingPaste && !pasteFlowActive) {
+    cancelInFlightPaste();
   }
   if (!isWindowUsable()) {
     resetWindowRuntimeState();
@@ -1118,6 +1188,7 @@ function hideWindow() {
   blurLocked    = false;
   windowVisible = false;
   focusRunId += 1;
+  stopFocusWatchdog();
 
   try { win!.setIgnoreMouseEvents(true, { forward: true }); }
   catch (err) { log("[hide] setIgnoreMouseEvents failed:", String(err)); }
@@ -1125,7 +1196,10 @@ function hideWindow() {
   // Notify renderer
   safeSendToRenderer(IPC.onVisibilityChanged, false);
 
-  if (pastePending) {
+  if (armingPaste) {
+    pasteFlowActive = true;
+    suppressDoubleAltFor(1_200);
+    armPasteFlowSafety();
     // Auto-paste path. Old approach was just blur + hide + setTimeout(paste,
     // 300ms), trusting Windows to give focus back to the previous app. It
     // didn't — Windows can promote any window in z-order, and the Ctrl+V
@@ -1144,7 +1218,7 @@ function hideWindow() {
     const ours = mnmlWindowHandle();
     if (target && ours && target === ours) {
       try { win!.blur(); } catch { /* noop */ }
-      setTimeout(triggerPaste, 300);
+      triggerPaste(300);
     } else if (target) {
       pasteAfterRestorePending = true;
       requestRestoreForeground(target);
@@ -1155,13 +1229,13 @@ function hideWindow() {
         pasteAfterRestorePending = false;
         awaitingHelperRestore = false;
         log("[paste] restore timed out — pasting anyway");
-        triggerPaste();
-      }, 450);
+        triggerPaste(120);
+      }, 750);
     } else {
       // No captured HWND — fall back to the old behaviour with a slightly
       // longer wait for Windows to settle z-order on its own.
       try { win!.blur(); } catch { /* noop */ }
-      setTimeout(triggerPaste, 300);
+      triggerPaste(350);
     }
   } else {
     // Normal hide (Escape / click-outside).
@@ -1185,6 +1259,10 @@ function toggleWindow() {
     return;
   }
   toggleLockedUntil = now + 650;
+  if (!windowVisible && (pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore || pastePending)) {
+    log("[toggle] ignored show during paste flow");
+    return;
+  }
   if (windowVisible) { log("[toggle] hiding");  hideWindow();  return; }
   log("[toggle] showing");
   showWindow();
@@ -1265,7 +1343,8 @@ app.whenReady().then(() => {
   onNewItem((item)    => safeSendToRenderer(IPC.onItemAdded,   item));
   onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, item));
 
-  uIOhook.on("mousedown", onGlobalMousedown);
+  uIOhook.on("mousedown", onGlobalMousedownHandler);
+  uIOhook.on("mouseup",   onGlobalMouseupHandler);
 
   try {
     uIOhook.start();
@@ -1324,7 +1403,8 @@ app.on("before-quit", () => {
   try { closeDb();     } catch (err) { log("[lifecycle] closeDb:",     String(err)); }
   try { foregroundHelper?.stdin.write("exit\n"); } catch { /* noop */ }
   try { foregroundHelper?.kill(); } catch { /* noop */ }
-  uIOhook.off("mousedown", onGlobalMousedown);
+  uIOhook.off("mousedown", onGlobalMousedownHandler);
+  uIOhook.off("mouseup",   onGlobalMouseupHandler);
   uninstallHotkey?.();
   globalShortcut.unregisterAll();
   tray?.destroy();

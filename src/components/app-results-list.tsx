@@ -74,7 +74,7 @@ export function AppResultsList({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      if (results.length === 0) return;
+      if (isSearching || results.length === 0) return;
       onActivate(results[activeIndex >= 0 ? activeIndex : 0]);
     }
   };

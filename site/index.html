@@ -89,11 +89,11 @@
         <div class="cta">
           <a class="btn primary" id="download-link" href="mnml-setup.exe" data-reveal>
             <span class="btn-label">Download for Windows</span>
-            <span class="btn-meta">v0.2.44 · .exe installer · Windows 10 / 11 · x64</span>
+            <span class="btn-meta">v0.2.45 · .exe installer · Windows 10 / 11 · x64</span>
           </a>
         </div>
         <p class="hero-foot">
-          Free and MIT-licensed. Latest release <strong>v0.2.44</strong> · installs in seconds, uninstalls cleanly.
+          Free and MIT-licensed. Latest release <strong>v0.2.45</strong> · installs in seconds, uninstalls cleanly.
         </p>
       </div>
 
@@ -352,9 +352,19 @@
       <h2 class="eyebrow">Recent updates</h2>
       <p class="updates-lede">
         Everything below ships in the current Windows installer
-        (<a href="mnml-setup.exe">v0.2.44</a>, May&nbsp;2026).
+        (<a href="mnml-setup.exe">v0.2.45</a>, June&nbsp;2026).
         Older builds auto-update via the in-app banner when a newer release is available.
       </p>
+
+      <article class="release">
+        <h3>v0.2.45 — dismiss, paste, and security</h3>
+        <ul>
+          <li><strong>Click-outside and Alt-Tab dismiss.</strong> Outside clicks use uIOhook screen coordinates plus mouseup; a focus watchdog hides when focus leaves — including when the pointer still sits over the always-on-top panel.</li>
+          <li><strong>Paste reliability.</strong> Auto-paste runs under a paste-flow lock until <kbd class="kbd inline">Ctrl + V</kbd> fires; double-Alt cannot resummon mid-restore; stalled paste clears after 2.5 s.</li>
+          <li><strong>Security.</strong> Vite and Electron dependency patches; marketing site CSP and <code>X-Frame-Options</code> headers with <code>npm run check:site-headers</code> validation.</li>
+          <li><strong>Polish.</strong> Settings no longer reopens after Alt-Alt hide; Enter waits for app search; quick-paste respects in-flight search; IPC id/limit validation.</li>
+        </ul>
+      </article>
 
       <article class="release">
         <h3>v0.2.44 — paste, focus, and polish</h3>
@@ -391,7 +401,7 @@
       <p class="install-lede">One installer. No setup, no account, no first-run wizard. Lives in your tray and auto-launches with Windows so the hotkey is always one keypress away.</p>
       <a class="btn primary big" href="mnml-setup.exe" id="download-link-2">
         <span class="btn-label">Download for Windows</span>
-        <span class="btn-meta">v0.2.44 · .exe installer · Windows 10 / 11 · x64</span>
+        <span class="btn-meta">v0.2.45 · .exe installer · Windows 10 / 11 · x64</span>
       </a>
       <p class="install-alt">
         Free, MIT-licensed, ~70 MB installed. Uninstall any time via Windows Settings.

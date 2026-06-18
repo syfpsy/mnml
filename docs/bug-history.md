@@ -85,6 +85,19 @@ These are the bugs we kept hitting because Windows protects against background a
 | O33 | Rapid delete used closure snapshot — wrong row reappeared. | Functional `setItems` filter; refetch on IPC failure. |
 | O34 | Image restore skipped path guard / pasted preview when PNG missing. | `assertResolvedWithinBase`; fail closed on missing image. |
 | O35 | `autoPaste` setting ignored after atomic activate. | `finishActivate()` gates `setPastePending` on setting; always hides on activate. |
+| O36 | Window stayed open after click-outside — uIOhook used `getCursorScreenPoint()` instead of event coords; no mouseup/outside-focus fallback. | `isPointInsideWindow(x,y)` from uIOhook; mouseup listener; 250 ms focus watchdog while visible. |
+| O37 | Auto-paste cancelled by late blur hide — second `hideWindow()` cleared `pasteAfterRestorePending` after the 350 ms internal-click suppress expired. | `pasteFlowActive` until Ctrl+V; blur/outside skip while paste in flight; longer restore/settle delays. |
+| O38 | Alt-Tab away left the panel visible when the cursor rested over the always-on-top window — focus watchdog gated on pointer position. | Watchdog hides on focus loss alone; `suppressBlurHideUntil` still covers transient internal clicks. |
+| O39 | Enter in search launched a stale app result while `useAppSearch` was still fetching. | Guard on `appSearch.isSearching` in search Enter + app list Enter. |
+| O40 | Settings toggle showed wrong value after failed `updateSetting`. | `useSettings.update` refetches on error; light theme applies only after confirmed save. |
+| O41 | Save-as-snippet showed confirmation when `savedFromItem` failed. | `SaveBtn` catches IPC errors before flipping to the checkmark. |
+| O42 | Invalid/zero IPC item ids could hit SQLite handlers. | `requirePositiveInt()` on restore/remove/pin/image/snippet paths. |
+| O43 | Stalled paste flow blocked click-outside forever. | `armPasteFlowSafety()` clears `pasteFlowActive` after 2.5 s. |
+| O44 | Alt-Alt hide left Settings open — next summon reopened the sheet. | Reset `settingsOpen` + remount SavedList on hide. |
+| O45 | Double-Alt during restore→paste could reshow mnml before Ctrl+V — paste landed in search. | Block show while paste flow active; suppress double-Alt during paste hide. |
+| O46 | Ctrl+1-9 quick-paste ignored app-search-in-flight guard. | `appSearch.isSearching` check in quick-paste ref. |
+| O47 | Snippet delete disarmed on failed IPC remove. | try/catch around `savedRemove`. |
+| O48 | `savedUpdate` skipped id validation; list/search limits unbounded. | `requirePositiveInt` on update; `clampListLimit()`. |
 
 ---
 

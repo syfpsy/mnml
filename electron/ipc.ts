@@ -33,6 +33,12 @@ function finishActivate(paste: boolean, windowControl: WindowControl) {
   windowControl.hide();
 }
 
+function clampListLimit(limit: unknown, fallback: number, max = 500): number {
+  const n = typeof limit === "number" ? limit : Number(limit);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(1, Math.floor(n)));
+}
+
 function broadcastSavedChanged() {
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
@@ -49,44 +55,60 @@ function broadcastItemsCleared() {
   }
 }
 
+function requirePositiveInt(id: unknown): number | null {
+  const n = typeof id === "number" ? id : Number(id);
+  if (!Number.isFinite(n) || n <= 0 || Math.floor(n) !== n) return null;
+  return n;
+}
+
 export function registerIpc(windowControl: WindowControl) {
   // ── Clipboard items ───────────────────────────────────────────────────────
 
   ipcMain.handle(
     IPC.listRecent,
     (_, { limit, type }: { limit?: number; type?: ItemType }) =>
-      listRecent(limit ?? 10, type),
+      listRecent(clampListLimit(limit, 10), type),
   );
 
   ipcMain.handle(
     IPC.search,
     (_, { query, type, limit }: { query: string; type?: ItemType; limit?: number }) => {
-      const scored = search(query ?? "", { limit: limit ?? 50, type });
+      const scored = search(query ?? "", { limit: clampListLimit(limit, 50), type });
       return scored.map((s) => s.item);
     },
   );
 
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
-    const item = getById(id);
+    const itemId = requirePositiveInt(id);
+    if (!itemId) return;
+    const item = getById(itemId);
     if (!item) return;
     if (!restoreItem(item)) return;
     finishActivate(paste, windowControl);
   });
 
   ipcMain.handle(IPC.remove, (_, id: number) => {
-    deleteById(id);
-    evictThumb(id);
+    const itemId = requirePositiveInt(id);
+    if (!itemId) return;
+    deleteById(itemId);
+    evictThumb(itemId);
   });
   ipcMain.handle(IPC.clear, () => {
     clearAll();
     evictAllThumbs();
     broadcastItemsCleared();
   });
-  ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) =>
-    setPinned(id, pinned),
-  );
+  ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) => {
+    const itemId = requirePositiveInt(id);
+    if (!itemId) return;
+    setPinned(itemId, pinned);
+  });
 
-  ipcMain.handle(IPC.getImage, (_, id: number): string | null => getThumbDataUrl(id));
+  ipcMain.handle(IPC.getImage, (_, id: number): string | null => {
+    const itemId = requirePositiveInt(id);
+    if (!itemId) return null;
+    return getThumbDataUrl(itemId);
+  });
 
   // ── App launcher (Start-Menu apps + Windows Settings + classic tools) ────
 
@@ -120,23 +142,29 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedUpdate,
     (_, { id, label, content }: { id: number; label: string; content: string }) => {
-      updateSaved(id, label, content);
+      const snippetId = requirePositiveInt(id);
+      if (!snippetId) return;
+      updateSaved(snippetId, label, content);
       broadcastSavedChanged();
     },
   );
 
   ipcMain.handle(IPC.savedRemove, (_, id: number) => {
-    deleteSaved(id);
+    const snippetId = requirePositiveInt(id);
+    if (!snippetId) return;
+    deleteSaved(snippetId);
     broadcastSavedChanged();
   });
 
   ipcMain.handle(
     IPC.savedRestore,
     (_, { id, paste = false }: { id: number; paste?: boolean }) => {
-      const snippet = getSavedById(id);
+      const snippetId = requirePositiveInt(id);
+      if (!snippetId) return;
+      const snippet = getSavedById(snippetId);
       if (!snippet) return;
       restoreText(snippet.content);
-      touchSaved(id);
+      touchSaved(snippetId);
       broadcastSavedChanged();
       finishActivate(paste, windowControl);
     },
@@ -145,7 +173,9 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedFromItem,
     (_, { itemId, label }: { itemId: number; label?: string }): SavedSnippet | null => {
-      const item = getById(itemId);
+      const id = requirePositiveInt(itemId);
+      if (!id) return null;
+      const item = getById(id);
       if (!item) return null;
       const content = item.content_text ?? item.content_url ?? item.preview;
       if (!content) return null;

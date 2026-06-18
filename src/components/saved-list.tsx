@@ -245,7 +245,11 @@ function DeleteSnippetBtn({ id }: { id: number }) {
         e.stopPropagation();
         if (armed) {
           disarm();
-          await bridge.savedRemove(id);
+          try {
+            await bridge.savedRemove(id);
+          } catch {
+            /* row stays — user can retry */
+          }
         } else {
           arm();
         }

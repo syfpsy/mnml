@@ -1,11 +1,28 @@
 # mnml Changelog
 
-## Unreleased
+## v0.2.45 — 2026-06-05
+
+Reliability and security release: dismiss/paste hardening, dependency patches, and site security headers.
 
 ### Security
 - **Dependency patches** — `vite` pinned to `^6.4.3` (CVE-2025-62522 / dev-server `fs.deny` bypass on Windows); `electron` upgraded to `^42.3.3` (patched Chromium/Electron advisories).
 - **Marketing site headers** — `vercel.json` now sends `X-Frame-Options: DENY` and a scoped `Content-Security-Policy` (clickjacking + CSP findings on the Vercel site).
 - **Header verification** — `npm run check:site-headers` validates `vercel.json`; optional live check via `MNML_SITE_URL`.
+
+### Fixed
+- **Window sometimes stayed open after click-outside** — uIOhook now uses event screen coordinates (not a separate cursor poll), listens for outside `mouseup` as well as `mousedown`, and a focus watchdog hides when focus leaves with the pointer outside.
+- **Auto-paste sometimes silently failed** — spurious blur/click-outside could cancel an in-flight foreground restore after the 350 ms suppress window; paste now runs under `pasteFlowActive` until Ctrl+V fires, with longer restore/settle timings.
+- **Alt-Tab left the panel visible** — focus watchdog no longer requires the cursor to be outside (pointer can sit over the always-on-top window after Alt-Tab).
+- **Enter launched stale app results** — search Enter and app list Enter wait until app search finishes (`isSearching`).
+- **Settings toggle drift on IPC failure** — failed `updateSetting` refetches settings instead of leaving a wrong optimistic value; light theme only applies after a confirmed save.
+- **Save-as-snippet false confirmation** — bookmark button no longer shows “saved” when `savedFromItem` fails.
+- **Invalid IPC item ids** — restore/remove/pin/image/snippet handlers reject non-positive ids.
+- **Stalled paste blocked dismiss** — 2.5 s paste-flow safety timeout clears a stuck restore→paste sequence.
+- **Settings reappeared after Alt-Alt dismiss** — hide resets `settingsOpen` and remounts SavedList (drops add-snippet form).
+- **Double-Alt during paste could resummon early** — show is blocked while paste flow is active; Alt suppressed during paste hide.
+- **Ctrl+1-9 during app search** — quick-paste waits until app search finishes.
+- **Snippet delete IPC failure** — failed remove no longer disarms as if delete succeeded.
+- **IPC hardening** — `savedUpdate` id validation; list/search limits clamped to 1–500.
 
 ## v0.2.44 — 2026-05-31
 

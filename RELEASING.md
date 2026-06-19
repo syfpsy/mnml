@@ -137,7 +137,16 @@ npm run check:site-headers
 vercel deploy --prod    # confirm first — updates copy only; binaries redirect to GitHub
 ```
 
-### 5. Verify
+### 5. Publish (when **both** platforms are uploaded)
+
+```bash
+gh release edit vX.Y.Z --draft=false --latest
+```
+
+The local scripts only auto-publish when **both** `mnml-setup.exe` and `mnml-mac.zip`
+are on the same release — so `v0.2.46` stays `latest` for Windows until then.
+
+### 6. Verify
 
 - `https://mnml.nxyz.art/mnml-setup.exe` → 307 → GitHub → 200
 - `https://mnml.nxyz.art/latest-mac.yml` → version matches tag

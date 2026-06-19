@@ -64,8 +64,16 @@ gh release upload "$TAG" \
   release/mnml-mac.zip.blockmap \
   --clobber
 
-# Publish draft → latest (safe while Windows artifacts may follow later)
-gh release edit "$TAG" --draft=false --latest
+# Only mark latest when Windows artifacts are also present (keeps v0.2.46
+# serving /mnml-setup.exe until this PC runs release-local-win.ps1).
+if gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null | grep -q 'mnml-setup.exe'; then
+  echo "[release] Windows + macOS artifacts present — publishing as latest"
+  gh release edit "$TAG" --draft=false --latest
+else
+  echo "[release] macOS uploaded. Release stays draft until Windows artifacts are added."
+  echo "  On Windows: .\\scripts\\release-local-win.ps1 -Tag $TAG"
+  echo "  Then:       gh release edit $TAG --draft=false --latest"
+fi
 
 rm -f "$NOTES_FILE"
 

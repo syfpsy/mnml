@@ -43,7 +43,14 @@ gh release upload $Tag `
   release/mnml-setup.exe.blockmap `
   --clobber
 
-gh release edit $Tag --draft=false --latest
+$hasMac = (gh release view $Tag --json assets -q ".assets[].name" 2>$null) -match "mnml-mac"
+if ($hasMac) {
+  Write-Host "[release] Windows + macOS complete — publishing as latest"
+  gh release edit $Tag --draft=false --latest
+} else {
+  Write-Host "[release] Windows uploaded. Run mac-mini-release.sh on Mac, then:"
+  Write-Host "  gh release edit $Tag --draft=false --latest"
+}
 
 Remove-Item $notesFile -Force -ErrorAction SilentlyContinue
 Write-Host "Done. https://github.com/syfpsy/mnml/releases/tag/$Tag"

@@ -22,8 +22,8 @@ npm ci
 npm run build:release:win
 npm run verify:release -- win
 
-$notesFile = New-TemporaryFile
-node scripts/extract-changelog.mjs $version | Set-Content $notesFile
+$notesFile = Join-Path $env:TEMP "mnml-release-notes-$version.md"
+node scripts/write-gh-release-notes.mjs $version --out $notesFile
 
 $releaseExists = $false
 try { gh release view $Tag 2>$null; $releaseExists = $true } catch {}
@@ -43,5 +43,7 @@ gh release upload $Tag `
   release/mnml-setup.exe.blockmap `
   --clobber
 
-Remove-Item $notesFile -Force
+gh release edit $Tag --draft=false --latest
+
+Remove-Item $notesFile -Force -ErrorAction SilentlyContinue
 Write-Host "Done. https://github.com/syfpsy/mnml/releases/tag/$Tag"

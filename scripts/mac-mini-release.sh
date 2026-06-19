@@ -45,7 +45,7 @@ npm run build:release:mac
 npm run verify:release -- mac
 
 NOTES_FILE="$(mktemp)"
-node scripts/extract-changelog.mjs "$VERSION" > "$NOTES_FILE" || true
+node scripts/write-gh-release-notes.mjs "$VERSION" --out "$NOTES_FILE"
 
 if ! gh release view "$TAG" >/dev/null 2>&1; then
   echo "[release] creating GitHub release $TAG"
@@ -63,6 +63,9 @@ gh release upload "$TAG" \
   release/latest-mac.yml \
   release/mnml-mac.zip.blockmap \
   --clobber
+
+# Publish draft → latest (safe while Windows artifacts may follow later)
+gh release edit "$TAG" --draft=false --latest
 
 rm -f "$NOTES_FILE"
 

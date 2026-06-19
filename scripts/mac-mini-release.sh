@@ -17,8 +17,8 @@ cd "$ROOT"
 
 TAG="${1:-}"
 if [[ -n "$TAG" ]]; then
-  git fetch --tags origin
-  git checkout "$TAG"
+  git fetch --tags --force origin
+  git checkout -f "$TAG"
 fi
 
 VERSION="$(node -p "require('./package.json').version")"
@@ -40,6 +40,7 @@ command -v gh >/dev/null || { echo "gh CLI required (brew install gh)"; exit 1; 
 
 echo "[release] mnml ${VERSION} (${TAG}) on $(uname -m)"
 
+rm -rf node_modules release
 npm ci
 npm run build:release:mac
 npm run verify:release -- mac

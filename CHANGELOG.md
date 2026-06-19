@@ -5,7 +5,7 @@
 macOS port — clipboard history, snippets, launcher, summon, auto-paste, and CI releases.
 
 ### Added
-- **macOS app (beta)** — universal DMG + ZIP for Apple Silicon and Intel. Double-tap **Option** to summon; **⌘1–9** quick-paste; **⌘V** auto-paste with focus restore.
+- **macOS app (beta)** — arm64 DMG + ZIP for Apple Silicon. Double-tap **Option** to summon; **⌘1–9** quick-paste; **⌘V** auto-paste with focus restore.
 - **macOS launcher** — indexes `/Applications`, `~/Applications`, and curated System Settings deep links.
 - **Platform layer** — `electron/platform/*` splits foreground activation, paste synthesis, and UI copy between Windows and macOS.
 - **CI** — GitHub Actions builds Windows + macOS on version tags; site redirects for `mnml-mac.zip`, `mnml-mac.dmg`, and `latest-mac.yml`.
@@ -16,6 +16,7 @@ macOS port — clipboard history, snippets, launcher, summon, auto-paste, and CI
 
 ### Internal
 - Foreground Win32 helper moved to `electron/platform/foreground-win.ts`; macOS uses `osascript` via `foreground-darwin.ts`.
+- **macOS packaging** — arm64-only builds (Apple Silicon). Universal builds failed when `copy-native-deps` copied one native binary into both arch slices; `rebuild-native.mjs` strips foreign uiohook prebuilds before `electron-rebuild`.
 
 ## v0.2.46 — 2026-05-31
 

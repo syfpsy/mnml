@@ -11,6 +11,7 @@ import fs   from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertSafeBasename, resolvePathWithinBase } from './lib/safe-path.mjs';
+import { findFile, findUiohookNode } from './lib/native-bindings.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT      = path.resolve(__dirname, '..');
@@ -29,7 +30,14 @@ const MODULES = [
  * @param {import('electron-builder').AfterPackContext} ctx
  */
 export default async function afterPack(ctx) {
-  // With asar:false the app content lives at <appOutDir>/resources/app/
+  // Universal mac builds need per-arch native binaries from electron-builder itself.
+  // This hook copies host node_modules and is only safe for single-arch targets.
+  const arch = ctx.arch;
+  if (process.platform === "darwin" && arch === "universal") {
+    console.log("[copy-native-deps] skip — universal mac build uses per-arch rebuild");
+    return;
+  }
+
   const destMods = resolvePathWithinBase(
     resolvePathWithinBase(ctx.appOutDir, 'resources', 'app'),
     'node_modules',
@@ -73,8 +81,8 @@ function copyModules(destBase) {
 
 function verifyCopiedModules(destBase) {
   const failures = [];
-  const sqlite = findNode(path.join(destBase, "better-sqlite3"), "better_sqlite3.node");
-  const uiohook = findAnyNode(path.join(destBase, "uiohook-napi"));
+  const sqlite = findFile(path.join(destBase, "better-sqlite3"), "better_sqlite3.node");
+  const uiohook = findUiohookNode(path.join(destBase, "uiohook-napi"));
   if (!sqlite) failures.push("better-sqlite3: better_sqlite3.node missing in packaged app");
   if (!uiohook) failures.push("uiohook-napi: .node binary missing in packaged app");
   if (failures.length) {
@@ -82,30 +90,6 @@ function verifyCopiedModules(destBase) {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-}
-
-function findNode(dir, name) {
-  if (!fs.existsSync(dir)) return null;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const hit = findNode(full, name);
-      if (hit) return hit;
-    } else if (entry.name === name) return full;
-  }
-  return null;
-}
-
-function findAnyNode(dir) {
-  if (!fs.existsSync(dir)) return null;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const hit = findAnyNode(full);
-      if (hit) return hit;
-    } else if (entry.name.endsWith(".node")) return full;
-  }
-  return null;
 }
 
 function copyDir(from, to) {

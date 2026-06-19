@@ -19,12 +19,12 @@
     "build:dir": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --dir",
     "build:release": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder",
     "build:release:win": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --win",
-    "build:release:mac": "npm run check:summon && npm run verify:mac-icon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --mac",
+    "build:release:mac": "npm run check:summon && npm run verify:mac-icon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --mac --arm64",
     "release:notes": "node scripts/extract-changelog.mjs",
     "verify:release": "node scripts/verify-release-artifacts.mjs",
     "release": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --publish always",
-    "postinstall": "electron-rebuild -f -w better-sqlite3 uiohook-napi",
-    "rebuild": "electron-rebuild -f -w better-sqlite3 uiohook-napi"
+    "postinstall": "node scripts/rebuild-native.mjs",
+    "rebuild": "node scripts/rebuild-native.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
@@ -115,8 +115,8 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
       ]
     },
     "dmg": {

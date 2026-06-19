@@ -33,7 +33,21 @@ chmod +x scripts/mac-mini-release.sh
 
 The script will:
 
-1. `npm ci` + `npm run build:release:mac` (universal DMG + ZIP)
+## On your Mac mini (reset local edits, then build)
+
+Local edits to `build/icon-512.png`, `build/icon.ico`, and `scripts/mac-mini-release.sh` block `git pull`. Reset to match GitHub, then build:
+
+```bash
+cd ~/motion/mnml
+git fetch origin --tags --force
+git reset --hard origin/master
+rm -rf node_modules release
+npm ci
+npm run build:release:mac
+```
+
+`npm ci` must show `postinstall` running `node scripts/rebuild-native.mjs` (not bare `electron-rebuild`). Verify should show `darwin-arm64`, not `win32-x64`.
+
 2. **Sign** via Keychain / `CSC_NAME` (electron-builder)
 3. **Notarize** via `scripts/notarize-mac.cjs` when Apple env vars are set
 4. Create or update the GitHub release and upload `mnml-mac.*` + `latest-mac.yml`

@@ -40,7 +40,7 @@ changes. Normal flow: **build → fill the new section → commit (when asked).*
 | `npm run dev` | Vite dev server + Electron, detached DevTools, HMR. |
 | `npm run build` | `check:summon` → `bump-version` → `rebuild` → `verify-native-bindings` → `tsc` → `vite build` → `electron-builder` (current OS). |
 | `npm run build:release:win` | Windows NSIS only → `release/mnml-setup.exe` + `latest.yml` + blockmap. |
-| `npm run build:release:mac` | macOS universal DMG + ZIP → `release/mnml-mac.*` + `latest-mac.yml`. |
+| `npm run build:release:mac` | macOS arm64 DMG + ZIP → `release/mnml-mac.*` + `latest-mac.yml`. |
 | `npm run verify:release` | `node scripts/verify-release-artifacts.mjs [win\|mac\|all]`. |
 | `npm run icons` | Regenerate icons from `build/icon.svg`. |
 | `npm run check:summon` | Guard for window-summon/focus invariants (runs before every build). |
@@ -55,7 +55,7 @@ changes. Normal flow: **build → fill the new section → commit (when asked).*
 `electron-builder` config is in `package.json` `build`: appId `dev.mnml.app`,
 `asar:false`, `npmRebuild:false`, `afterPack: scripts/copy-native-deps.mjs`,
 `afterSign: scripts/notarize-mac.cjs` (macOS only, when Apple env vars set),
-`extraResources` ships icons, NSIS x64 (`mnml-setup.exe`), mac universal
+`extraResources` ships icons, NSIS x64 (`mnml-setup.exe`), mac arm64
 (`mnml-mac.dmg` / `mnml-mac.zip`).
 
 ## Distribution model (important)

@@ -38,17 +38,25 @@ changes. Normal flow: **build → fill the new section → commit (when asked).*
 | Script | Does |
 | --- | --- |
 | `npm run dev` | Vite dev server + Electron, detached DevTools, HMR. |
-| `npm run build` | `check:summon` → `bump-version` → `tsc -b` → `vite build` → `electron-builder`. Emits `release/mnml-setup.exe` + `latest.yml` + `mnml-setup.exe.blockmap`. |
-| `npm run build:dir` | Same, `--dir` (unpacked, no installer) for quick checks. |
-| `npm run release` | Same pipeline with `--publish always` (uses `build.publish`). |
+| `npm run build` | `check:summon` → `bump-version` → `rebuild` → `verify-native-bindings` → `tsc` → `vite build` → `electron-builder` (current OS). |
+| `npm run build:release:win` | Windows NSIS only → `release/mnml-setup.exe` + `latest.yml` + blockmap. |
+| `npm run build:release:mac` | macOS universal DMG + ZIP → `release/mnml-mac.*` + `latest-mac.yml`. |
+| `npm run verify:release` | `node scripts/verify-release-artifacts.mjs [win\|mac\|all]`. |
 | `npm run icons` | Regenerate icons from `build/icon.svg`. |
-| `npm run check:summon` | Guard for the window-summon/focus invariants (runs before every build). |
+| `npm run check:summon` | Guard for window-summon/focus invariants (runs before every build). |
+
+**Local release scripts (no GitHub Actions):**
+
+| Script | Machine | Does |
+| --- | --- | --- |
+| `scripts/release-local-win.ps1` | Windows + VS Build Tools | Build + `gh release upload` Windows artifacts. |
+| `scripts/mac-mini-release.sh` | Mac mini | Build, sign, notarize, upload macOS artifacts. See [`docs/MAC-MINI-RELEASE.md`](./docs/MAC-MINI-RELEASE.md). |
 
 `electron-builder` config is in `package.json` `build`: appId `dev.mnml.app`,
-`asar:false`, `npmRebuild:false`, `afterPack: scripts/copy-native-deps.mjs` (places
-the rebuilt native binaries), `extraResources` ships `icon.ico` + `tray.png`, NSIS
-x64, `artifactName: mnml-setup.exe`, one-click per-user with shortcuts +
-`build/installer.nsh`.
+`asar:false`, `npmRebuild:false`, `afterPack: scripts/copy-native-deps.mjs`,
+`afterSign: scripts/notarize-mac.cjs` (macOS only, when Apple env vars set),
+`extraResources` ships icons, NSIS x64 (`mnml-setup.exe`), mac universal
+(`mnml-mac.dmg` / `mnml-mac.zip`).
 
 ## Distribution model (important)
 
@@ -58,10 +66,14 @@ x64, `artifactName: mnml-setup.exe`, one-click per-user with shortcuts +
 /mnml-setup.exe          → github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe
 /latest.yml              → …/releases/latest/download/latest.yml
 /mnml-setup.exe.blockmap → …/releases/latest/download/mnml-setup.exe.blockmap
+/mnml-mac.zip            → …/releases/latest/download/mnml-mac.zip
+/mnml-mac.dmg            → …/releases/latest/download/mnml-mac.dmg
+/latest-mac.yml          → …/releases/latest/download/latest-mac.yml
+/mnml-mac.zip.blockmap   → …/releases/latest/download/mnml-mac.zip.blockmap
 ```
 
-Download buttons point at `/mnml-setup.exe`. `/releases/latest/download/` always
-tracks the newest release, so **future releases need no `vercel.json` change**.
+Windows auto-update reads `latest.yml`; macOS reads `latest-mac.yml`. Both
+redirect to GitHub **latest** release assets.
 
 > **Why** (cautionary tale): binaries were once served straight from `site/` via
 > manual `vercel --prod`. But any git push triggered a Vercel **git-integration**
@@ -83,7 +95,65 @@ in `package.json` `build.publish`:
 So it fetches `…/latest.yml`, which **redirects** to the GitHub manifest. (Planned:
 switch to `provider: "github"` once signed builds publish to Releases directly.)
 
-## Release runbook (app)
+## Release runbook (manual — default)
+
+GitHub Actions is **manual-only** (`workflow_dispatch`) to save minutes. Normal
+path is local builds + `gh release upload`.
+
+### 1. Prepare the repo
+
+1. Fill `CHANGELOG.md` for the version (already in `package.json`).
+2. Commit and push `master`.
+3. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+### 2. macOS (Mac mini — sign + notarize)
+
+See **[`docs/MAC-MINI-RELEASE.md`](./docs/MAC-MINI-RELEASE.md)**.
+
+```bash
+git clone https://github.com/syfpsy/mnml.git && cd mnml
+git checkout vX.Y.Z
+cp ~/.config/mnml/.env.release .env.release   # your saved Apple credentials
+./scripts/mac-mini-release.sh
+```
+
+### 3. Windows (this PC — needs Visual Studio Build Tools)
+
+```powershell
+git pull
+git checkout vX.Y.Z
+.\scripts\release-local-win.ps1
+```
+
+Requires `electron-rebuild` (native modules). Install **VS 2022 Build Tools** with
+the “Desktop development with C++” workload if `npm run rebuild` fails.
+
+### 4. Site
+
+After the GitHub release is **published** (not draft) with `--latest`:
+
+```bash
+npm run check:site-headers
+vercel deploy --prod    # confirm first — updates copy only; binaries redirect to GitHub
+```
+
+### 5. Verify
+
+- `https://mnml.nxyz.art/mnml-setup.exe` → 307 → GitHub → 200
+- `https://mnml.nxyz.art/latest-mac.yml` → version matches tag
+- `npm run verify:release -- all` locally before upload
+
+### GitHub Actions (optional)
+
+When minutes are available: **Actions → Release (manual)** → tag + platform.
+Store Apple secrets in the repo for macOS CI notarization.
+
+---
+
+## Release runbook (legacy / reference)
+
+<details>
+<summary>Previous single-platform Windows steps</summary>
 
 1. **Build**: `npm run build` (bumps version, runs guard + typecheck + bundle,
    emits the three `release/` artifacts).
@@ -95,17 +165,9 @@ switch to `provider: "github"` once signed builds publish to Releases directly.)
      release/mnml-setup.exe release/latest.yml release/mnml-setup.exe.blockmap \
      --title "vX.Y.Z" --notes "…" --latest
    ```
-   `--latest` is what makes the redirects resolve to this build.
-5. **Verify**: `https://mnml.nxyz.art/mnml-setup.exe` → 307 → GitHub → 200;
-   `…/latest.yml` shows the new version.
-6. **Keep only the latest release live.** After publishing, delete superseded
-   releases (and their tags) so the Releases page shows only the current version —
-   a confirmed, irreversible action. Old releases don't affect updates (clients read
-   `latest.yml`), so cleanup is safe.
+5. **Verify**: `https://mnml.nxyz.art/mnml-setup.exe` → 307 → GitHub → 200.
 
-> `npm run release` (`--publish always`) can publish during the build instead of the
-> manual `gh release create`, but the manual path is the predictable default. Either
-> way, publishing is a confirmed action.
+</details>
 
 ## Site deploy (Vercel)
 
@@ -120,16 +182,19 @@ keys.**
   `cname.vercel-dns.com`. (The repo's homepage URL should point at the live site.)
 - When brand artwork changes, bump the OG filename (`og-vN.png`) to bust caches.
 
-## Code signing (in progress)
+## Code signing
+
+### macOS (Mac mini)
+
+**Developer ID + notarization** via `.env.release` on the Mac mini. See
+[`docs/MAC-MINI-RELEASE.md`](./docs/MAC-MINI-RELEASE.md). `scripts/notarize-mac.cjs`
+runs automatically after sign when `APPLE_*` env vars are set.
+
+### Windows (in progress)
 
 Not yet signed → SmartScreen "unrecognized app" prompt on first run (More info →
-Run anyway). Authenticode reputation needs an OV/EV cert on hardware/cloud (a
-Turkish business e-imza token is document-signing only — no Code Signing EKU — and
-won't work). **Plan**: approved into **SignPath Foundation** (free OSS signing,
-applied). Once active: (1) CI builds + submits artifacts to SignPath; (2) publish
-the **signed** installer + `latest.yml` to Releases (redirects already serve them);
-(3) switch `build.publish` to `provider: "github"`. Until then, keep the
-README/privacy SmartScreen note accurate.
+Run anyway). **Plan**: SignPath Foundation (free OSS signing, applied). Until then,
+keep the README SmartScreen note accurate.
 
 ## Secrets & environment
 

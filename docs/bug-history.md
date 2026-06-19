@@ -99,6 +99,7 @@ These are the bugs we kept hitting because Windows protects against background a
 | O47 | Snippet delete disarmed on failed IPC remove. | try/catch around `savedRemove`. |
 | O48 | `savedUpdate` skipped id validation; list/search limits unbounded. | `requirePositiveInt` on update; `clampListLimit()`. |
 | O49 | v0.2.45 installer failed to start — `better_sqlite3.node` missing after Electron 42 bump without native rebuild. | Revert Electron to 33.4.11; `verify-native-bindings.mjs` + rebuild before pack; CI `build:release`. |
+| O50 | GitHub Actions minutes exhausted; macOS must sign on Mac mini. | Manual release scripts; `workflow_dispatch` CI; `docs/MAC-MINI-RELEASE.md`. |
 
 ---
 

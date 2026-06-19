@@ -53,6 +53,7 @@ export const bridge = {
     ok: boolean; available?: boolean; version?: string | null; message?: string;
   }>,
   getVersion:         () => window.mnml.getVersion() as Promise<string>,
+  getPlatformUi:      () => window.mnml.getPlatformUi(),
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    () => window.mnml.storageGet() as Promise<{

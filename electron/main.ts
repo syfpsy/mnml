@@ -1,9 +1,8 @@
 import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
-import { uIOhook, UiohookKey } from "uiohook-napi";
+import { uIOhook } from "uiohook-napi";
 import { autoUpdater } from "electron-updater";
 import { getDb } from "./db/index.js";
 import { getSetting } from "./db/settings.js";
@@ -14,6 +13,9 @@ import { IPC } from "./ipc-channels.js";
 import { registerIpc } from "./ipc.js";
 import { rebuildAppIndex } from "./search/app-search.js";
 import { log, logPathForDisplay } from "./utils/log.js";
+import { FALLBACK_SHORTCUT, IS_MAC, IS_WIN, PLATFORM_UI } from "./platform/config.js";
+import { triggerPaste } from "./platform/paste.js";
+import { ForegroundService } from "./platform/foreground.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -27,14 +29,12 @@ process.env.VITE_PUBLIC   = app.isPackaged
 const DEV_URL = process.env["VITE_DEV_SERVER_URL"];
 
 const WINDOW_SIZE = { width: 440, height: 540 };
-const FALLBACK_SHORTCUT = "Control+Shift+V";
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let uninstallHotkey: (() => void) | null = null;
 let blurLocked  = false;
 let pastePending = false;
-let pasteScriptPath: string | null = null;
 let rendererReady = false;
 let showWhenReady = false;
 let loggedSearchFocusForShow = false;
@@ -42,16 +42,13 @@ let loggedNativeFocusForShow = false;
 let nativeForegroundRequestsForShow = 0;
 let toggleLockedUntil = 0;
 let focusRunId = 0;
-let foregroundHelper: ChildProcessWithoutNullStreams | null = null;
-let foregroundHelperBuffer = "";
 let updaterInterval: NodeJS.Timeout | null = null;
+let fg: ForegroundService | null = null;
 /**
- * Decimal string of the Win32 HWND that owned foreground focus right before
- * mnml was summoned. Captured via helper `capture` *before* win.show() steals focus.
- * Used by the auto-paste path to ensure Ctrl+V lands on the originating app
- * rather than on whatever Windows promoted in z-order when we hid.
+ * Opaque foreground target captured before win.show() — Win32 HWND decimal
+ * string on Windows, `pid:<n>` on macOS. Used to restore focus for auto-paste.
  */
-let prevForegroundHwnd: string | null = null;
+let prevForegroundTarget: string | null = null;
 /** True while waiting for helper "ok"/"miss" after a `restore <hwnd>` request. */
 let awaitingHelperRestore = false;
 /** Paste is armed but waiting for foreground restore to complete. */
@@ -63,10 +60,6 @@ let pasteFlowActive = false;
 let pasteFlowSafetyTimer: NodeJS.Timeout | null = null;
 /** Polls for focus loss when blur/mousedown paths miss (always-on-top edge cases). */
 let focusWatchTimer: NodeJS.Timeout | null = null;
-/** Callback + timer while waiting for `capture` → `prev` before the first show(). */
-let capturePrevCallback: (() => void) | null = null;
-let capturePrevTimer: NodeJS.Timeout | null = null;
-let capturePrevGeneration = 0;
 
 /**
  * Tracks whether the window is logically visible.
@@ -328,48 +321,44 @@ const onGlobalMousedownHandler = (e: { x: number; y: number }) =>
 const onGlobalMouseupHandler = (e: { x: number; y: number }) =>
   onGlobalMouseOutside(e, "mouseup");
 
-/* ── Paste helper ──────────────────────────────────────────────────────────── */
-function ensurePasteScript(): string {
-  if (!pasteScriptPath) {
-    const dir = app.getPath("userData");
-    pasteScriptPath = path.join(dir, "paste.vbs");
-    const vbs =
-      'Set ws = CreateObject("WScript.Shell")\r\n' +
-      'ws.SendKeys "^v"\r\n';
-    try { fs.writeFileSync(pasteScriptPath, vbs, "ascii"); }
-    catch (err) { log("[paste] failed to write paste.vbs:", String(err)); }
+function clearPasteAfterRestoreTimer() {
+  if (pasteAfterRestoreTimer !== null) {
+    clearTimeout(pasteAfterRestoreTimer);
+    pasteAfterRestoreTimer = null;
   }
-  return pasteScriptPath;
 }
 
-/**
- * Synthesize Ctrl+V into whatever window currently has foreground focus.
- * Tries uiohook-napi's `keyTap` first (in-process `SendInput`, ~instant) and
- * falls back to a one-shot `wscript` + VBS SendKeys if that throws.
- *
- * Caller is responsible for ensuring the *correct* window has focus first —
- * see `requestRestoreForeground()` and the `hideWindow()` paste path.
- */
-function triggerPaste(settleMs = 0) {
-  const fire = () => {
-    try {
-      suppressDoubleAltFor(600);
-      uIOhook.keyTap(UiohookKey.V, [UiohookKey.Ctrl]);
-      log("[paste] uIOhook Ctrl+V sent");
-      pasteFlowActive = false;
-      return;
-    } catch (err) {
-      log("[paste] uIOhook.keyTap failed, falling back to VBS:", String(err));
-    }
-    const script = ensurePasteScript();
-    exec(`wscript //nologo "${script}"`, (err) => {
-      pasteFlowActive = false;
-      if (err) log("[paste] wscript error:", err.message);
-      else      log("[paste] VBS auto-paste sent");
-    });
+function onForegroundRestoreComplete(settleMs: number) {
+  pasteAfterRestorePending = false;
+  clearPasteAfterRestoreTimer();
+  triggerPaste(settleMs, () => { pasteFlowActive = false; });
+}
+
+function createForegroundService(): ForegroundService {
+  const service = new ForegroundService(() => win, {
+    onFocusOk: () => {
+      if (!loggedNativeFocusForShow) {
+        loggedNativeFocusForShow = true;
+        log(IS_MAC ? "[focus] macOS foreground focused" : "[focus] windows foreground focused");
+      }
+      scheduleSearchFocusVerification("native-foreground", [0, 16, 50, 120, 240]);
+    },
+    onFocusMiss: () => { /* noop */ },
+    onRestoreOk: () => {
+      if (!awaitingHelperRestore) return;
+      awaitingHelperRestore = false;
+      if (pasteAfterRestorePending) onForegroundRestoreComplete(80);
+    },
+    onRestoreMiss: () => {
+      if (!awaitingHelperRestore) return;
+      awaitingHelperRestore = false;
+      if (pasteAfterRestorePending) onForegroundRestoreComplete(400);
+    },
+  });
+  service.onPrevCaptured = (target) => {
+    prevForegroundTarget = service.sanitizePrevTarget(target);
   };
-  if (settleMs > 0) setTimeout(fire, settleMs);
-  else fire();
+  return service;
 }
 
 function setPastePending() {
@@ -377,133 +366,37 @@ function setPastePending() {
   markInternalPointerDown(800);
 }
 
-/* Windows foreground activation
- *
- * uIOhook sees double-Alt through a low-level hook, not through an OS-registered
- * accelerator. Windows can therefore show our window but deny it foreground
- * keyboard ownership. Electron/Chromium can still report the search input as
- * focused in that inactive window, which is the bug we kept seeing.
- *
- * The helper keeps one hidden PowerShell process alive and loads a tiny Win32
- * shim once. On each summon we ask it to attach input queues around the current
- * foreground thread and our HWND, then call SetForegroundWindow/SetFocus.
- */
-const WINDOWS_FOREGROUND_HELPER = `
-$ErrorActionPreference = "Continue"
-$ProgressPreference = "SilentlyContinue"
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class MnmlForeground {
-  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-  [DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-  [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hWnd);
-  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr hWnd);
-  [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-  [DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
-  [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-
-  const int SW_SHOW = 5;
-  const byte VK_MENU = 0x12;
-  const uint KEYEVENTF_KEYUP = 0x0002;
-
-  public static IntPtr CapturePrevious() {
-    return GetForegroundWindow();
-  }
-
-  public static bool Focus(IntPtr hWnd) {
-    if (hWnd == IntPtr.Zero) return false;
-
-    IntPtr foreground = GetForegroundWindow();
-    uint foregroundPid;
-    uint targetPid;
-    uint foregroundThread = GetWindowThreadProcessId(foreground, out foregroundPid);
-    uint targetThread = GetWindowThreadProcessId(hWnd, out targetPid);
-    uint currentThread = GetCurrentThreadId();
-
-    bool attachedForeground = false;
-    bool attachedTarget = false;
-
-    try {
-      if (foregroundThread != 0 && foregroundThread != currentThread) {
-        attachedForeground = AttachThreadInput(currentThread, foregroundThread, true);
-      }
-      if (targetThread != 0 && targetThread != currentThread) {
-        attachedTarget = AttachThreadInput(currentThread, targetThread, true);
-      }
-
-      // A synthetic Alt tap clears Windows' foreground lock in the same way a
-      // user Alt interaction does. Double-Alt already uses Alt, but injected or
-      // hook-observed keyups are not always enough for SetForegroundWindow.
-      keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
-      keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-
-      ShowWindowAsync(hWnd, SW_SHOW);
-      BringWindowToTop(hWnd);
-      SetForegroundWindow(hWnd);
-      SwitchToThisWindow(hWnd, true);
-      SetFocus(hWnd);
-      return GetForegroundWindow() == hWnd;
-    } finally {
-      if (attachedTarget) AttachThreadInput(currentThread, targetThread, false);
-      if (attachedForeground) AttachThreadInput(currentThread, foregroundThread, false);
-    }
-  }
-
-  // Bring an *external* window back to the foreground — used by the auto-paste
-  // path so SendKeys lands on the app that had focus before mnml was summoned,
-  // not on whatever Windows happened to promote in z-order when we hid.
-  public static bool Restore(IntPtr hWnd) {
-    if (hWnd == IntPtr.Zero) return false;
-
-    // Same Alt-tap trick used in Focus(): unblocks the calling process's
-    // ability to call SetForegroundWindow on an unrelated window.
-    keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
-    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-
-    ShowWindowAsync(hWnd, SW_SHOW);
-    BringWindowToTop(hWnd);
-    SetForegroundWindow(hWnd);
-    SwitchToThisWindow(hWnd, true);
-    return GetForegroundWindow() == hWnd;
-  }
+function cancelCapturePrev() {
+  fg?.cancelCapture();
 }
-"@
 
-# Protocol:
-#   capture                 → print "prev <hwnd>" for current foreground only
-#   focus <hwnd>            → bring <hwnd> to front (print "focus-ok" / "focus-miss")
-#   restore <hwnd>          → SetForegroundWindow on <hwnd> (print "restore-ok" / "restore-miss")
-#   exit                    → quit
-while (($line = [Console]::In.ReadLine()) -ne $null) {
-  $line = $line.Trim()
-  if ($line -eq "exit") { break }
-  try {
-    if ($line -eq "capture") {
-      $prev = [MnmlForeground]::CapturePrevious()
-      [Console]::Out.WriteLine("prev " + $prev.ToInt64())
-    } elseif ($line.StartsWith("restore ")) {
-      $hwnd = [IntPtr]([Int64]($line.Substring(8)))
-      $ok = [MnmlForeground]::Restore($hwnd)
-      [Console]::Out.WriteLine($(if ($ok) { "restore-ok" } else { "restore-miss" }))
-    } elseif ($line.StartsWith("focus ")) {
-      $hwnd = [IntPtr]([Int64]($line.Substring(6).Trim()))
-      $ok = [MnmlForeground]::Focus($hwnd)
-      [Console]::Out.WriteLine($(if ($ok) { "focus-ok" } else { "focus-miss" }))
-    } else {
-      [Console]::Out.WriteLine("error: unknown command")
-    }
-    [Console]::Out.Flush()
-  } catch {
-    [Console]::Out.WriteLine("error: " + $_.Exception.Message)
-    [Console]::Out.Flush()
-  }
+function requestCapturePrev(onDone: () => void) {
+  fg?.requestCapturePrev(onDone);
 }
-`;
+
+function requestNativeForeground() {
+  if (!win || win.isDestroyed()) return;
+  if (nativeForegroundRequestsForShow >= 1) return;
+  nativeForegroundRequestsForShow += 1;
+  suppressDoubleAltFor(IS_WIN ? 1_200 : 400);
+  fg?.requestNativeForeground();
+}
+
+function requestRestoreForeground(target: string) {
+  suppressDoubleAltFor(600);
+  awaitingHelperRestore = true;
+  fg?.requestRestoreForeground(target);
+}
+
+function focusWindowNow(native = false) {
+  if (!win || win.isDestroyed()) return;
+  win.setFocusable(true);
+  app.focus({ steal: true });
+  win.moveTop();
+  win.focus();
+  win.webContents.focus();
+  if (native) requestNativeForeground();
+}
 
 interface SearchFocusResult {
   inputFound: boolean;
@@ -521,226 +414,6 @@ function isSearchFocusResult(value: unknown): value is SearchFocusResult {
     typeof result.focused === "boolean" &&
     (typeof result.activeElement === "string" || result.activeElement === null)
   );
-}
-
-function windowHandleAsDecimal(w: BrowserWindow): string | null {
-  const handle = w.getNativeWindowHandle();
-  if (handle.length >= 8) return handle.readBigUInt64LE(0).toString();
-  if (handle.length >= 4) return BigInt(handle.readUInt32LE(0)).toString();
-  return null;
-}
-
-function mnmlWindowHandle(): string | null {
-  if (!isWindowUsable()) return null;
-  return windowHandleAsDecimal(win!);
-}
-
-function acceptPrevForegroundHwnd(hwnd: string): void {
-  const ours = mnmlWindowHandle();
-  if (!hwnd || hwnd === "0" || (ours && hwnd === ours)) {
-    prevForegroundHwnd = null;
-    if (ours && hwnd === ours) {
-      log("[focus] prev HWND was mnml — not using for auto-paste restore");
-    }
-    return;
-  }
-  prevForegroundHwnd = hwnd;
-}
-
-function cancelCapturePrev() {
-  capturePrevGeneration += 1;
-  if (capturePrevTimer !== null) {
-    clearTimeout(capturePrevTimer);
-    capturePrevTimer = null;
-  }
-  capturePrevCallback = null;
-}
-
-function finishCapturePrev() {
-  if (capturePrevTimer !== null) {
-    clearTimeout(capturePrevTimer);
-    capturePrevTimer = null;
-  }
-  const cb = capturePrevCallback;
-  capturePrevCallback = null;
-  cb?.();
-}
-
-/** Capture the HWND that owns foreground *before* we call win.show(). */
-function requestCapturePrev(onDone: () => void) {
-  cancelCapturePrev();
-  const gen = capturePrevGeneration;
-  capturePrevCallback = () => {
-    if (gen !== capturePrevGeneration) return;
-    onDone();
-  };
-  capturePrevTimer = setTimeout(() => {
-    capturePrevTimer = null;
-    log("[focus] capture prev timed out — showing anyway");
-    finishCapturePrev();
-  }, 250);
-
-  const helper = ensureForegroundHelper();
-  if (!helper || helper.stdin.destroyed) {
-    finishCapturePrev();
-    return;
-  }
-  try {
-    helper.stdin.write("capture\n");
-  } catch (err) {
-    log("[focus] capture request failed:", String(err));
-    finishCapturePrev();
-  }
-}
-
-function handleForegroundHelperLine(line: string) {
-  if (!line) return;
-  if (line.startsWith("prev ")) {
-    // Ignore stale helper replies after hide/cancel — they must not
-    // overwrite prevForegroundHwnd or resurrect a cancelled show().
-    if (!capturePrevCallback) return;
-    acceptPrevForegroundHwnd(line.slice(5).trim());
-    finishCapturePrev();
-    return;
-  }
-  if (line === "restore-ok") {
-    if (!awaitingHelperRestore) return;
-    awaitingHelperRestore = false;
-    if (pasteAfterRestorePending) {
-      pasteAfterRestorePending = false;
-      if (pasteAfterRestoreTimer !== null) {
-        clearTimeout(pasteAfterRestoreTimer);
-        pasteAfterRestoreTimer = null;
-      }
-      triggerPaste(80);
-    }
-    return;
-  }
-  if (line === "restore-miss") {
-    if (!awaitingHelperRestore) return;
-    awaitingHelperRestore = false;
-    if (pasteAfterRestorePending) {
-      pasteAfterRestorePending = false;
-      if (pasteAfterRestoreTimer !== null) {
-        clearTimeout(pasteAfterRestoreTimer);
-        pasteAfterRestoreTimer = null;
-      }
-      // Foreground restore failed — give Windows longer to settle z-order.
-      triggerPaste(400);
-    }
-    return;
-  }
-  if (line === "focus-ok") {
-    if (awaitingHelperRestore) return;
-    if (!loggedNativeFocusForShow) {
-      loggedNativeFocusForShow = true;
-      log("[focus] windows foreground focused");
-    }
-    scheduleSearchFocusVerification("native-foreground", [0, 16, 50, 120, 240]);
-    return;
-  }
-  if (line === "focus-miss") {
-    if (awaitingHelperRestore) return;
-    return;
-  }
-  log("[focus] foreground helper:", line);
-}
-
-function ensureForegroundHelper(): ChildProcessWithoutNullStreams | null {
-  if (process.platform !== "win32") return null;
-  if (foregroundHelper && !foregroundHelper.killed) return foregroundHelper;
-
-  const encoded = Buffer.from(WINDOWS_FOREGROUND_HELPER, "utf16le").toString("base64");
-  const child = spawn(
-    "powershell.exe",
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
-    { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] },
-  );
-
-  child.stdout.setEncoding("utf8");
-  // Cap the accumulator. The helper emits one "ok" / "miss" / "error: …"
-  // per request, all newline-terminated, so the residual after split should
-  // always be tiny. If it ever isn't (e.g. PowerShell hangs mid-line and
-  // dumps a long backtrace), we don't want this string to grow forever and
-  // pin live memory inside the closure.
-  const HELPER_BUFFER_CAP = 16 * 1024;
-  child.stdout.on("data", (chunk: string) => {
-    foregroundHelperBuffer += chunk;
-    if (foregroundHelperBuffer.length > HELPER_BUFFER_CAP) {
-      log("[focus] foreground helper buffer overflow; truncating");
-      // Keep only the tail — most likely the start of a line we haven't
-      // seen the newline for yet.
-      foregroundHelperBuffer = foregroundHelperBuffer.slice(-1024);
-    }
-    const lines = foregroundHelperBuffer.split(/\r?\n/);
-    foregroundHelperBuffer = lines.pop() ?? "";
-    for (const line of lines) handleForegroundHelperLine(line.trim());
-  });
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk: string) => {
-    const msg = chunk.trim();
-    if (msg && !msg.startsWith("#< CLIXML")) log("[focus] foreground helper stderr:", msg);
-  });
-  child.on("exit", (code) => {
-    foregroundHelper = null;
-    foregroundHelperBuffer = "";
-    if (code !== 0 && code !== null) log("[focus] foreground helper exited:", code);
-  });
-  child.on("error", (err) => {
-    foregroundHelper = null;
-    log("[focus] foreground helper failed:", String(err));
-  });
-
-  foregroundHelper = child;
-  return child;
-}
-
-function requestNativeForeground() {
-  if (!win || win.isDestroyed()) return;
-  if (nativeForegroundRequestsForShow >= 1) return;
-  const helper = ensureForegroundHelper();
-  if (!helper || helper.stdin.destroyed) return;
-
-  const hwnd = windowHandleAsDecimal(win);
-  if (!hwnd) return;
-
-  try {
-    nativeForegroundRequestsForShow += 1;
-    suppressDoubleAltFor(1_200);
-    helper.stdin.write(`focus ${hwnd}\n`);
-  } catch (err) {
-    log("[focus] foreground request failed:", String(err));
-  }
-}
-
-/**
- * Ask the helper to bring an external HWND back to the foreground. Used by
- * the auto-paste path to restore focus to the app the user was working in
- * before they summoned mnml.
- */
-function requestRestoreForeground(hwnd: string) {
-  const helper = ensureForegroundHelper();
-  if (!helper || helper.stdin.destroyed) return;
-  try {
-    // Brief detector suppression — the helper sends a synthetic Alt tap to
-    // unblock SetForegroundWindow; we don't want it tripping double-Alt.
-    suppressDoubleAltFor(600);
-    awaitingHelperRestore = true;
-    helper.stdin.write(`restore ${hwnd}\n`);
-  } catch (err) {
-    awaitingHelperRestore = false;
-    log("[focus] restore request failed:", String(err));
-  }
-}
-
-function focusWindowNow(native = false) {
-  if (!win || win.isDestroyed()) return;
-  win.setFocusable(true);
-  app.focus({ steal: true });
-  win.moveTop();
-  win.focus();
-  win.webContents.focus();
-  if (native) requestNativeForeground();
 }
 
 const FOCUS_SEARCH_SCRIPT = `
@@ -833,7 +506,7 @@ function createTrayIcon(): Electron.NativeImage {
     ? path.join(process.resourcesPath, "build")
     : path.join(__dirname, "..", "build");
   for (const candidate of [
-    path.join(buildDir, "icon.ico"),
+    path.join(buildDir, IS_MAC ? "icon-512.png" : "icon.ico"),
     path.join(buildDir, "tray.png"),
   ]) {
     if (fs.existsSync(candidate)) {
@@ -864,7 +537,7 @@ function buildTrayMenu(updateVersion?: string) {
 
 function createTray(): Tray {
   const t = new Tray(createTrayIcon());
-  t.setToolTip("mnml — clipboard manager\nDouble-tap Alt to show/hide");
+  t.setToolTip(`mnml — clipboard manager\n${PLATFORM_UI.summonHint} to show/hide`);
   t.setContextMenu(buildTrayMenu());
   t.on("click", () => toggleWindow());
   return t;
@@ -951,9 +624,12 @@ function createWindow() {
   // Menu / file Explorer) is set separately via electron-builder's
   // `win.icon`. Both point at the same multi-resolution ICO so the brand
   // mark is consistent everywhere Windows renders it.
-  const winIconPath = app.isPackaged
-    ? path.join(process.resourcesPath, "build", "icon.ico")
-    : path.join(__dirname, "..", "build", "icon.ico");
+  const buildDir = app.isPackaged
+    ? path.join(process.resourcesPath, "build")
+    : path.join(__dirname, "..", "build");
+  const winIconPath = IS_MAC
+    ? path.join(buildDir, "icon-512.png")
+    : path.join(buildDir, "icon.ico");
 
   win = new BrowserWindow({
     ...size,
@@ -1167,7 +843,7 @@ function showWindow() {
   };
 
   // Capture the app the user was in *before* win.show() steals foreground.
-  prevForegroundHwnd = null;
+  prevForegroundTarget = null;
   requestCapturePrev(revealWindow);
 }
 
@@ -1214,11 +890,11 @@ function hideWindow() {
     //      previous app.
     pastePending = false;
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
-    const target = prevForegroundHwnd;
-    const ours = mnmlWindowHandle();
+    const target = prevForegroundTarget;
+    const ours = fg?.ownTarget() ?? null;
     if (target && ours && target === ours) {
       try { win!.blur(); } catch { /* noop */ }
-      triggerPaste(300);
+      triggerPaste(300, () => { pasteFlowActive = false; });
     } else if (target) {
       pasteAfterRestorePending = true;
       requestRestoreForeground(target);
@@ -1229,13 +905,11 @@ function hideWindow() {
         pasteAfterRestorePending = false;
         awaitingHelperRestore = false;
         log("[paste] restore timed out — pasting anyway");
-        triggerPaste(120);
+        triggerPaste(120, () => { pasteFlowActive = false; });
       }, 750);
     } else {
-      // No captured HWND — fall back to the old behaviour with a slightly
-      // longer wait for Windows to settle z-order on its own.
       try { win!.blur(); } catch { /* noop */ }
-      triggerPaste(350);
+      triggerPaste(350, () => { pasteFlowActive = false; });
     }
   } else {
     // Normal hide (Escape / click-outside).
@@ -1331,7 +1005,8 @@ app.whenReady().then(() => {
   try { createWindow(); }
   catch (err) { log("[startup] FATAL: createWindow:", String(err)); app.quit(); return; }
 
-  ensureForegroundHelper();
+  fg = createForegroundService();
+  fg.ensureStarted();
 
   registerIpc({ hide: hideWindow, setBlurLock, setPastePending });
 
@@ -1401,8 +1076,7 @@ app.on("before-quit", () => {
   // even a partial shutdown shouldn't block app exit.
   try { stopMonitor(); } catch (err) { log("[lifecycle] stopMonitor:", String(err)); }
   try { closeDb();     } catch (err) { log("[lifecycle] closeDb:",     String(err)); }
-  try { foregroundHelper?.stdin.write("exit\n"); } catch { /* noop */ }
-  try { foregroundHelper?.kill(); } catch { /* noop */ }
+  try { fg?.shutdown(); } catch { /* noop */ }
   uIOhook.off("mousedown", onGlobalMousedownHandler);
   uIOhook.off("mouseup",   onGlobalMouseupHandler);
   uninstallHotkey?.();

@@ -12,6 +12,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
   const { settings, update } = useSettings();
   const [confirmClear, setConfirmClear] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
+  const [launchHint, setLaunchHint] = useState("Start at login so the hotkey always works.");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const sheetRef    = useRef<HTMLDivElement>(null);
 
@@ -25,6 +26,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
     // app restart, and the sheet is short-lived enough that re-reading on
     // each open is the simpler model.
     bridge.getVersion().then(setVersion).catch(() => setVersion(null));
+    bridge.getPlatformUi().then((p) => setLaunchHint(p.launchOnStartupHint)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -132,7 +134,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
               <Toggle isSelected={settings.monitoring}    onChange={(v) => update("monitoring", v)}    label="Monitor clipboard" />
             </Row>
 
-            <Row label="Launch on startup" hint="Start with Windows so the hotkey always works.">
+            <Row label="Launch on startup" hint={launchHint}>
               <Toggle isSelected={settings.launchOnStartup} onChange={(v) => update("launchOnStartup", v)} label="Launch on startup" />
             </Row>
 

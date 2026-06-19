@@ -7,7 +7,7 @@
  *   - `build/icon.ico`  — Windows multi-resolution icon, consumed by
  *                         electron-builder via `package.json:build.win.icon`
  *                         and by BrowserWindow's `icon:` option.
- *   - `build/tray.png` (16) — fallback the tray code in `electron/main.ts`
+ *   - `build/icon-512.png` — macOS app icon (electron-builder `mac.icon`)
  *                         uses only if `icon.ico` is missing at runtime
  *                         (the tray loads the multi-size ICO first).
  *
@@ -33,7 +33,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT      = path.resolve(__dirname, "..");
 const BUILD     = path.resolve(ROOT, "build");
 const SVG       = path.resolve(BUILD, "icon.svg");
-const SIZES     = [16, 24, 32, 48, 64, 128, 256];
+const SIZES     = [16, 24, 32, 48, 64, 128, 256, 512];
 
 if (!fs.existsSync(SVG)) {
   console.error(`Missing master SVG: ${SVG}`);
@@ -135,3 +135,4 @@ fs.copyFileSync(
   resolvePathWithinBase(BUILD, "tray.png"),
 );
 console.log(`✓ tray.png (16, fallback)`);
+console.log(`✓ icon-512.png (macOS)`);

@@ -1,7 +1,7 @@
 {
   "name": "mnml",
-  "version": "0.2.46",
-  "description": "mnml — a super minimal clipboard manager for Windows",
+  "version": "0.3.0",
+  "description": "mnml — a super minimal clipboard manager for Windows and macOS",
   "private": true,
   "main": "dist-electron/main.js",
   "type": "module",
@@ -17,6 +17,10 @@
     "build": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder",
     "build:dir": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --dir",
     "build:release": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder",
+    "build:release:win": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --win",
+    "build:release:mac": "npm run check:summon && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --mac",
+    "release:notes": "node scripts/extract-changelog.mjs",
+    "verify:release": "node scripts/verify-release-artifacts.mjs",
     "release": "npm run check:summon && node scripts/bump-version.mjs && npm run rebuild && node scripts/verify-native-bindings.mjs && tsc -b && vite build && electron-builder --publish always",
     "postinstall": "electron-rebuild -f -w better-sqlite3 uiohook-napi",
     "rebuild": "electron-rebuild -f -w better-sqlite3 uiohook-napi"
@@ -28,6 +32,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@electron/notarize": "^2.5.0",
     "@tailwindcss/vite": "^4.2.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
@@ -60,6 +65,7 @@
     "asar": false,
     "npmRebuild": false,
     "afterPack": "./scripts/copy-native-deps.mjs",
+    "afterSign": "scripts/notarize-mac.cjs",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -71,7 +77,8 @@
         "to": "build",
         "filter": [
           "tray.png",
-          "icon.ico"
+          "icon.ico",
+          "icon-512.png"
         ]
       }
     ],
@@ -97,6 +104,22 @@
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
       "include": "build/installer.nsh"
+    },
+    "mac": {
+      "icon": "build/icon-512.png",
+      "category": "public.app-category.productivity",
+      "artifactName": "mnml-mac.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
+      ]
+    },
+    "dmg": {
+      "title": "mnml"
     }
   }
 }

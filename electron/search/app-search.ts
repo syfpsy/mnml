@@ -19,7 +19,9 @@ import { exec } from "node:child_process";
 import { app, shell } from "electron";
 import { log } from "../utils/log.js";
 import { WINDOWS_SHORTCUTS } from "./windows-settings.js";
+import { MACOS_SHORTCUTS } from "./macos-settings.js";
 import { assertSafeBasename, resolvePathWithinBase } from "../utils/safe-path.js";
+import { IS_MAC, IS_WIN } from "../platform/config.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -53,7 +55,7 @@ interface IndexEntry {
   aliases:   string[];
 }
 
-const SHORTCUT_DIRS = [
+const SHORTCUT_DIRS_WIN = [
   path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs"),
   path.join(
     process.env.ProgramData ?? process.env.PROGRAMDATA ?? "C:\\ProgramData",
@@ -61,6 +63,13 @@ const SHORTCUT_DIRS = [
   ),
   path.join(process.env.USERPROFILE ?? "", "Desktop"),
   path.join(process.env.PUBLIC ?? "C:\\Users\\Public", "Desktop"),
+];
+
+const APP_DIRS_MAC = [
+  "/Applications",
+  path.join(process.env.HOME ?? "", "Applications"),
+  "/System/Applications",
+  "/System/Applications/Utilities",
 ];
 
 let _index: IndexEntry[] = [];
@@ -71,39 +80,88 @@ let _indexed = false;
  * startup. Idempotent — second call rebuilds in place.
  */
 export function rebuildAppIndex(): void {
-  if (process.platform !== "win32") {
-    _indexed = true;
-    return;
-  }
   const startedAt = Date.now();
   const entries: IndexEntry[] = [];
   const seenNames = new Set<string>();
 
-  // 1. Curated Windows settings + tools (static).
-  for (const sc of WINDOWS_SHORTCUTS) {
-    const nameKey = sc.name.toLowerCase();
-    const aliases = [
-      nameKey,
-      nameKey.replace(/[\s\-_/&]+/g, ""),
-      ...(sc.aliases ?? []).map((a) => a.toLowerCase()),
-    ];
-    entries.push({
-      id:      sc.command,
-      name:    sc.name,
-      target:  sc.command,
-      kind:    sc.kind,
-      nameKey,
-      aliases,
-    });
-    seenNames.add(nameKey);
+  if (IS_MAC) {
+    for (const sc of MACOS_SHORTCUTS) {
+      pushShortcutEntry(entries, seenNames, sc.name, sc.command, sc.kind, sc.aliases);
+    }
+    for (const dir of APP_DIRS_MAC) walkAppBundles(dir, entries, seenNames);
+    _index = entries;
+    _indexed = true;
+    log(`[app-search] indexed ${entries.length} macOS entries in ${Date.now() - startedAt}ms`);
+    return;
   }
 
-  // 2. Start-Menu shortcuts (.lnk).
-  for (const dir of SHORTCUT_DIRS) walkLnk(dir, entries, seenNames);
+  if (!IS_WIN) {
+    _indexed = true;
+    return;
+  }
+
+  for (const sc of WINDOWS_SHORTCUTS) {
+    pushShortcutEntry(entries, seenNames, sc.name, sc.command, sc.kind, sc.aliases);
+  }
+
+  for (const dir of SHORTCUT_DIRS_WIN) walkLnk(dir, entries, seenNames);
 
   _index = entries;
   _indexed = true;
   log(`[app-search] indexed ${entries.length} entries (${WINDOWS_SHORTCUTS.length} system + ${entries.length - WINDOWS_SHORTCUTS.length} apps) in ${Date.now() - startedAt}ms`);
+}
+
+function pushShortcutEntry(
+  out: IndexEntry[],
+  seen: Set<string>,
+  name: string,
+  target: string,
+  kind: AppResult["kind"],
+  extraAliases?: string[],
+): void {
+  const nameKey = name.toLowerCase();
+  const aliases = [
+    nameKey,
+    nameKey.replace(/[\s\-_/&]+/g, ""),
+    ...(extraAliases ?? []).map((a) => a.toLowerCase()),
+  ];
+  out.push({ id: target, name, target, kind, nameKey, aliases });
+  seen.add(nameKey);
+}
+
+function walkAppBundles(dir: string, out: IndexEntry[], seen: Set<string>): void {
+  if (!dir || !fs.existsSync(dir)) return;
+  let dirents: fs.Dirent[];
+  try { dirents = fs.readdirSync(dir, { withFileTypes: true }); }
+  catch { return; }
+
+  for (const e of dirents) {
+    let full: string;
+    try {
+      assertSafeBasename(e.name);
+      full = resolvePathWithinBase(dir, e.name);
+    } catch {
+      continue;
+    }
+    if (e.isDirectory()) {
+      if (e.name.endsWith(".app")) {
+        const display = e.name.slice(0, -4).trim();
+        const nameKey = display.toLowerCase();
+        if (!nameKey || seen.has(nameKey)) continue;
+        seen.add(nameKey);
+        out.push({
+          id: full,
+          name: display,
+          target: full,
+          kind: "app",
+          nameKey,
+          aliases: [nameKey, nameKey.replace(/[\s\-_/&]+/g, "")],
+        });
+      } else {
+        walkAppBundles(full, out, seen);
+      }
+    }
+  }
 }
 
 function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>): void {
@@ -264,6 +322,19 @@ async function getIcon(entry: IndexEntry): Promise<string | null> {
     return null;
   }
 
+  if (IS_MAC && entry.target.endsWith(".app")) {
+    try {
+      const img = await app.getFileIcon(entry.target, { size: "large" });
+      if (!img.isEmpty()) {
+        const url = `data:image/png;base64,${img.toPNG().toString("base64")}`;
+        rememberIcon(entry.id, url);
+        return url;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
   // Walk a small list of candidate paths in priority order: the .lnk's
   // resolved target first (gives us the real app's icon), the .lnk itself
   // as a final fallback (yields the Windows shortcut overlay, which is
@@ -344,6 +415,30 @@ export async function launchAppResult(target: string): Promise<boolean> {
   if (!isKnownLaunchTarget(target)) {
     log(`[app-search] rejected unknown launch target: ${target.slice(0, 120)}`);
     return false;
+  }
+
+  if (IS_MAC) {
+    if (target.toLowerCase().startsWith("x-apple.systempreferences:")) {
+      try { await shell.openExternal(target); return true; }
+      catch (err) { log(`[app-search] openExternal failed: ${String(err)}`); return false; }
+    }
+    if (target.endsWith(".app")) {
+      const err = await shell.openPath(target);
+      if (err) log(`[app-search] openPath failed: ${err}`);
+      return !err;
+    }
+    // Bundle id or bare app name — `open -a`.
+    const quoted = target.replace(/"/g, '\\"');
+    return new Promise<boolean>((resolve) => {
+      exec(`open -a "${quoted}"`, (err) => {
+        if (err) {
+          log(`[app-search] open -a failed: ${err.message}`);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
   }
 
   if (target.toLowerCase().startsWith("ms-settings:")) {

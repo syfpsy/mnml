@@ -9,7 +9,7 @@ If you change a subsystem, update its section here in the same commit.
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Shell | Electron 33 (Chromium 130) | First-class Windows clipboard API + global-shortcut infra |
+| Shell | Electron 33 (Chromium 130) | Cross-platform shell; platform code in `electron/platform/` |
 | Bundler | Vite 6 + `vite-plugin-electron` | One config builds renderer + main + preload, HMR in dev |
 | UI | React 19 + TypeScript | Single overlay window; no UI component framework |
 | Styling | Tailwind v4 (`@tailwindcss/vite`) | Utilities + a CSS-variable token system in `styles.css` |

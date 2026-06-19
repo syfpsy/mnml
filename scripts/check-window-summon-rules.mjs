@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const main = readFileSync(join(root, "electron", "main.ts"), "utf8");
+const fgWin = readFileSync(join(root, "electron", "platform", "foreground-win.ts"), "utf8");
+const fg = readFileSync(join(root, "electron", "platform", "foreground.ts"), "utf8");
 const ipc = readFileSync(join(root, "electron", "ipc.ts"), "utf8");
 const app = readFileSync(join(root, "src", "app.tsx"), "utf8");
 const searchBar = readFileSync(join(root, "src", "components", "search-bar.tsx"), "utf8");
@@ -32,20 +34,20 @@ if (!/installDoubleAlt\(\(\)\s*=>\s*{\s*setTimeout/.test(main)) {
   failures.push("Double-Alt must delay toggleWindow() so the Alt key-up finishes before focus.");
 }
 
-if (!main.includes("WINDOWS_FOREGROUND_HELPER") ||
-    !main.includes("AttachThreadInput") ||
+if (!fgWin.includes("WINDOWS_FOREGROUND_HELPER") ||
+    !fgWin.includes("AttachThreadInput") ||
     !main.includes("requestNativeForeground();") ||
     !main.includes("suppressDoubleAltFor(")) {
-  failures.push("Double-Alt summon must include native Windows foreground activation, not DOM focus alone.");
+  failures.push("Summon must include native foreground activation (Windows helper + macOS osascript).");
 }
 
-if (!main.includes('if ($line -eq "capture")') ||
-    !main.includes('focus ${hwnd}') ||
+if (!fgWin.includes('if ($line -eq "capture")') ||
+    !fgWin.includes('StartsWith("focus ")') ||
     !main.includes("requestCapturePrev(") ||
     !main.includes("cancelCapturePrev(") ||
-    !main.includes('"restore-ok"') ||
-    !main.includes('"focus-ok"')) {
-  failures.push("Auto-paste must capture prev foreground via helper capture before win.show(), not during focus mnml.");
+    !fg.includes("onRestoreOk") ||
+    !main.includes("ForegroundService")) {
+  failures.push("Auto-paste must capture prev foreground before win.show() via ForegroundService.");
 }
 
 if (!main.includes("nativeForegroundRequestsForShow >= 1") ||
@@ -58,7 +60,7 @@ if (!/setTimeout\(\(\)\s*=>\s*{\s*(?:if \(win\) )?toggleWindow\(\);\s*},\s*(?:[8
   failures.push("Double-Alt must wait at least 80ms after Alt key-up before toggling focus.");
 }
 
-if (!main.includes("suppressDoubleAltFor(1_200)")) {
+if (!main.includes("suppressDoubleAltFor(1_200)") && !main.includes("IS_WIN ? 1_200")) {
   failures.push("Native foreground activation must suppress uIOhook long enough to ignore synthetic Alt unlocks.");
 }
 

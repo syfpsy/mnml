@@ -98,6 +98,14 @@ const api = {
   checkUpdate:   (): Promise<{ ok: boolean; available?: boolean; version?: string | null; message?: string }> =>
     ipcRenderer.invoke(IPC.checkUpdate),
   getVersion:    (): Promise<string> => ipcRenderer.invoke(IPC.getVersion),
+  getPlatformUi: (): Promise<{
+    platform: string;
+    summonHint: string;
+    pasteRowHint: string;
+    pasteChord: string;
+    launchOnStartupHint: string;
+    osName: string;
+  }> => ipcRenderer.invoke(IPC.getPlatformUi),
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    (): Promise<{ dataDir: string; defaultDir: string; isDefault: boolean }> =>

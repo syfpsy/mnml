@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>mnml: a keyboard-first clipboard for Windows</title>
+  <title>mnml: a keyboard-first clipboard for Windows and macOS</title>
 
-  <meta name="description" content="A 440×540 overlay window for clipboard history, saved snippets, and an apps + Windows Settings launcher. Press Alt twice. Local SQLite. No telemetry." />
+  <meta name="description" content="A 440×540 overlay for clipboard history, saved snippets, and an app launcher. Press Alt twice on Windows or Option twice on Mac. Local SQLite. No telemetry." />
   <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
 
@@ -78,22 +78,27 @@
       <div class="hero-text">
         <h1>
           A keyboard-first<br>
-          clipboard for Windows.
+          clipboard for Windows &amp; Mac.
         </h1>
         <p class="lede">
-          Press <kbd class="kbd">Alt</kbd> twice. Paste from history,
-          launch any app or Windows Setting, save reusable snippets.
+          Press <kbd class="kbd">Alt</kbd> twice on Windows or <kbd class="kbd">Option</kbd> twice on Mac.
+          Paste from history, launch apps and settings, save reusable snippets.
           One <span class="num">440 × 540</span> window. Local SQLite.
           No telemetry.
         </p>
         <div class="cta">
-          <a class="btn primary" id="download-link" href="mnml-setup.exe" data-reveal>
+          <a class="btn primary" id="download-link-win" href="mnml-setup.exe" data-reveal>
             <span class="btn-label">Download for Windows</span>
-            <span class="btn-meta">v0.2.46 · .exe installer · Windows 10 / 11 · x64</span>
+            <span class="btn-meta">v0.3.0 · .exe · Windows 10 / 11 · x64</span>
+          </a>
+          <a class="btn primary" id="download-link-mac" href="mnml-mac.dmg" data-reveal>
+            <span class="btn-label">Download for macOS</span>
+            <span class="btn-meta">v0.3.0 · .dmg · macOS 12+ · Apple Silicon &amp; Intel</span>
           </a>
         </div>
         <p class="hero-foot">
-          Free and MIT-licensed. Latest release <strong>v0.2.46</strong> · installs in seconds, uninstalls cleanly.
+          Free and MIT-licensed. Latest release <strong>v0.3.0</strong> · installs in seconds, uninstalls cleanly.
+          On first launch, macOS asks for <strong>Accessibility</strong> and <strong>Input Monitoring</strong> so the global hotkey works.
         </p>
       </div>
 
@@ -352,9 +357,18 @@
       <h2 class="eyebrow">Recent updates</h2>
       <p class="updates-lede">
         Everything below ships in the current Windows installer
-        (<a href="mnml-setup.exe">v0.2.46</a>, May&nbsp;2026).
+        (<a href="mnml-setup.exe">v0.3.0</a>, May&nbsp;2026).
+        macOS: <a href="mnml-mac.dmg">.dmg</a> or <a href="mnml-mac.zip">.zip</a>.
         Older builds auto-update via the in-app banner when a newer release is available.
       </p>
+
+      <article class="release">
+        <h3>v0.3.0 — macOS</h3>
+        <ul>
+          <li><strong>macOS beta.</strong> Universal DMG/ZIP, double-tap Option to summon, ⌘1–9 quick-paste, auto-paste with focus restore, Applications + System Settings launcher.</li>
+          <li><strong>CI.</strong> Windows + macOS builds on every version tag.</li>
+        </ul>
+      </article>
 
       <article class="release">
         <h3>v0.2.46 — startup hotfix</h3>
@@ -408,7 +422,11 @@
       <p class="install-lede">One installer. No setup, no account, no first-run wizard. Lives in your tray and auto-launches with Windows so the hotkey is always one keypress away.</p>
       <a class="btn primary big" href="mnml-setup.exe" id="download-link-2">
         <span class="btn-label">Download for Windows</span>
-        <span class="btn-meta">v0.2.46 · .exe installer · Windows 10 / 11 · x64</span>
+        <span class="btn-meta">v0.3.0 · .exe · Windows 10 / 11 · x64</span>
+      </a>
+      <a class="btn primary big" href="mnml-mac.dmg" id="download-link-mac-2">
+        <span class="btn-label">Download for macOS</span>
+        <span class="btn-meta">v0.3.0 · .dmg · macOS 12+</span>
       </a>
       <p class="install-alt">
         Free, MIT-licensed, ~70 MB installed. Uninstall any time via Windows Settings.

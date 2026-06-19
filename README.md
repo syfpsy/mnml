@@ -2,11 +2,11 @@
 
 # mnml
 
-A keyboard-first clipboard manager for Windows. Press **Alt** twice; paste from history, launch any app or Windows Setting, save reusable snippets. One 440×540 window. Local SQLite. No accounts, no telemetry.
+A keyboard-first clipboard manager for **Windows and macOS**. Press **Alt** twice (Windows) or **Option** twice (Mac); paste from history, launch apps and settings, save reusable snippets. One 440×540 window. Local SQLite. No accounts, no telemetry.
 
 <br clear="left" />
 
-**[⬇ Download for Windows](https://mnml.nxyz.art/)** · MIT licensed · Windows 10 / 11 (x64)
+**[⬇ Windows](https://mnml.nxyz.art/mnml-setup.exe)** · **[⬇ macOS](https://mnml.nxyz.art/mnml-mac.dmg)** · MIT licensed
 
 ---
 

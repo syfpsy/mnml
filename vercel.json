@@ -48,6 +48,26 @@
       "source": "/mnml-setup.exe.blockmap",
       "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-setup.exe.blockmap",
       "permanent": false
+    },
+    {
+      "source": "/mnml-mac.zip",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-mac.zip",
+      "permanent": false
+    },
+    {
+      "source": "/mnml-mac.dmg",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-mac.dmg",
+      "permanent": false
+    },
+    {
+      "source": "/latest-mac.yml",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/latest-mac.yml",
+      "permanent": false
+    },
+    {
+      "source": "/mnml-mac.zip.blockmap",
+      "destination": "https://github.com/syfpsy/mnml/releases/latest/download/mnml-mac.zip.blockmap",
+      "permanent": false
     }
   ]
 }

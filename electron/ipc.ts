@@ -19,6 +19,7 @@ import { launchAppResult, searchApps, type AppSearchResponse } from "./search/ap
 import { restoreItem, restoreText, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
 import { evictAllThumbs, evictThumb, getThumbDataUrl } from "./thumb-cache.js";
 import { log } from "./utils/log.js";
+import { PLATFORM_UI } from "./platform/config.js";
 
 interface WindowControl {
   hide: () => void;
@@ -217,6 +218,10 @@ export function registerIpc(windowControl: WindowControl) {
   });
 
   ipcMain.handle(IPC.getVersion, (): string => app.getVersion());
+  ipcMain.handle(IPC.getPlatformUi, () => ({
+    platform: process.platform,
+    ...PLATFORM_UI,
+  }));
   ipcMain.handle(IPC.checkUpdate, async () => {
     // Returns a short summary the renderer can show ("checking" / "no update" /
     // "available v0.2.30"). The real update lifecycle still flows through the
@@ -337,6 +342,10 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(IPC.storageReveal, async () => {
     const dir = getDataDir();
     if (!fs.existsSync(dir)) return false;
+    if (process.platform === "darwin") {
+      shell.showItemInFolder(dir);
+      return true;
+    }
     await shell.openPath(dir);
     return true;
   });

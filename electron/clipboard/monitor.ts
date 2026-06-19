@@ -39,6 +39,7 @@ const EXCLUDE_MARKER = "ExcludeClipboardContentFromMonitorProcessing";
 let wasConcealed = false;
 
 function isClipboardConcealed(): boolean {
+  if (process.platform !== "win32") return false;
   try {
     if (clipboard.has(EXCLUDE_MARKER)) return true;
     const buf = clipboard.readBuffer("CanIncludeInClipboardHistory");

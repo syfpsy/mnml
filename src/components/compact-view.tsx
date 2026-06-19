@@ -76,6 +76,15 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const [focusedSavedIndex, setFocusedSavedIndex] = useState(-1);
   /** Bumped on hide so SavedList remounts and drops any open add form. */
   const [savedListEpoch,    setSavedListEpoch]    = useState(0);
+  const [summonHint,        setSummonHint]        = useState("Alt Alt");
+  const [pasteRowHint,      setPasteRowHint]      = useState("Ctrl 1-9 paste");
+
+  useEffect(() => {
+    void bridge.getPlatformUi().then((p) => {
+      setSummonHint(p.summonHint);
+      setPasteRowHint(p.pasteRowHint);
+    }).catch(() => { /* dev in browser */ });
+  }, []);
 
   const inputRef     = useRef<HTMLInputElement>(null);
   const listRef      = useRef<HTMLDivElement>(null);
@@ -418,8 +427,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         className="px-3 py-1.5 flex items-center justify-between text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        <span>Ctrl 1-9 paste · Shift-click copy · Esc dismiss</span>
-        <span>Alt Alt to toggle</span>
+        <span>{pasteRowHint} · Shift-click copy · Esc dismiss</span>
+        <span>{summonHint} to toggle</span>
       </div>
 
       {settingsOpen && (

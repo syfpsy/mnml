@@ -33,6 +33,8 @@ export const IPC = {
   checkUpdate:   "mnml:window:check-update",
   /** Returns the installed app version (matches package.json's `version`). */
   getVersion:    "mnml:app:version",
+  /** Platform-specific UI copy (summon hint, paste keys, OS name). */
+  getPlatformUi: "mnml:app:platform-ui",
 
   // ── Storage folder (custom dataDir for cross-device sync) ─────────────────
   /** Returns { dataDir, defaultDir, isDefault } — current state for the UI. */

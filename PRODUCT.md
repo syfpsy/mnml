@@ -61,8 +61,7 @@ page, changelog), be specific and concrete, not reassuring-and-vague.
 
 - **Not a cloud service** — no accounts, no server storage, no team features. Sync,
   if used, is the user's own folder (Dropbox/OneDrive/iCloud), one device at a time, $0.
-- **Not cross-platform (yet)** — Windows 10/11 x64 only; the native bits are
-  Windows-specific by design.
+- **Not cross-platform (yet)** — ~~Windows 10/11 x64 only~~ **Windows 10/11 + macOS 12+** (v0.3.0). Native bits remain platform-specific by design.
 - **Not a kitchen sink** — we removed a full-disk indexer for being too heavy.
   Features must earn their place in a minimal tool.
 - **No telemetry/analytics/ads/third-party SDKs** — nothing to sell.

@@ -1,5 +1,22 @@
 # mnml Changelog
 
+## v0.3.0 — 2026-05-31
+
+macOS port — clipboard history, snippets, launcher, summon, auto-paste, and CI releases.
+
+### Added
+- **macOS app (beta)** — universal DMG + ZIP for Apple Silicon and Intel. Double-tap **Option** to summon; **⌘1–9** quick-paste; **⌘V** auto-paste with focus restore.
+- **macOS launcher** — indexes `/Applications`, `~/Applications`, and curated System Settings deep links.
+- **Platform layer** — `electron/platform/*` splits foreground activation, paste synthesis, and UI copy between Windows and macOS.
+- **CI** — GitHub Actions builds Windows + macOS on version tags; site redirects for `mnml-mac.zip`, `mnml-mac.dmg`, and `latest-mac.yml`.
+
+### Changed
+- **Summon fallback** — `Command+Shift+V` on macOS (was Control-only).
+- **Settings copy** — launch-at-login and footer hints adapt to the host OS.
+
+### Internal
+- Foreground Win32 helper moved to `electron/platform/foreground-win.ts`; macOS uses `osascript` via `foreground-darwin.ts`.
+
 ## v0.2.46 — 2026-05-31
 
 Hotfix: v0.2.45 installers failed to start because native SQLite bindings were not packaged for Electron 42.

@@ -222,9 +222,21 @@ function cancelScheduledBlurHide() {
 /** In-window clicks (tabs, pin, settings, …) can briefly blur the HWND on
  *  Windows frameless overlays. Mark them so the deferred blur handler
  *  doesn't treat every button press as "click away". */
-function markInternalPointerDown(ms = 500) {
+function markInternalPointerDown(ms = 1_000) {
   suppressBlurHideUntil = Math.max(suppressBlurHideUntil, Date.now() + ms);
   cancelScheduledBlurHide();
+}
+
+/** Renderer calls this on mousedown in tabs, lists, etc. before HWND blur fires. */
+function suppressBlurHideFromRenderer() {
+  markInternalPointerDown(1_200);
+  setImmediate(() => {
+    if (!windowVisible || !isWindowUsable()) return;
+    try {
+      win!.focus();
+      win!.webContents.focus();
+    } catch { /* noop */ }
+  });
 }
 
 function isPointInsideWindow(x?: number, y?: number): boolean {
@@ -301,7 +313,7 @@ function scheduleBlurHide() {
     if (win!.webContents.isDevToolsOpened()) return;
     log("[blur] hiding — focus left the window");
     hideWindow();
-  }, 150);
+  }, 250);
 }
 
 function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" | "mouseup") {
@@ -1008,7 +1020,12 @@ app.whenReady().then(() => {
   fg = createForegroundService();
   fg.ensureStarted();
 
-  registerIpc({ hide: hideWindow, setBlurLock, setPastePending });
+  registerIpc({
+    hide: hideWindow,
+    setBlurLock,
+    setPastePending,
+    suppressBlurHide: suppressBlurHideFromRenderer,
+  });
 
   try { tray = createTray(); }
   catch (err) { log("[startup] tray failed (non-fatal):", String(err)); }

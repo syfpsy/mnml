@@ -90,6 +90,10 @@ if (!main.includes("before-input-event") || !main.includes("markInternalPointerD
   failures.push("Blur hide must suppress on in-window pointer down (before-input-event + markInternalPointerDown).");
 }
 
+if (!main.includes("suppressBlurHideFromRenderer") || !readFileSync(join(root, "electron", "ipc-channels.ts"), "utf8").includes("suppressBlurHide")) {
+  failures.push("Renderer must call suppressBlurHide IPC on in-window tab/button interaction.");
+}
+
 if (!main.includes("scheduleBlurHide") || !main.includes("isPointInsideWindow")) {
   failures.push("Click-outside must use uIOhook screen coords + isPointInsideWindow() and a deferred blur hide with focus re-check.");
 }

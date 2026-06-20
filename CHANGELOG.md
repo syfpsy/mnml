@@ -1,5 +1,12 @@
 # mnml Changelog
 
+## v0.3.1 — 2026-05-31
+
+Windows ship + tab-dismiss hotfix. macOS arm64 build uploads separately from the Mac mini.
+
+### Fixed
+- **Window dismissed when switching tabs (Windows)** — category tab clicks could spuriously blur the frameless HWND; renderer calls `suppressBlurHide` on in-window pointer/keyboard before the focus watchdog treats it as click-away. Update banner clicks covered too.
+
 ## v0.3.0 — 2026-05-31
 
 macOS port — clipboard history, snippets, launcher, summon, auto-paste, and CI releases.

@@ -28,6 +28,8 @@ export const IPC = {
   updateSetting: "mnml:settings:set",
   hide:          "mnml:window:hide",
   setBlurLock:   "mnml:window:blur-lock",
+  /** In-window pointer/keyboard on tabs, pins, etc. — suppresses spurious blur→hide. */
+  suppressBlurHide: "mnml:window:suppress-blur-hide",
   installUpdate: "mnml:window:install-update",
   /** Manually trigger a check (the auto-updater also polls every 24 h). */
   checkUpdate:   "mnml:window:check-update",

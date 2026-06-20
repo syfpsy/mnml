@@ -100,6 +100,10 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return () => { bridge.setBlurLock(false); };
   }, [settingsOpen]);
 
+  // Frameless Windows overlays spuriously blur the HWND on tab/button clicks.
+  // Tell main before React handlers run so blur/focus-watchdog don't hide us.
+  const onInternalPointerDown = () => { void bridge.suppressBlurHide(); };
+
   // Summon refetch reads storage fresh on each show (see onVisibilityChanged).
 
   // Window visibility drives two things:
@@ -282,14 +286,23 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     (appResults.length === 0 && !appSearch.isSearching);
 
   return (
-    <div className="relative h-full flex flex-col">
+    <div className="relative h-full flex flex-col" onMouseDownCapture={onInternalPointerDown}>
     {/* The non-modal subtree is `inert`-ed whenever Settings is open. Pairs
         with the `aria-modal="true"` on <SettingsPanel> so focus, pointer,
         and assistive-tech navigation can't leak from the sheet into the
         compact view underneath. The UpdateBanner + Footer below are
         siblings of this subtree so they remain interactive while Settings
         is open (you can still click "Restart now" on the banner). */}
-    <div className="flex-1 flex flex-col min-h-0" inert={settingsOpen}>
+    <div
+      className="flex-1 flex flex-col min-h-0"
+      inert={settingsOpen}
+      onKeyDownCapture={(e) => {
+        const t = e.target as HTMLElement | null;
+        if (!t) return;
+        if (e.key !== "Enter" && e.key !== " ") return;
+        if (t.closest('[role="tab"]') || t.closest("button")) onInternalPointerDown();
+      }}
+    >
 
       {/* Header */}
       <div className="mnml-drag px-2.5 pt-2 pb-2 flex items-center gap-2">

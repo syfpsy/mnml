@@ -25,6 +25,7 @@ interface WindowControl {
   hide: () => void;
   setBlurLock: (locked: boolean) => void;
   setPastePending: () => void;
+  suppressBlurHide: () => void;
 }
 
 /** Copy to clipboard; optional activate closes mnml and pastes when auto-paste is on. */
@@ -213,6 +214,7 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(IPC.setBlurLock, (_, locked: boolean) =>
     windowControl.setBlurLock(locked),
   );
+  ipcMain.handle(IPC.suppressBlurHide, () => windowControl.suppressBlurHide());
   ipcMain.handle(IPC.installUpdate, () => {
     autoUpdater.quitAndInstall(false /* isSilent */, true /* isForceRunAfter */);
   });

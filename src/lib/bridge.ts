@@ -39,6 +39,7 @@ export const bridge = {
     window.mnml.updateSetting(key, value) as Promise<AppSettings>,
   hide:        () => window.mnml.hide(),
   setBlurLock: (locked: boolean) => window.mnml.setBlurLock(locked),
+  suppressBlurHide: () => window.mnml.suppressBlurHide(),
 
   // ── Events ──────────────────────────────────────────────────────────────
   onItemAdded:        (cb: (item: Item) => void) => window.mnml.onItemAdded(cb),

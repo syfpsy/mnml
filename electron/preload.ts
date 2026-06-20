@@ -50,6 +50,7 @@ const api = {
   hide:    (): Promise<void> => ipcRenderer.invoke(IPC.hide),
   setBlurLock: (locked: boolean): Promise<void> =>
     ipcRenderer.invoke(IPC.setBlurLock, locked),
+  suppressBlurHide: (): Promise<void> => ipcRenderer.invoke(IPC.suppressBlurHide),
 
   // ── Events ──────────────────────────────────────────────────────────────
   onItemAdded: (cb: (item: Item) => void): (() => void) => {

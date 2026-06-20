@@ -94,8 +94,8 @@ if (!main.includes("suppressBlurHideFromRenderer") || !readFileSync(join(root, "
   failures.push("Renderer must call suppressBlurHide IPC on in-window tab/button interaction.");
 }
 
-if (!main.includes("scheduleBlurHide") || !main.includes("isPointInsideWindow")) {
-  failures.push("Click-outside must use uIOhook screen coords + isPointInsideWindow() and a deferred blur hide with focus re-check.");
+if (!main.includes("screenToDipPoint") || !main.includes("isPointInsideWindow() || isPointInsideWindow(e.x")) {
+  failures.push("Click-outside must normalize uIOhook coords (screenToDipPoint) and trust cursor position for in-window clicks.");
 }
 
 if (!main.includes("pasteFlowActive") || !main.includes("startFocusWatchdog")) {

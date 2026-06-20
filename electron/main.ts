@@ -239,10 +239,20 @@ function suppressBlurHideFromRenderer() {
   });
 }
 
+function normalizeHookPoint(x: number, y: number): { x: number; y: number } {
+  // uIOhook reports physical screen pixels on Windows; getBounds() is DIP.
+  if (IS_WIN) {
+    try {
+      return screen.screenToDipPoint({ x, y });
+    } catch { /* fall through */ }
+  }
+  return { x, y };
+}
+
 function isPointInsideWindow(x?: number, y?: number): boolean {
   if (!isWindowUsable() || !win!.isVisible()) return false;
   const point = x != null && y != null
-    ? { x, y }
+    ? normalizeHookPoint(x, y)
     : screen.getCursorScreenPoint();
   const b = win!.getBounds();
   return (
@@ -320,7 +330,8 @@ function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" |
   if (!isWindowUsable() || !windowVisible || blurLocked) return;
   if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
-  if (isPointInsideWindow(e.x, e.y)) {
+  // Cursor is authoritative — hook x/y can disagree with DIP bounds on HiDPI.
+  if (isPointInsideWindow() || isPointInsideWindow(e.x, e.y)) {
     markInternalPointerDown();
     return;
   }

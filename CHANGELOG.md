@@ -1,5 +1,11 @@
 # mnml Changelog
 
+## v0.3.2 — 2026-05-31
+
+### Fixed
+- **Window dismissed on every in-app click (Windows HiDPI)** — uIOhook mouse coords are physical pixels; window bounds are DIP. Clicks were misclassified as outside; cursor position is now used as fallback. Blur/focus watchdog also skips hide while the pointer is over the panel.
+- **Paste failed when window dismissed early** — same root cause; row click never reached `restore` IPC.
+
 ## v0.3.1 — 2026-05-31
 
 Windows ship + tab-dismiss hotfix. macOS arm64 build uploads separately from the Mac mini.

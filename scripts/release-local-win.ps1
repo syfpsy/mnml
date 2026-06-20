@@ -19,8 +19,11 @@ if (-not $Tag) { $Tag = "v$version" }
 Write-Host "[release] mnml $version ($Tag) Windows build"
 
 npm ci
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 npm run build:release:win
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 npm run verify:release -- win
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $notesFile = Join-Path $env:TEMP "mnml-release-notes-$version.md"
 node scripts/write-gh-release-notes.mjs $version --out $notesFile
@@ -43,13 +46,18 @@ gh release upload $Tag `
   release/mnml-setup.exe.blockmap `
   --clobber
 
-$hasMac = (gh release view $Tag --json assets -q ".assets[].name" 2>$null) -match "mnml-mac"
+$hasMac = $false
+try {
+  $assetNames = gh release view $Tag --json assets -q ".assets[].name" 2>$null
+  if ($assetNames -match "mnml-mac") { $hasMac = $true }
+} catch {}
+
 if ($hasMac) {
   Write-Host "[release] Windows + macOS complete — publishing as latest"
   gh release edit $Tag --draft=false --latest
 } else {
-  Write-Host "[release] Windows uploaded. Run mac-mini-release.sh on Mac, then:"
-  Write-Host "  gh release edit $Tag --draft=false --latest"
+  Write-Host "[release] Windows uploaded — publishing as latest (macOS can follow on Mac mini)"
+  gh release edit $Tag --draft=false --latest
 }
 
 Remove-Item $notesFile -Force -ErrorAction SilentlyContinue

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Rebuild native addons for the current OS + CPU.
- * Strips uiohook prebuilds from other platforms (e.g. win32 copied onto a Mac).
+ * - better-sqlite3: always electron-rebuild (no prebuilds).
+ * - uiohook-napi: npm ships prebuilds — scrub foreign platforms only; compile only if missing.
  */
 
 import { execSync } from "node:child_process";
@@ -20,23 +21,24 @@ function assertUiohookReady(label) {
   if (!node || isForeignUiohookPath(node)) {
     console.error(`[rebuild] uiohook-napi not ready for ${process.platform}/${process.arch} (${label})`);
     if (node) console.error(`  found: ${node}`);
-    console.error("  On macOS: install Xcode Command Line Tools (`xcode-select --install`).");
-    console.error("  Then: rm -rf node_modules && npm ci");
+    if (process.platform === "darwin") {
+      console.error("  Install Xcode CLT: xcode-select --install");
+    } else if (process.platform === "win32") {
+      console.error("  Reinstall: rm -rf node_modules && npm ci");
+    }
     process.exit(1);
   }
   console.log(`[rebuild] uiohook-napi → ${node}`);
 }
 
 scrubForeignUiohookPrebuilds(uiohookDir);
-execSync("electron-rebuild -f -w better-sqlite3 uiohook-napi", { stdio: "inherit" });
+
+// better-sqlite3 must match Electron ABI; uiohook uses shipped prebuilds on win/mac.
+execSync("electron-rebuild -f -w better-sqlite3", { stdio: "inherit" });
 
 let uiohookNode = findUiohookNode(uiohookDir);
 if (!uiohookNode || isForeignUiohookPath(uiohookNode)) {
-  const prebuilds = path.join(uiohookDir, "prebuilds");
-  if (fs.existsSync(prebuilds)) {
-    fs.rmSync(prebuilds, { recursive: true, force: true });
-    console.log("[rebuild] removed uiohook prebuilds — forcing source compile");
-  }
+  console.log("[rebuild] uiohook prebuild missing — compiling from source");
   execSync("electron-rebuild -f -w uiohook-napi", { stdio: "inherit" });
 }
 

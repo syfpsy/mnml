@@ -7,6 +7,9 @@ Windows ship + tab-dismiss hotfix. macOS arm64 build uploads separately from the
 ### Fixed
 - **Window dismissed when switching tabs (Windows)** — category tab clicks could spuriously blur the frameless HWND; renderer calls `suppressBlurHide` on in-window pointer/keyboard before the focus watchdog treats it as click-away. Update banner clicks covered too.
 
+### Internal
+- **Windows packaging** — `rebuild-native.mjs` only electron-rebuilds `better-sqlite3`; `uiohook-napi` uses npm prebuilds (no VS compile for uiohook).
+
 ## v0.3.0 — 2026-05-31
 
 macOS port — clipboard history, snippets, launcher, summon, auto-paste, and CI releases.

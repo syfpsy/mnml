@@ -217,6 +217,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   const activate      = async (item: Item)        => { void bridge.suppressBlurHide(); await bridge.restore(item.id, true); };
   const activateApp   = async (result: AppResult) => {
+    void bridge.suppressBlurHide();
     const ok = await bridge.appLaunch(result.target);
     if (ok) await bridge.hide();
   };

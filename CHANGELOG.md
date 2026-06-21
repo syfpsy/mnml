@@ -1,5 +1,16 @@
 # mnml Changelog
 
+## v0.3.5 — 2026-05-31
+
+### Fixed
+- **Panel stuck after failed restore** — `cancelPasteActivation()` now releases the blur-suppress window, not just `pastePending`.
+- **Stale blur hide after re-summon** — `showWindow()` cancels pending blur timers on every summon; visible re-summon bumps `dismissGeneration`.
+- **Shift-click copy dismissed panel** — copy-only restore suppresses blur during clipboard write.
+- **App launch dismiss race** — `activateApp` suppresses blur before launch + hide.
+
+### Internal
+- List keyboard focus resets on pin-order signature, not raw `items` reference churn.
+
 ## v0.3.4 — 2026-05-31
 
 ### Fixed

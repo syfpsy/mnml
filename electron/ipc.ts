@@ -41,6 +41,11 @@ function preparePasteActivate(paste: boolean, windowControl: WindowControl) {
   windowControl.armPasteActivation();
 }
 
+/** Copy-only restore still touches clipboard — brief suppress avoids blur dismiss. */
+function prepareCopyOnlyRestore(windowControl: WindowControl) {
+  windowControl.suppressBlurHide();
+}
+
 function finishActivate(paste: boolean, windowControl: WindowControl) {
   if (!paste) return;
   if (!getSetting("autoPaste")) return;
@@ -94,7 +99,8 @@ export function registerIpc(windowControl: WindowControl) {
   );
 
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
-    preparePasteActivate(paste, windowControl);
+    if (paste) preparePasteActivate(paste, windowControl);
+    else prepareCopyOnlyRestore(windowControl);
     const itemId = requirePositiveInt(id);
     if (!itemId) {
       if (paste) windowControl.cancelPasteActivation();
@@ -184,7 +190,8 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedRestore,
     (_, { id, paste = false }: { id: number; paste?: boolean }) => {
-      preparePasteActivate(paste, windowControl);
+      if (paste) preparePasteActivate(paste, windowControl);
+      else prepareCopyOnlyRestore(windowControl);
       const snippetId = requirePositiveInt(id);
       if (!snippetId) {
         if (paste) windowControl.cancelPasteActivation();

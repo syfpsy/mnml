@@ -146,6 +146,18 @@ if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").i
   failures.push("Renderer hide-reset must be cancellable when user re-summons before rAF (hideResetGen).");
 }
 
+if (!main.includes("cancelScheduledBlurHide()") || !/showWindow\(\)[\s\S]*cancelScheduledBlurHide\(\)/.test(main)) {
+  failures.push("showWindow() must cancel pending blur-hide timers on every summon.");
+}
+
+if (!ipc.includes("prepareCopyOnlyRestore")) {
+  failures.push("Shift-click copy-only restore must suppress blur dismiss during clipboard write.");
+}
+
+if (!main.includes("suppressBlurHideUntil = 0") || !main.includes("function cancelPasteActivation")) {
+  failures.push("cancelPasteActivation() must release pastePending and suppressBlurHideUntil on restore failure.");
+}
+
 if (!main.includes("uIOhook.start()")) {
   failures.push("uIOhook must start independently of double-Alt so click-outside and paste work when hotkey install fails.");
 }

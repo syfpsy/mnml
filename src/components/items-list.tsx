@@ -18,7 +18,7 @@
  * ring (frontend-design absolute bans prohibit side-stripes).
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { bridge } from "../lib/bridge";
 import { timeAgo, splitHighlight } from "../lib/format";
 import type { Item, ItemType } from "../types";
@@ -74,8 +74,12 @@ export function ItemsList({
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const lastKbdAt = useRef(0);
   const listEl    = useRef<HTMLDivElement>(null);
+  const orderKey  = useMemo(
+    () => items.map((i) => `${i.id}:${i.pinned_at ?? ""}`).join("|"),
+    [items],
+  );
 
-  useEffect(() => { setFocusedIndex(-1); }, [items]);
+  useEffect(() => { setFocusedIndex(-1); }, [orderKey, query]);
 
   const activeId =
     focusedIndex >= 0 && focusedIndex < items.length

@@ -126,6 +126,7 @@ function resetWindowRuntimeState() {
   cancelInFlightPaste();
   hideInProgress = false;
   pastePending = false;
+  dismissGeneration += 1;
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -416,6 +417,8 @@ function armPasteActivation() {
 
 function cancelPasteActivation() {
   pastePending = false;
+  // armPasteActivation() extended suppress — release if restore never reached hide().
+  suppressBlurHideUntil = 0;
 }
 
 function recoverFromFailedHide() {
@@ -857,12 +860,15 @@ function showWindow() {
     return;
   }
   reconcileVisibilityFlag();
+  cancelScheduledBlurHide();
 
   if (!rendererReady) {
     showWhenReady = true;
     return;
   }
   if (windowVisible && win!.isVisible()) {
+    dismissGeneration += 1;
+    windowShownAt = Date.now();
     focusRunId += 1;
     loggedSearchFocusForShow = false;
     loggedNativeFocusForShow = false;
@@ -982,18 +988,6 @@ function hideWindow() {
     pasteFlowActive = true;
     suppressDoubleAltFor(1_200);
     armPasteFlowSafety();
-    // Auto-paste path. Old approach was just blur + hide + setTimeout(paste,
-    // 300ms), trusting Windows to give focus back to the previous app. It
-    // didn't — Windows can promote any window in z-order, and the Ctrl+V
-    // would land on the wrong app (often Explorer or an alwaysOnTop tool).
-    //
-    // New sequence:
-    //   1. Hide mnml.
-    //   2. Ask the foreground helper to SetForegroundWindow on the HWND we
-    //      captured *before* the summon (saved as `prevForegroundHwnd`).
-    //   3. After a short settle delay, synthesize Ctrl+V via uIOhook into
-    //      whatever window currently has foreground — which is now the
-    //      previous app.
     pastePending = false;
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
     if (win!.isVisible()) {

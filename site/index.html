@@ -363,7 +363,23 @@
       </p>
 
       <article class="release">
-        <h3>v0.3.6 — dismiss/paste hardening</h3>
+        <h3>v0.3.6 — stability hardening</h3>
+        <ul>
+          <li><strong>Safer IPC.</strong> Setting keys allowlisted; search and snippet sizes capped; clean shutdown cancels all dismiss timers.</li>
+        </ul>
+      </article>
+
+      <article class="release">
+        <h3>v0.3.5 — bug hunt fixes</h3>
+        <ul>
+          <li><strong>No stuck panel</strong> after a failed restore — blur suppress is released correctly.</li>
+          <li><strong>Shift-click copy</strong> no longer dismisses the panel during clipboard write.</li>
+          <li><strong>Stale blur timers</strong> cancelled on every re-summon.</li>
+        </ul>
+      </article>
+
+      <article class="release">
+        <h3>v0.3.4 — dismiss/paste hardening</h3>
         <ul>
           <li><strong>Paste arms earlier.</strong> Dismiss is blocked during clipboard restore I/O, not only at hide time.</li>
           <li><strong>Mousedown-only outside dismiss.</strong> Releasing the mouse outside after an in-window press no longer closes the panel.</li>

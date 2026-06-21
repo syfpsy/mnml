@@ -25,7 +25,7 @@ export function search(
 ): ScoredItem[] {
   const db = getDb();
   const limit = opts.limit ?? 50;
-  const query = normalize(q);
+  const query = normalize(q.length > 500 ? q.slice(0, 500) : q);
 
   // Empty query → most-recent items, pinned first.
   if (!query) {

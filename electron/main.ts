@@ -121,9 +121,7 @@ function resetWindowRuntimeState() {
   nativeForegroundRequestsForShow = 0;
   cancelScheduledBlurHide();
   suppressBlurHideUntil = 0;
-  cancelCapturePrev();
-  stopFocusWatchdog();
-  cancelInFlightPaste();
+  shutdownDismissTimers();
   hideInProgress = false;
   pastePending = false;
   dismissGeneration += 1;
@@ -314,9 +312,19 @@ function stopFocusWatchdog() {
   }
 }
 
+/** Cancel dismiss/paste timers — safe during shutdown or window reset. */
+function shutdownDismissTimers() {
+  cancelScheduledBlurHide();
+  stopFocusWatchdog();
+  cancelInFlightPaste();
+  cancelCapturePrev();
+}
+
 function startFocusWatchdog() {
   stopFocusWatchdog();
+  const gen = dismissGeneration;
   focusWatchTimer = setInterval(() => {
+    if (gen !== dismissGeneration) return;
     if (!windowVisible || !isWindowUsable()) return;
     if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
@@ -428,6 +436,7 @@ function recoverFromFailedHide() {
   windowVisible = true;
   try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
   try { win!.focus(); win!.webContents.focus(); } catch { /* noop */ }
+  startFocusWatchdog();
 }
 
 function ensureWindowSize() {
@@ -948,6 +957,7 @@ function showWindow() {
 }
 
 function hideWindow() {
+  if (appQuitting) return;
   if (hideInProgress) {
     log("[hide] ignored — hide already in progress");
     return;
@@ -1190,6 +1200,7 @@ app.on("window-all-closed", () => { /* stay alive for the global hotkey */ });
 app.on("before-quit", () => {
   appQuitting = true;
   log("[lifecycle] before-quit");
+  shutdownDismissTimers();
   if (updaterInterval) { clearInterval(updaterInterval); updaterInterval = null; }
   // Stop the clipboard poller first so it can't write into the
   // about-to-close DB connection. Then checkpoint + close SQLite so

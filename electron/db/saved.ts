@@ -31,6 +31,12 @@ interface SavedRow {
  * 500 most-recently-touched. Bumping this is safe; never remove the LIMIT.
  */
 const LIST_SAVED_CAP = 500;
+const MAX_SNIPPET_LABEL_LEN = 200;
+const MAX_SNIPPET_CONTENT_LEN = 64 * 1024;
+
+function clampSnippetField(value: string, maxLen: number): string {
+  return value.length > maxLen ? value.slice(0, maxLen) : value;
+}
 
 export function listSaved(): SavedSnippet[] {
   return getDb()
@@ -54,8 +60,8 @@ export function getSavedById(id: number): SavedSnippet | null {
 
 export function addSaved(label: string, content: string): SavedSnippet {
   const now = Date.now();
-  const trimmedLabel   = label.trim()   || defaultLabel(content);
-  const trimmedContent = content;        // content kept verbatim — preserves whitespace
+  const trimmedLabel   = clampSnippetField(label.trim()   || defaultLabel(content), MAX_SNIPPET_LABEL_LEN);
+  const trimmedContent = clampSnippetField(content, MAX_SNIPPET_CONTENT_LEN);
   const result = getDb()
     .prepare(
       "INSERT INTO saved_snippets(label, content, created_at, updated_at) VALUES(?, ?, ?, ?)",
@@ -72,12 +78,13 @@ export function addSaved(label: string, content: string): SavedSnippet {
 
 export function updateSaved(id: number, label: string, content: string): void {
   const now = Date.now();
-  const trimmedLabel = label.trim() || defaultLabel(content);
+  const trimmedLabel = clampSnippetField(label.trim() || defaultLabel(content), MAX_SNIPPET_LABEL_LEN);
+  const trimmedContent = clampSnippetField(content, MAX_SNIPPET_CONTENT_LEN);
   getDb()
     .prepare(
       "UPDATE saved_snippets SET label = ?, content = ?, updated_at = ? WHERE id = ?",
     )
-    .run(trimmedLabel, content, now, id);
+    .run(trimmedLabel, trimmedContent, now, id);
 }
 
 export function deleteSaved(id: number): void {

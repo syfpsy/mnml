@@ -53,6 +53,31 @@ function finishActivate(paste: boolean, windowControl: WindowControl) {
   windowControl.hide();
 }
 
+const SETTING_KEYS: ReadonlySet<keyof AppSettings> = new Set([
+  "monitoring",
+  "maxItems",
+  "launchOnStartup",
+  "autoPaste",
+  "lightTheme",
+]);
+
+const MAX_SEARCH_QUERY_LEN = 500;
+const MAX_SNIPPET_LABEL_LEN = 200;
+const MAX_SNIPPET_CONTENT_LEN = 64 * 1024;
+
+function isSettingKey(key: unknown): key is keyof AppSettings {
+  return typeof key === "string" && SETTING_KEYS.has(key as keyof AppSettings);
+}
+
+function clampString(value: unknown, maxLen: number): string {
+  if (typeof value !== "string") return "";
+  return value.length > maxLen ? value.slice(0, maxLen) : value;
+}
+
+function clampSearchQuery(value: unknown): string {
+  return clampString(value, MAX_SEARCH_QUERY_LEN);
+}
+
 function clampListLimit(limit: unknown, fallback: number, max = 500): number {
   const n = typeof limit === "number" ? limit : Number(limit);
   if (!Number.isFinite(n)) return fallback;
@@ -93,7 +118,7 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.search,
     (_, { query, type, limit }: { query: string; type?: ItemType; limit?: number }) => {
-      const scored = search(query ?? "", { limit: clampListLimit(limit, 50), type });
+      const scored = search(clampSearchQuery(query), { limit: clampListLimit(limit, 50), type });
       return scored.map((s) => s.item);
     },
   );
@@ -132,7 +157,7 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(IPC.pin,    (_, { id, pinned }: { id: number; pinned: boolean }) => {
     const itemId = requirePositiveInt(id);
     if (!itemId) return;
-    setPinned(itemId, pinned);
+    setPinned(itemId, Boolean(pinned));
   });
 
   ipcMain.handle(IPC.getImage, (_, id: number): string | null => {
@@ -146,7 +171,7 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.appSearch,
     async (_, { query }: { query: string }): Promise<AppSearchResponse> => {
-      const q = query?.trim() ?? "";
+      const q = clampSearchQuery(query).trim();
       if (!q) return { results: [] };
       return searchApps(q, 12);
     },
@@ -164,7 +189,10 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedAdd,
     (_, { label, content }: { label: string; content: string }): SavedSnippet => {
-      const created = addSaved(label, content);
+      const created = addSaved(
+        clampString(label, MAX_SNIPPET_LABEL_LEN),
+        clampString(content, MAX_SNIPPET_CONTENT_LEN),
+      );
       broadcastSavedChanged();
       return created;
     },
@@ -175,7 +203,11 @@ export function registerIpc(windowControl: WindowControl) {
     (_, { id, label, content }: { id: number; label: string; content: string }) => {
       const snippetId = requirePositiveInt(id);
       if (!snippetId) return;
-      updateSaved(snippetId, label, content);
+      updateSaved(
+        snippetId,
+        clampString(label, MAX_SNIPPET_LABEL_LEN),
+        clampString(content, MAX_SNIPPET_CONTENT_LEN),
+      );
       broadcastSavedChanged();
     },
   );
@@ -231,6 +263,10 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.updateSetting,
     (_, { key, value }: { key: keyof AppSettings; value: AppSettings[keyof AppSettings] }) => {
+      if (!isSettingKey(key)) {
+        log("[ipc] updateSetting rejected unknown key:", String(key));
+        return getAllSettings();
+      }
       let next = value;
       if (key === "maxItems" && typeof value === "number") {
         next = Math.min(10_000, Math.max(1, Math.floor(value))) as AppSettings["maxItems"];
@@ -248,8 +284,8 @@ export function registerIpc(windowControl: WindowControl) {
   );
 
   ipcMain.handle(IPC.hide, () => windowControl.hide());
-  ipcMain.handle(IPC.setBlurLock, (_, locked: boolean) =>
-    windowControl.setBlurLock(locked),
+  ipcMain.handle(IPC.setBlurLock, (_, locked: unknown) =>
+    windowControl.setBlurLock(Boolean(locked)),
   );
   ipcMain.handle(IPC.suppressBlurHide, () => windowControl.suppressBlurHide());
   ipcMain.handle(IPC.installUpdate, () => {
@@ -315,6 +351,9 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.storageSet,
     async (_, targetPath: string): Promise<{ ok: boolean; changed: boolean; message: string; adoptedExisting?: boolean }> => {
+      if (typeof targetPath !== "string" || !targetPath.trim()) {
+        return { ok: false, changed: false, message: "Invalid folder path." };
+      }
       log(`[storage] migration requested: ${targetPath}`);
 
       // Capture the monitoring preference BEFORE we close the DB, so we

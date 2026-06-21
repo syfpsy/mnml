@@ -202,8 +202,28 @@ if (!ipc.includes("if (paste) windowControl.suppressBlurHide()") && !ipc.include
   failures.push("restore/savedRestore must prepare paste activation at IPC entry when paste is requested.");
 }
 
-if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("requestAnimationFrame")) {
-  failures.push("Renderer must defer UI reset on hide by one frame (requestAnimationFrame) as a belt-and-suspenders guard.");
+if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("hideResetGen")) {
+  failures.push("Renderer hide-reset must be cancellable when user re-summons before rAF (hideResetGen).");
+}
+
+if (!ipc.includes("isSettingKey") || !ipc.includes("updateSetting rejected unknown key")) {
+  failures.push("IPC updateSetting must reject unknown setting keys (isSettingKey allowlist).");
+}
+
+if (!ipc.includes("clampSearchQuery") || !ipc.includes("MAX_SNIPPET_CONTENT_LEN")) {
+  failures.push("IPC must clamp search queries and snippet field lengths at the boundary.");
+}
+
+if (!main.includes("shutdownDismissTimers") || !/before-quit[\s\S]*shutdownDismissTimers/.test(main)) {
+  failures.push("before-quit must call shutdownDismissTimers() to cancel dismiss/paste timers.");
+}
+
+if (!main.includes("gen !== dismissGeneration") || !/startFocusWatchdog[\s\S]*gen !== dismissGeneration/.test(main)) {
+  failures.push("Focus watchdog must stamp dismissGeneration like deferred blur hide.");
+}
+
+if (!readFileSync(join(root, "electron", "db", "saved.ts"), "utf8").includes("MAX_SNIPPET_CONTENT_LEN")) {
+  failures.push("saved.ts must clamp snippet content length at the DB layer.");
 }
 
 if (failures.length > 0) {

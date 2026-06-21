@@ -101,7 +101,9 @@ These are the bugs we kept hitting because Windows protects against background a
 | O49 | v0.2.45 installer failed to start — `better_sqlite3.node` missing after Electron 42 bump without native rebuild. | Revert Electron to 33.4.11; `verify-native-bindings.mjs` + rebuild before pack; CI `build:release`. |
 | O51 | Failed restore left `suppressBlurHideUntil` armed — panel stuck undismissable for up to 2 s after bad row id / missing image. | `cancelPasteActivation()` clears both `pastePending` and `suppressBlurHideUntil`. |
 | O52 | Stale blur timer could hide after re-summon on the already-visible path — `showWindow()` visible branch skipped `cancelScheduledBlurHide()`. | Cancel blur timers at every `showWindow()` entry; bump `dismissGeneration` + `windowShownAt` on visible re-summon. |
-| O53 | Shift-click copy dismissed panel during clipboard write — only paste path called `suppressBlurHide`. | `prepareCopyOnlyRestore()` on `paste:false` restore/savedRestore. |
+| O54 | Focus watchdog could hide after re-summon without generation stamp. | Watchdog interval bails when `dismissGeneration` drifts. |
+| O55 | Quit left dismiss/paste timers armed. | `shutdownDismissTimers()` on `before-quit` and window reset. |
+| O56 | Unbounded IPC search/snippet payloads. | Clamp at IPC boundary + DB layer for snippets; search service caps query length. |
 
 ---
 

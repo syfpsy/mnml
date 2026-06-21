@@ -1,5 +1,12 @@
 # mnml Changelog
 
+## v0.3.6 — 2026-05-31
+
+### Internal
+- **IPC input guards** — setting-key allowlist, clamped search queries (500 chars), snippet label/content caps, boolean coercion on pin/blur-lock, storage path validation.
+- **Shutdown safety** — `shutdownDismissTimers()` cancels blur/focus/paste timers on quit; focus watchdog stamps `dismissGeneration`; failed hide restarts watchdog.
+- **DB-layer snippet caps** — `saved.ts` enforces the same content limits as IPC (defence in depth).
+
 ## v0.3.5 — 2026-05-31
 
 ### Fixed

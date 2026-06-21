@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type RefObject } from "react";
+import { bridge } from "../lib/bridge";
 import type { AppResult } from "../types";
 import { AppIcon, FileIcon, FolderIcon } from "./icons";
 
@@ -116,6 +117,7 @@ export function AppResultsList({
               role="option"
               aria-selected={selected}
               tabIndex={-1}
+              onMouseDown={() => { void bridge.suppressBlurHide(); }}
               onClick={() => onActivate(result)}
               onMouseEnter={() => {
                 if (Date.now() - lastKbdAt.current < KEYBOARD_GRACE_MS) return;

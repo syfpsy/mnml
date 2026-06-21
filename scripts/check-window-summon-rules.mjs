@@ -142,6 +142,30 @@ if (!/body\s*{[^}]*background:\s*var\(--bg\)/s.test(styles) || /<body[^>]*bg-tra
   failures.push("Renderer body must paint var(--bg), not transparent, because the window is intentionally opaque.");
 }
 
+if (!main.includes("notifyRendererHidden") || !main.includes("win!.isVisible()")) {
+  failures.push("Renderer visibility reset must run only after win.hide() succeeds (notifyRendererHidden).");
+}
+
+if (!main.includes("setMinimumSize") || !main.includes("setMaximumSize") || !main.includes("ensureWindowSize")) {
+  failures.push("Window size must be locked to WINDOW_SIZE via min/max bounds and ensureWindowSize() before show/hide.");
+}
+
+if (!main.includes("isDismissBlocked") || !main.includes("hideInProgress")) {
+  failures.push("Dismiss pathways must share isDismissBlocked() and guard reentrant hideWindow().");
+}
+
+if (!ipc.includes("suppressBlurHide()") || !ipc.includes("setPastePending()") || !ipc.includes("windowControl.hide()")) {
+  failures.push("finishActivate(paste) must suppress blur, arm paste, then hide in that order.");
+}
+
+if (!ipc.includes("if (paste) windowControl.suppressBlurHide()")) {
+  failures.push("restore/savedRestore must suppress blur at IPC entry when paste is requested.");
+}
+
+if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("requestAnimationFrame")) {
+  failures.push("Renderer must defer UI reset on hide by one frame (requestAnimationFrame) as a belt-and-suspenders guard.");
+}
+
 if (failures.length > 0) {
   console.error("Window summon rule check failed:");
   for (const failure of failures) console.error(`- ${failure}`);

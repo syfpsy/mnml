@@ -180,6 +180,7 @@ function SavedRow({
       role="option"
       aria-selected={selected}
       tabIndex={-1}
+      onMouseDown={() => { void bridge.suppressBlurHide(); }}
       onClick={(e) => {
         if (e.shiftKey && onCopyOnly) { onCopyOnly(); return; }
         onActivate();

@@ -1,5 +1,15 @@
 # mnml Changelog
 
+## v0.3.3 — 2026-05-31
+
+### Fixed
+- **Panel looked like it shrank on row click** — renderer was cleared before `win.hide()`; visibility reset now fires only after the window is actually hidden.
+- **Row click did not paste** — explicit row/Enter restore always arms auto-paste (not gated on the Settings toggle); blur suppress on item mousedown prevents premature dismiss.
+
+### Internal
+- **Dismiss hardening** — shared `isDismissBlocked()` gate across blur, click-outside, and focus watchdog; reentrant `hideWindow()` guard; IPC arms suppress→paste→hide in order; summon-rule checks extended; renderer defers UI reset one frame on hide.
+- **Audit polish** — larger update-banner button, search-bar `:focus-within` ring, tab/clear hit targets, footer action hint, `prefers-reduced-motion`, settings copy for auto-paste scope.
+
 ## v0.3.2 — 2026-05-31
 
 ### Fixed

@@ -40,17 +40,6 @@ export function SearchBar({
         background: "var(--bg-raised)",
         boxShadow: "0 0 0 1px var(--border)",
       }}
-      // 1px light-blue ring via `--focus-search` on the wrapper when any
-      // child (input, clear-x) gains keyboard or pointer focus. The wrapper
-      // owns the focus signal; child inputs + buttons opt out of the
-      // generic 2px outline (scoped by `[data-mnml-search-bar]` in
-      // styles.css) so the two indicators don't stack.
-      onFocusCapture={(e) => (e.currentTarget.style.boxShadow = "0 0 0 1px var(--focus-search)")}
-      onBlurCapture={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          e.currentTarget.style.boxShadow = "0 0 0 1px var(--border)";
-        }
-      }}
     >
       <SearchIcon className="w-[14px] h-[14px] shrink-0" style={{ color: "var(--t3)" }} />
 
@@ -85,7 +74,7 @@ export function SearchBar({
           type="button"
           onClick={() => onChange("")}
           aria-label="Clear"
-          className="mnml-btn-ghost shrink-0 p-1 -m-1 rounded"
+          className="mnml-btn-ghost shrink-0 p-1.5 -m-0.5 rounded"
         >
           <XIcon className="w-[14px] h-[14px]" />
         </button>

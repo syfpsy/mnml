@@ -138,7 +138,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
               <Toggle isSelected={settings.launchOnStartup} onChange={(v) => update("launchOnStartup", v)} label="Launch on startup" />
             </Row>
 
-            <Row label="Auto-paste on restore" hint="Simulates Ctrl+V so the item lands in the focused app.">
+            <Row label="Auto-paste on restore" hint="When on, clicking a row or pressing Enter pastes into the app you were using. Shift-click always copies only.">
               <Toggle isSelected={settings.autoPaste}    onChange={(v) => update("autoPaste", v)}    label="Auto-paste on restore" />
             </Row>
 

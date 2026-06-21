@@ -44,7 +44,7 @@ export function UpdateBanner({ state, version, onInstall }: Props) {
         <button
           type="button"
           onClick={onInstall}
-          className="px-2 py-0.5 rounded text-[10px] font-medium transition-opacity hover:opacity-75 active:opacity-60"
+          className="px-2.5 py-1 rounded text-[11px] font-medium min-h-[28px] transition-opacity hover:opacity-75 active:opacity-60"
           style={{ background: "var(--accent-success-btn)", color: "var(--accent-success)" }}
         >
           Restart now

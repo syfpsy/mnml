@@ -28,10 +28,16 @@ interface WindowControl {
   suppressBlurHide: () => void;
 }
 
-/** Copy to clipboard; optional activate closes mnml and pastes when auto-paste is on. */
+/**
+ * paste:true = user activated a row (click / Enter / quick-paste).
+ * When autoPaste is off, clipboard is already updated — stay open.
+ * Shift-click passes paste:false and returns immediately above.
+ */
 function finishActivate(paste: boolean, windowControl: WindowControl) {
   if (!paste) return;
-  if (getSetting("autoPaste")) windowControl.setPastePending();
+  if (!getSetting("autoPaste")) return;
+  windowControl.suppressBlurHide();
+  windowControl.setPastePending();
   windowControl.hide();
 }
 
@@ -81,6 +87,7 @@ export function registerIpc(windowControl: WindowControl) {
   );
 
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
+    if (paste) windowControl.suppressBlurHide();
     const itemId = requirePositiveInt(id);
     if (!itemId) return;
     const item = getById(itemId);
@@ -161,6 +168,7 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedRestore,
     (_, { id, paste = false }: { id: number; paste?: boolean }) => {
+      if (paste) windowControl.suppressBlurHide();
       const snippetId = requirePositiveInt(id);
       if (!snippetId) return;
       const snippet = getSavedById(snippetId);

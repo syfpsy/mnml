@@ -215,6 +215,10 @@ textarea::placeholder {
   outline: none;
 }
 
+[data-mnml-search-bar="true"]:focus-within {
+  box-shadow: 0 0 0 1px var(--focus-search);
+}
+
 #root {
   display: flex;
   align-items: stretch;
@@ -258,6 +262,14 @@ textarea::placeholder {
 }
 .mnml-row:last-child {
   border-bottom: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mnml-btn-ghost,
+  .mnml-row,
+  [data-mnml-search-bar="true"] {
+    transition: none !important;
+  }
 }
 
 /* ── Hide native number-input spinners ──────────────────────────────────────

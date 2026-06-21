@@ -86,6 +86,8 @@ let showVerifyAttempts = 0;
 /** Suppress blur→hide while an in-window pointer interaction is in flight. */
 let suppressBlurHideUntil = 0;
 let blurHideTimer: NodeJS.Timeout | null = null;
+/** Prevents reentrant hideWindow() from interleaving paste-arm / visibility IPC. */
+let hideInProgress = false;
 
 const MAX_LOAD_RETRIES = 2;
 const MAX_RECREATE_ATTEMPTS = 5;
@@ -227,6 +229,19 @@ function markInternalPointerDown(ms = 1_000) {
   cancelScheduledBlurHide();
 }
 
+/** Shared gate for blur, click-outside, and focus-watchdog dismiss pathways. */
+function isDismissBlocked(): boolean {
+  return (
+    blurLocked ||
+    hideInProgress ||
+    pastePending ||
+    pasteFlowActive ||
+    pasteAfterRestorePending ||
+    awaitingHelperRestore ||
+    Date.now() < suppressBlurHideUntil
+  );
+}
+
 /** Renderer calls this on mousedown in tabs, lists, etc. before HWND blur fires. */
 function suppressBlurHideFromRenderer() {
   markInternalPointerDown(1_200);
@@ -295,9 +310,8 @@ function stopFocusWatchdog() {
 function startFocusWatchdog() {
   stopFocusWatchdog();
   focusWatchTimer = setInterval(() => {
-    if (!windowVisible || blurLocked || !isWindowUsable()) return;
-    if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
-    if (Date.now() < suppressBlurHideUntil) return;
+    if (!windowVisible || !isWindowUsable()) return;
+    if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
     if (win!.isFocused() || win!.webContents.isFocused()) return;
     if (BrowserWindow.getFocusedWindow() === win) return;
@@ -313,9 +327,8 @@ function scheduleBlurHide() {
   cancelScheduledBlurHide();
   blurHideTimer = setTimeout(() => {
     blurHideTimer = null;
-    if (blurLocked || !windowVisible || !isWindowUsable()) return;
-    if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
-    if (Date.now() < suppressBlurHideUntil) return;
+    if (!windowVisible || !isWindowUsable()) return;
+    if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
     // Transient blur from an internal click — focus never actually left.
     if (win!.isFocused() || win!.webContents.isFocused()) return;
@@ -327,8 +340,8 @@ function scheduleBlurHide() {
 }
 
 function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" | "mouseup") {
-  if (!isWindowUsable() || !windowVisible || blurLocked) return;
-  if (pastePending || pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore) return;
+  if (!isWindowUsable() || !windowVisible) return;
+  if (isDismissBlocked()) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
   // Cursor is authoritative — hook x/y can disagree with DIP bounds on HiDPI.
   if (isPointInsideWindow() || isPointInsideWindow(e.x, e.y)) {
@@ -386,7 +399,36 @@ function createForegroundService(): ForegroundService {
 
 function setPastePending() {
   pastePending = true;
-  markInternalPointerDown(800);
+  markInternalPointerDown(1_500);
+}
+
+function ensureWindowSize() {
+  if (!isWindowUsable()) return;
+  const b = win!.getBounds();
+  if (b.width !== WINDOW_SIZE.width || b.height !== WINDOW_SIZE.height) {
+    try {
+      win!.setBounds({ x: b.x, y: b.y, ...WINDOW_SIZE }, false);
+    } catch (err) {
+      log("[window] ensureWindowSize failed:", String(err));
+    }
+  }
+}
+
+/** Tell renderer to reset only after the OS window is actually hidden. */
+function notifyRendererHidden() {
+  setImmediate(() => {
+    if (!isWindowUsable()) {
+      safeSendToRenderer(IPC.onVisibilityChanged, false);
+      return;
+    }
+    if (!win!.isVisible()) {
+      safeSendToRenderer(IPC.onVisibilityChanged, false);
+    } else {
+      // hide() failed — keep UI state; user still sees the panel
+      windowVisible = true;
+      try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
+    }
+  });
 }
 
 function cancelCapturePrev() {
@@ -676,6 +718,8 @@ function createWindow() {
   });
 
   win.setMenu(null);
+  win.setMinimumSize(WINDOW_SIZE.width, WINDOW_SIZE.height);
+  win.setMaximumSize(WINDOW_SIZE.width, WINDOW_SIZE.height);
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
@@ -806,6 +850,7 @@ function showWindow() {
   }
 
   const revealWindow = () => {
+    ensureWindowSize();
     const size     = WINDOW_SIZE;
     const { x, y } = positionNearCursor(size.width, size.height);
 
@@ -871,6 +916,11 @@ function showWindow() {
 }
 
 function hideWindow() {
+  if (hideInProgress) {
+    log("[hide] ignored — hide already in progress");
+    return;
+  }
+  hideInProgress = true;
   cancelScheduledBlurHide();
   cancelCapturePrev();
   const armingPaste = pastePending;
@@ -882,18 +932,24 @@ function hideWindow() {
   }
   if (!isWindowUsable()) {
     resetWindowRuntimeState();
+    hideInProgress = false;
     return;
   }
   blurLocked    = false;
-  windowVisible = false;
   focusRunId += 1;
   stopFocusWatchdog();
+
+  ensureWindowSize();
 
   try { win!.setIgnoreMouseEvents(true, { forward: true }); }
   catch (err) { log("[hide] setIgnoreMouseEvents failed:", String(err)); }
 
-  // Notify renderer
-  safeSendToRenderer(IPC.onVisibilityChanged, false);
+  // Do NOT notify renderer here — clearing the list before win.hide() made the
+  // panel look like it shrank while still visible.
+
+  const finishHideSync = () => {
+    hideInProgress = false;
+  };
 
   if (armingPaste) {
     pasteFlowActive = true;
@@ -913,6 +969,8 @@ function hideWindow() {
     //      previous app.
     pastePending = false;
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
+    windowVisible = false;
+    notifyRendererHidden();
     const target = prevForegroundTarget;
     const ours = fg?.ownTarget() ?? null;
     if (target && ours && target === ours) {
@@ -934,11 +992,13 @@ function hideWindow() {
       try { win!.blur(); } catch { /* noop */ }
       triggerPaste(350, () => { pasteFlowActive = false; });
     }
+    finishHideSync();
   } else {
     // Normal hide (Escape / click-outside).
-    // Truly hide so the next showWindow() operates on a hidden HWND and gets
-    // OS focus unconditionally via ShowWindow(SW_SHOW).
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
+    windowVisible = false;
+    notifyRendererHidden();
+    finishHideSync();
   }
 }
 

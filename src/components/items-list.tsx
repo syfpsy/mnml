@@ -75,7 +75,7 @@ export function ItemsList({
   const lastKbdAt = useRef(0);
   const listEl    = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setFocusedIndex(-1); }, [items.length, query, items.map((i) => `${i.id}:${i.pinned_at ?? ""}`).join("|")]);
+  useEffect(() => { setFocusedIndex(-1); }, [items]);
 
   const activeId =
     focusedIndex >= 0 && focusedIndex < items.length
@@ -171,6 +171,7 @@ export function ItemsList({
               role="option"
               aria-selected={focused}
               tabIndex={-1}
+              onMouseDown={() => { void bridge.suppressBlurHide(); }}
               onClick={(e) => {
                 if (e.shiftKey && onCopyOnly) { onCopyOnly(item); return; }
                 onActivate(item);

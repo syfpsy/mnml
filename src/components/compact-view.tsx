@@ -118,9 +118,13 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   useEffect(() => {
     return bridge.onVisibilityChanged((visible) => {
       if (!visible) {
-        setQuery("");
-        setSettingsOpen(false);
-        setSavedListEpoch((n) => n + 1);
+        // Defer reset one frame so we never clear list chrome while the OS
+        // window is still visible (belt-and-suspenders with main's deferred IPC).
+        requestAnimationFrame(() => {
+          setQuery("");
+          setSettingsOpen(false);
+          setSavedListEpoch((n) => n + 1);
+        });
         return;
       }
       bridge.storageGet()
@@ -204,12 +208,12 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // ── Activation ──────────────────────────────────────────────────────────
 
-  const activate      = async (item: Item)        => { await bridge.restore(item.id, true); };
+  const activate      = async (item: Item)        => { void bridge.suppressBlurHide(); await bridge.restore(item.id, true); };
   const activateApp   = async (result: AppResult) => {
     const ok = await bridge.appLaunch(result.target);
     if (ok) await bridge.hide();
   };
-  const activateSaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, true); };
+  const activateSaved = async (s: SavedSnippet)   => { void bridge.suppressBlurHide(); await bridge.savedRestore(s.id, true); };
   const copyOnly      = async (item: Item)        => { await bridge.restore(item.id); };
   const copyOnlySaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, false); };
 
@@ -440,7 +444,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         className="px-3 py-1.5 flex items-center justify-between text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        <span>{pasteRowHint} · Shift-click copy · Esc dismiss</span>
+        <span>{pasteRowHint} · Shift-click copy · Esc dismiss · Hover row for actions</span>
         <span>{summonHint} to toggle</span>
       </div>
 
@@ -510,7 +514,7 @@ function TabBtn({ label, active, onClick, panelId }: {
       tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={
-        "px-2.5 py-1 text-[11px] rounded-md rounded-b-none transition-colors " +
+        "px-2.5 py-1.5 min-h-[28px] text-[11px] rounded-md rounded-b-none transition-colors " +
         (active ? "" : "mnml-btn-ghost")
       }
       style={{

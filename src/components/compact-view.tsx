@@ -94,6 +94,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // listener (registered once, below) calls through this ref so it always
   // sees current `items` / `snippets` / tab without re-subscribing.
   const quickPasteRef = useRef<(n: number) => boolean>(() => false);
+  /** Cancels a pending hide-reset if the user re-summons before rAF fires. */
+  const hideResetGen   = useRef(0);
 
   useEffect(() => {
     bridge.setBlurLock(settingsOpen);
@@ -117,24 +119,29 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   //    restart. Skipped for the default location — there's nothing to pick up.
   useEffect(() => {
     return bridge.onVisibilityChanged((visible) => {
-      if (!visible) {
-        // Defer reset one frame so we never clear list chrome while the OS
-        // window is still visible (belt-and-suspenders with main's deferred IPC).
+      if (visible) {
+        hideResetGen.current += 1;
+        bridge.storageGet()
+          .then((s) => {
+            if (!s.isDefault) {
+              refetch();
+              refetchSaved();
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+      const gen = hideResetGen.current;
+      // Defer reset two frames so we never clear list chrome while the OS
+      // window is still visible (belt-and-suspenders with main's deferred IPC).
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          if (gen !== hideResetGen.current) return;
           setQuery("");
           setSettingsOpen(false);
           setSavedListEpoch((n) => n + 1);
         });
-        return;
-      }
-      bridge.storageGet()
-        .then((s) => {
-          if (!s.isDefault) {
-            refetch();
-            refetchSaved();
-          }
-        })
-        .catch(() => {});
+      });
     });
   }, [refetch, refetchSaved]);
 

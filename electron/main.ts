@@ -88,6 +88,8 @@ let suppressBlurHideUntil = 0;
 let blurHideTimer: NodeJS.Timeout | null = null;
 /** Prevents reentrant hideWindow() from interleaving paste-arm / visibility IPC. */
 let hideInProgress = false;
+/** Bumped on every show/hide; stale blur timers bail when generation drifts. */
+let dismissGeneration = 0;
 
 const MAX_LOAD_RETRIES = 2;
 const MAX_RECREATE_ATTEMPTS = 5;
@@ -122,6 +124,8 @@ function resetWindowRuntimeState() {
   cancelCapturePrev();
   stopFocusWatchdog();
   cancelInFlightPaste();
+  hideInProgress = false;
+  pastePending = false;
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -270,9 +274,11 @@ function isPointInsideWindow(x?: number, y?: number): boolean {
     ? normalizeHookPoint(x, y)
     : screen.getCursorScreenPoint();
   const b = win!.getBounds();
+  // 2 px inset tolerance — edge clicks on HiDPI can land just outside bounds.
+  const pad = 2;
   return (
-    point.x >= b.x && point.x <= b.x + b.width &&
-    point.y >= b.y && point.y <= b.y + b.height
+    point.x >= b.x - pad && point.x <= b.x + b.width + pad &&
+    point.y >= b.y - pad && point.y <= b.y + b.height + pad
   );
 }
 
@@ -325,8 +331,10 @@ function startFocusWatchdog() {
 
 function scheduleBlurHide() {
   cancelScheduledBlurHide();
+  const gen = dismissGeneration;
   blurHideTimer = setTimeout(() => {
     blurHideTimer = null;
+    if (gen !== dismissGeneration) return;
     if (!windowVisible || !isWindowUsable()) return;
     if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
@@ -339,7 +347,7 @@ function scheduleBlurHide() {
   }, 250);
 }
 
-function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" | "mouseup") {
+function onGlobalMouseOutside(e: { x: number; y: number }) {
   if (!isWindowUsable() || !windowVisible) return;
   if (isDismissBlocked()) return;
   if (Date.now() - windowShownAt < 350) return; // ignore the opening click
@@ -348,14 +356,12 @@ function onGlobalMouseOutside(e: { x: number; y: number }, source: "mousedown" |
     markInternalPointerDown();
     return;
   }
-  log(`[mouse] outside ${source} — hiding`);
+  log("[mouse] outside mousedown — hiding");
   hideWindow();
 }
 
 const onGlobalMousedownHandler = (e: { x: number; y: number }) =>
-  onGlobalMouseOutside(e, "mousedown");
-const onGlobalMouseupHandler = (e: { x: number; y: number }) =>
-  onGlobalMouseOutside(e, "mouseup");
+  onGlobalMouseOutside(e);
 
 function clearPasteAfterRestoreTimer() {
   if (pasteAfterRestoreTimer !== null) {
@@ -402,6 +408,25 @@ function setPastePending() {
   markInternalPointerDown(1_500);
 }
 
+/** Called at IPC entry before clipboard restore — blocks dismiss during slow I/O. */
+function armPasteActivation() {
+  pastePending = true;
+  markInternalPointerDown(2_000);
+}
+
+function cancelPasteActivation() {
+  pastePending = false;
+}
+
+function recoverFromFailedHide() {
+  pastePending = false;
+  cancelInFlightPaste();
+  if (!isWindowUsable()) return;
+  windowVisible = true;
+  try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
+  try { win!.focus(); win!.webContents.focus(); } catch { /* noop */ }
+}
+
 function ensureWindowSize() {
   if (!isWindowUsable()) return;
   const b = win!.getBounds();
@@ -425,8 +450,8 @@ function notifyRendererHidden() {
       safeSendToRenderer(IPC.onVisibilityChanged, false);
     } else {
       // hide() failed — keep UI state; user still sees the panel
-      windowVisible = true;
-      try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
+      log("[hide] win still visible after hide() — recovering");
+      recoverFromFailedHide();
     }
   });
 }
@@ -782,9 +807,9 @@ function createWindow() {
   // re-checked so in-window button clicks (which can spuriously blur the HWND
   // on frameless Windows overlays) don't dismiss the panel.
   win.on("blur", () => {
-    if (blurLocked || !windowVisible) return;
+    if (!windowVisible || !isWindowUsable()) return;
+    if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
-    if (!isWindowUsable()) return;
     scheduleBlurHide();
   });
   win.on("focus", () => {
@@ -865,6 +890,7 @@ function showWindow() {
     }
 
     windowShownAt = Date.now();
+    dismissGeneration += 1;
     windowVisible = true;
     showVerifyAttempts = 0;
     focusRunId += 1;
@@ -921,6 +947,7 @@ function hideWindow() {
     return;
   }
   hideInProgress = true;
+  dismissGeneration += 1;
   cancelScheduledBlurHide();
   cancelCapturePrev();
   const armingPaste = pastePending;
@@ -969,6 +996,12 @@ function hideWindow() {
     //      previous app.
     pastePending = false;
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
+    if (win!.isVisible()) {
+      log("[hide] paste hide did not take effect — recovering");
+      recoverFromFailedHide();
+      finishHideSync();
+      return;
+    }
     windowVisible = false;
     notifyRendererHidden();
     const target = prevForegroundTarget;
@@ -996,6 +1029,12 @@ function hideWindow() {
   } else {
     // Normal hide (Escape / click-outside).
     try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
+    if (win!.isVisible()) {
+      log("[hide] normal hide did not take effect — recovering");
+      recoverFromFailedHide();
+      finishHideSync();
+      return;
+    }
     windowVisible = false;
     notifyRendererHidden();
     finishHideSync();
@@ -1095,6 +1134,8 @@ app.whenReady().then(() => {
     hide: hideWindow,
     setBlurLock,
     setPastePending,
+    armPasteActivation,
+    cancelPasteActivation,
     suppressBlurHide: suppressBlurHideFromRenderer,
   });
 
@@ -1107,7 +1148,6 @@ app.whenReady().then(() => {
   onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, item));
 
   uIOhook.on("mousedown", onGlobalMousedownHandler);
-  uIOhook.on("mouseup",   onGlobalMouseupHandler);
 
   try {
     uIOhook.start();
@@ -1166,7 +1206,6 @@ app.on("before-quit", () => {
   try { closeDb();     } catch (err) { log("[lifecycle] closeDb:",     String(err)); }
   try { fg?.shutdown(); } catch { /* noop */ }
   uIOhook.off("mousedown", onGlobalMousedownHandler);
-  uIOhook.off("mouseup",   onGlobalMouseupHandler);
   uninstallHotkey?.();
   globalShortcut.unregisterAll();
   tray?.destroy();

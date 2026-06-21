@@ -1,5 +1,15 @@
 # mnml Changelog
 
+## v0.3.4 — 2026-05-31
+
+### Fixed
+- **Spurious dismiss during paste** — paste arms at IPC entry (`armPasteActivation`) before slow clipboard I/O; dismiss timers stamp `dismissGeneration` so stale blur callbacks cannot hide after re-show.
+- **mouseup false outside** — click-outside dismiss is mousedown-only (mouseup after in-window press no longer closes the panel).
+- **Failed hide recovery** — if `win.hide()` fails, paste state is cleared and the panel is refocused instead of leaving a broken half-hidden UI.
+
+### Internal
+- HiDPI edge tolerance on in-window hit test; cancellable renderer hide-reset (`hideResetGen`); extended summon-rule checks.
+
 ## v0.3.3 — 2026-05-31
 
 ### Fixed

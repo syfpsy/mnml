@@ -114,8 +114,36 @@ if (!ipc.includes("clampListLimit")) {
   failures.push("IPC list/search handlers must clamp limits via clampListLimit().");
 }
 
-if (!main.includes('onGlobalMouseOutside(e, "mouseup")') || !main.includes("onGlobalMousedownHandler")) {
-  failures.push("Click-outside must listen to both uIOhook mousedown and mouseup with stable handler refs for cleanup.");
+if (!main.includes("onGlobalMousedownHandler") || !main.includes('uIOhook.on("mousedown", onGlobalMousedownHandler)')) {
+  failures.push("Click-outside must listen to uIOhook mousedown with stable handler refs for cleanup.");
+}
+
+if (main.includes('onGlobalMouseOutside(e, "mouseup")') || main.includes("onGlobalMouseupHandler")) {
+  failures.push("Click-outside must not dismiss on mouseup — mousedown-only avoids spurious hide after in-window press.");
+}
+
+if (!main.includes("dismissGeneration") || !main.includes("gen !== dismissGeneration")) {
+  failures.push("Deferred blur hide must stamp dismissGeneration so stale timers cannot hide after re-show.");
+}
+
+if (!main.includes("armPasteActivation") || !main.includes("cancelPasteActivation")) {
+  failures.push("Paste activation must arm at IPC entry (armPasteActivation) and cancel on restore failure.");
+}
+
+if (!ipc.includes("preparePasteActivate") || !ipc.includes("cancelPasteActivation")) {
+  failures.push("restore/savedRestore must preparePasteActivate at entry and cancelPasteActivation on failure.");
+}
+
+if (!main.includes("recoverFromFailedHide")) {
+  failures.push("Failed win.hide() must recover paste state and re-enable the panel (recoverFromFailedHide).");
+}
+
+if (!main.includes("isDismissBlocked()") || !/win\.on\("blur"[\s\S]*isDismissBlocked\(\)/.test(main)) {
+  failures.push("Window blur handler must consult isDismissBlocked() before scheduling hide.");
+}
+
+if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("hideResetGen")) {
+  failures.push("Renderer hide-reset must be cancellable when user re-summons before rAF (hideResetGen).");
 }
 
 if (!main.includes("uIOhook.start()")) {
@@ -154,12 +182,12 @@ if (!main.includes("isDismissBlocked") || !main.includes("hideInProgress")) {
   failures.push("Dismiss pathways must share isDismissBlocked() and guard reentrant hideWindow().");
 }
 
-if (!ipc.includes("suppressBlurHide()") || !ipc.includes("setPastePending()") || !ipc.includes("windowControl.hide()")) {
-  failures.push("finishActivate(paste) must suppress blur, arm paste, then hide in that order.");
+if (!ipc.includes("suppressBlurHide()") || !ipc.includes("windowControl.hide()")) {
+  failures.push("finishActivate(paste) must suppress blur then hide; paste is armed via preparePasteActivate.");
 }
 
-if (!ipc.includes("if (paste) windowControl.suppressBlurHide()")) {
-  failures.push("restore/savedRestore must suppress blur at IPC entry when paste is requested.");
+if (!ipc.includes("if (paste) windowControl.suppressBlurHide()") && !ipc.includes("preparePasteActivate")) {
+  failures.push("restore/savedRestore must prepare paste activation at IPC entry when paste is requested.");
 }
 
 if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("requestAnimationFrame")) {

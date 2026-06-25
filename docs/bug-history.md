@@ -104,6 +104,11 @@ These are the bugs we kept hitting because Windows protects against background a
 | O54 | Focus watchdog could hide after re-summon without generation stamp. | Watchdog interval bails when `dismissGeneration` drifts. |
 | O55 | Quit left dismiss/paste timers armed. | `shutdownDismissTimers()` on `before-quit` and window reset. |
 | O56 | Unbounded IPC search/snippet payloads. | Clamp at IPC boundary + DB layer for snippets; search service caps query length. |
+| O57 | Panel wedged open + Alt-Alt dead — a `restore`/`savedRestore` that threw after `armPasteActivation()` leaked `pastePending`, which `isDismissBlocked()` and the `toggleWindow` show-guard both honor, so dismiss *and* re-summon were blocked permanently. | Restore IPC handlers wrap the body in `try/catch/finally` and call `cancelPasteActivation()` whenever the activation didn't complete. |
+| O58 | Window occasionally wouldn't close on Windows — `hideWindow()` judged the hide failed by a synchronous `win.isVisible()` immediately after `hide()` (racy on Windows compositor timing) and `recoverFromFailedHide()` re-showed the panel. | `attemptHide()` calls `hide()` and retries once; the normal path defers the failure decision one tick and re-checks before recovering. |
+| O59 | Click-outside dismiss + double-Alt silently died after sleep/lock — Windows tears down the global low-level hook on suspend and uIOhook was never re-armed. | `restartInputHook()` on `powerMonitor` `resume`/`unlock-screen`; failed `start()` retries with backoff (`startInputHook`). |
+| O60 | Dismiss-blocking flags had no absolute backstop — any future stuck transient flag wedges the panel. | Focus watchdog force-clears transient flags after `DISMISS_STUCK_MS` (3 s) of lost focus, then hides. `blurLocked` (Settings panel + native folder picker = intentional indefinite hold) is explicitly exempt from both stuck-detection and force-clear, so a slow folder pick never force-hides mnml. |
+| O61 | Per-poll clipboard image decode spiked the main thread — `clipboard.readImage()` ran every 500 ms even when only text was present, starving the renderer + input-hook thread (felt like global lag). | Poll checks `clipboard.availableFormats()` (cheap) and only decodes when an `image/*` format is present; summon focus-verification fan-out trimmed to fewer cross-process `executeJavaScript` calls. |
 
 ---
 

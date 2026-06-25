@@ -1,5 +1,16 @@
 # mnml Changelog
 
+## v0.3.7 — 2026-06-26
+
+### Fixed
+- **Panel could get wedged open + Alt-Alt dead** — a clipboard/snippet restore that threw mid-flight leaked `pastePending`, permanently blocking dismiss *and* re-summon. Restore IPC now releases paste state in a `finally`.
+- **Window occasionally wouldn't close on Windows** — `hide()` was judged failed by a racy synchronous `isVisible()` check and the panel re-shown. Hide now retries once and re-checks on the next tick before recovering.
+- **Click-outside dismiss / double-Alt died after sleep** — the global input hook is now re-armed on system resume / screen unlock, and a failed start retries with backoff.
+
+### Internal
+- **Dismiss safety watchdog** — if a transient blocking flag stays stuck while focus is gone (>3 s), it is force-cleared so the panel can never wedge. The intentional Settings/folder-picker hold (`blurLocked`) is explicitly exempt.
+- **Less main-thread work** — clipboard poll skips the per-500 ms image decode when no image format is present; summon focus-verification fan-out trimmed (fewer cross-process calls).
+
 ## v0.3.6 — 2026-05-31
 
 ### Internal

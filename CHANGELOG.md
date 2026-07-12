@@ -1,6 +1,6 @@
 # mnml Changelog
 
-## Unreleased
+## v0.3.8 — 2026-07-12
 
 ### Changed
 - **Snappier summon & search** — collapsed dual focus storms (main owns focus; renderer single 120 ms backup). Search is stale-while-revalidate (no list flash on keystroke). Recent list cap 50.

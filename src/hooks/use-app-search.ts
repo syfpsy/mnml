@@ -19,6 +19,23 @@ export function useAppSearch(query: string): AppSearchState {
   const seq = useRef(0);
 
   useEffect(() => {
+    const off = bridge.onAppIconsResolved((icons) => {
+      setState((prev) => {
+        if (prev.results.length === 0) return prev;
+        let changed = false;
+        const next = prev.results.map((r) => {
+          const icon = icons[r.id];
+          if (icon === undefined) return r;
+          changed = true;
+          return { ...r, icon };
+        });
+        return changed ? { ...prev, results: next } : prev;
+      });
+    });
+    return off;
+  }, []);
+
+  useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
       seq.current += 1;
@@ -27,7 +44,7 @@ export function useAppSearch(query: string): AppSearchState {
     }
 
     const current = ++seq.current;
-    setState({ results: [], isSearching: true });
+    setState((prev) => ({ results: prev.results, isSearching: true }));
     const timer = setTimeout(async () => {
       try {
         const response = await bridge.appSearch(trimmed);

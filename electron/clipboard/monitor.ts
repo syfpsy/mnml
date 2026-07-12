@@ -12,7 +12,8 @@ import { assertResolvedWithinBase, resolveImagePath } from "../utils/safe-path.j
 
 type Listener = (item: Item) => void;
 
-const POLL_MS = 500;
+const POLL_MS_VISIBLE = 500;
+const POLL_MS_HIDDEN  = 2_000;
 const listeners = new Set<Listener>();
 const updateListeners = new Set<Listener>();
 
@@ -77,7 +78,31 @@ let timer: NodeJS.Timeout | null = null;
  */
 let lastImageSizeKey = "";
 let lastImageCheckedAt = 0;
-const IMAGE_RECHECK_MS = 4_000;
+const IMAGE_RECHECK_MS = 30_000;
+
+let pollIntervalMs = POLL_MS_HIDDEN;
+let lastFormatsKey = "";
+
+function formatsKey(): string {
+  try {
+    return clipboard.availableFormats().join("|");
+  } catch {
+    return "";
+  }
+}
+
+function armPollTimer() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(poll, pollIntervalMs);
+}
+
+/** Slower poll while the panel is hidden — less main-thread work in the tray. */
+export function setClipboardPollCadence(panelVisible: boolean) {
+  const next = panelVisible ? POLL_MS_VISIBLE : POLL_MS_HIDDEN;
+  if (next === pollIntervalMs && timer) return;
+  pollIntervalMs = next;
+  if (timer) armPollTimer();
+}
 
 export function onNewItem(l: Listener): () => void {
   listeners.add(l);
@@ -116,7 +141,8 @@ export function start() {
     }
   }
 
-  timer = setInterval(poll, POLL_MS);
+  pollIntervalMs = POLL_MS_HIDDEN;
+  armPollTimer();
 }
 
 export function stop() {
@@ -125,6 +151,7 @@ export function stop() {
   // Reset image fingerprint so a re-start triggers a fresh confirmation.
   lastImageSizeKey   = "";
   lastImageCheckedAt = 0;
+  lastFormatsKey     = "";
 }
 
 function emit(item: Item) {
@@ -153,9 +180,16 @@ function poll() {
   wasConcealed = false;
 
   try {
-    // image first — when copying screenshots, text is usually empty
-    const img = clipboard.readImage();
-    if (!img.isEmpty()) {
+    const fk = formatsKey();
+    const hasImageFormat = fk.includes("image/");
+    const hasTextFormat  = fk.includes("text/");
+    // Nothing to read when formats are unchanged and there's no text/image payload.
+    if (fk === lastFormatsKey && !hasImageFormat && !hasTextFormat) return;
+    lastFormatsKey = fk;
+
+    // image first — when copying screenshots, text is usually empty.
+    const img = hasImageFormat ? clipboard.readImage() : null;
+    if (img && !img.isEmpty()) {
       // Cheap dimension fingerprint — getSize() is O(1) (reads cached field
       // from the wrapping NativeImage; no decode). If dimensions match what
       // we already hashed AND we re-confirmed recently, the image is almost

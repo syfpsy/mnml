@@ -25,6 +25,15 @@ export function evictAllThumbs() {
   thumbCache.clear();
 }
 
+export function getThumbDataUrls(ids: number[]): Record<number, string | null> {
+  const out: Record<number, string | null> = {};
+  for (const id of ids) {
+    if (!Number.isFinite(id) || id <= 0) continue;
+    out[id] = getThumbDataUrl(id);
+  }
+  return out;
+}
+
 export function getThumbDataUrl(id: number): string | null {
   if (thumbCache.has(id)) {
     const cached = thumbCache.get(id)!;

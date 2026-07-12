@@ -15,9 +15,9 @@ import { getDataDir, getDefaultDataDir, isUsingDefaultDataDir, setDataDir, reset
 import { getAll as getAllSettings, getSetting, setSetting, type AppSettings } from "./db/settings.js";
 import { addSaved, deleteSaved, getSavedById, listSaved, touchSaved, updateSaved, type SavedSnippet } from "./db/saved.js";
 import { search } from "./search/service.js";
-import { launchAppResult, searchApps, type AppSearchResponse } from "./search/app-search.js";
+import { launchAppResult, searchApps, hydrateAppIcons, type AppSearchResponse } from "./search/app-search.js";
 import { restoreItem, restoreText, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
-import { evictAllThumbs, evictThumb, getThumbDataUrl } from "./thumb-cache.js";
+import { evictAllThumbs, evictThumb, getThumbDataUrl, getThumbDataUrls } from "./thumb-cache.js";
 import { log } from "./utils/log.js";
 import { PLATFORM_UI } from "./platform/config.js";
 
@@ -126,21 +126,23 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
     if (paste) preparePasteActivate(paste, windowControl);
     else prepareCopyOnlyRestore(windowControl);
-    const itemId = requirePositiveInt(id);
-    if (!itemId) {
-      if (paste) windowControl.cancelPasteActivation();
-      return;
+    // `armPasteActivation()` set `pastePending` before any DB/clipboard I/O.
+    // If that I/O throws (DB reopen, sync conflict, unreadable image), the
+    // flag must be released or it wedges every future dismiss + re-summon.
+    let activated = false;
+    try {
+      const itemId = requirePositiveInt(id);
+      if (!itemId) return;
+      const item = getById(itemId);
+      if (!item) return;
+      if (!restoreItem(item)) return;
+      finishActivate(paste, windowControl);
+      activated = true;
+    } catch (err) {
+      log("[ipc] restore failed:", String(err));
+    } finally {
+      if (paste && !activated) windowControl.cancelPasteActivation();
     }
-    const item = getById(itemId);
-    if (!item) {
-      if (paste) windowControl.cancelPasteActivation();
-      return;
-    }
-    if (!restoreItem(item)) {
-      if (paste) windowControl.cancelPasteActivation();
-      return;
-    }
-    finishActivate(paste, windowControl);
   });
 
   ipcMain.handle(IPC.remove, (_, id: number) => {
@@ -166,14 +168,34 @@ export function registerIpc(windowControl: WindowControl) {
     return getThumbDataUrl(itemId);
   });
 
+  ipcMain.handle(IPC.getImages, (_, ids: unknown): Record<number, string | null> => {
+    if (!Array.isArray(ids)) return {};
+    const valid = ids
+      .map((id) => (typeof id === "number" ? id : Number(id)))
+      .filter((id) => Number.isFinite(id) && id > 0 && Math.floor(id) === id)
+      .slice(0, 32);
+    return getThumbDataUrls(valid);
+  });
+
   // ── App launcher (Start-Menu apps + Windows Settings + classic tools) ────
 
   ipcMain.handle(
     IPC.appSearch,
-    async (_, { query }: { query: string }): Promise<AppSearchResponse> => {
+    (_, { query }: { query: string }): AppSearchResponse => {
       const q = clampSearchQuery(query).trim();
       if (!q) return { results: [] };
-      return searchApps(q, 12);
+      const response = searchApps(q, 12);
+      const ids = response.results.map((r) => r.id);
+      if (ids.length > 0) {
+        hydrateAppIcons(ids, (icons) => {
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (w.isDestroyed() || w.webContents.isDestroyed()) continue;
+            try { w.webContents.send(IPC.onAppIconsResolved, icons); }
+            catch (err) { log("[ipc] app-icons broadcast failed:", String(err)); }
+          }
+        });
+      }
+      return response;
     },
   );
 
@@ -224,20 +246,22 @@ export function registerIpc(windowControl: WindowControl) {
     (_, { id, paste = false }: { id: number; paste?: boolean }) => {
       if (paste) preparePasteActivate(paste, windowControl);
       else prepareCopyOnlyRestore(windowControl);
-      const snippetId = requirePositiveInt(id);
-      if (!snippetId) {
-        if (paste) windowControl.cancelPasteActivation();
-        return;
+      let activated = false;
+      try {
+        const snippetId = requirePositiveInt(id);
+        if (!snippetId) return;
+        const snippet = getSavedById(snippetId);
+        if (!snippet) return;
+        restoreText(snippet.content);
+        touchSaved(snippetId);
+        broadcastSavedChanged();
+        finishActivate(paste, windowControl);
+        activated = true;
+      } catch (err) {
+        log("[ipc] savedRestore failed:", String(err));
+      } finally {
+        if (paste && !activated) windowControl.cancelPasteActivation();
       }
-      const snippet = getSavedById(snippetId);
-      if (!snippet) {
-        if (paste) windowControl.cancelPasteActivation();
-        return;
-      }
-      restoreText(snippet.content);
-      touchSaved(snippetId);
-      broadcastSavedChanged();
-      finishActivate(paste, windowControl);
     },
   );
 

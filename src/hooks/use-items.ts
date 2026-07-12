@@ -29,10 +29,8 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
     }
 
     const trimmed = query.trim();
-    if (trimmed) {
-      setSearchPending(true);
-      setItems([]);
-    }
+    if (trimmed) setSearchPending(true);
+    // Stale-while-revalidate: keep prior rows visible until the new query lands.
 
     const run = async () => {
       try {
@@ -43,7 +41,7 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
         setItems(results);
       } catch {
         if (current !== seq.current) return;
-        setItems([]);
+        if (!trimmed) setItems([]);
       } finally {
         if (current === seq.current) setSearchPending(false);
       }

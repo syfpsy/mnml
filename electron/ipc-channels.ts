@@ -8,6 +8,7 @@ export const IPC = {
   clear:      "mnml:items:clear",
   pin:        "mnml:items:pin",
   getImage:   "mnml:items:image",
+  getImages:  "mnml:items:images",
 
   // ── App launcher (Start-Menu apps + Windows Settings + classic tools) ───
   appSearch:  "mnml:app:search",
@@ -58,5 +59,7 @@ export const IPC = {
   onUpdateDownloaded:  "mnml:event:update-downloaded",
   onSavedChanged:      "mnml:event:saved-changed",
   onItemsCleared:      "mnml:event:items-cleared",
+  /** Lazy app-search icon hydration (main → renderer after fast search response). */
+  onAppIconsResolved:  "mnml:event:app-icons",
 } as const;
 

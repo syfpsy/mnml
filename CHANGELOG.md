@@ -1,5 +1,16 @@
 # mnml Changelog
 
+## Unreleased
+
+### Changed
+- **Snappier summon & search** — collapsed dual focus storms (main owns focus; renderer single 120 ms backup). Search is stale-while-revalidate (no list flash on keystroke). Recent list cap 50.
+- **Lazy work** — image thumbs batch via IntersectionObserver + `getImages` IPC; app-search returns immediately and hydrates icons async; saved snippets load only on Saved tab; Settings panel code-split with `React.lazy`.
+- **Less background CPU** — clipboard adaptive poll (500 ms visible / 2 s hidden), format fingerprint skip, 30 s image recheck; PowerShell foreground helper starts on demand with 60 s idle shutdown; focus watchdog runs as a 3 s burst on blur/summon instead of continuous 250 ms polling.
+- **No external favicon fetches** — link rows use the local link icon only.
+
+### Internal
+- In-memory settings cache warmed at boot; `getThumbDataUrls` batch API.
+
 ## v0.3.7 — 2026-06-26
 
 ### Fixed

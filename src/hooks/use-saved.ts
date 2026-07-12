@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "../lib/bridge";
 import type { SavedSnippet } from "../types";
 
@@ -7,21 +7,25 @@ import type { SavedSnippet } from "../types";
  * broadcasts a `saved-changed` event. Optionally narrows to a query
  * substring (label or content). Cheap — list is small (<100 entries).
  */
-export function useSaved(query?: string) {
+export function useSaved(query?: string, enabled = true) {
   const [snippets, setSnippets] = useState<SavedSnippet[]>([]);
 
   const load = useCallback(() => {
     bridge.savedList().then(setSnippets).catch(() => setSnippets([]));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!enabled) return;
+    load();
+  }, [load, enabled]);
 
   // Subscribe to "saved-changed" so other windows / IPC paths trigger a
   // refetch (e.g. quick-save from items-list).
   useEffect(() => {
+    if (!enabled) return undefined;
     const off = bridge.onSavedChanged(load);
     return off;
-  }, [load]);
+  }, [load, enabled]);
 
   const filtered = useMemo(() => {
     const q = (query ?? "").trim().toLowerCase();

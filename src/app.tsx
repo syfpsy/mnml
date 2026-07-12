@@ -17,18 +17,15 @@ export default function App() {
     bridge.getSettings().then((s) => { if (s) applyTheme(s.lightTheme ?? false); });
   }, []);
 
-  // Renderer-side backup focus. Main owns summon focus through executeJavaScript
-  // in electron/main.ts; this only covers delayed React remounts.
+  // Renderer-side backup focus — main owns summon focus via executeJavaScript.
+  // Single delayed attempt only if the search field still isn't focused.
   useEffect(() => {
-    const timers = new Set<ReturnType<typeof setTimeout>>();
-    let raf: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const clearScheduledFocus = () => {
-      for (const timer of timers) clearTimeout(timer);
-      timers.clear();
-      if (raf !== null) {
-        cancelAnimationFrame(raf);
-        raf = null;
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
       }
     };
 
@@ -37,39 +34,21 @@ export default function App() {
       if (document.querySelector("[data-mnml-snippet-form]")) return;
       const el = document.querySelector<HTMLInputElement>("input[data-mnml-search='true']");
       if (!el) return;
+      if (document.activeElement === el && document.hasFocus()) return;
       el.focus({ preventScroll: true });
       el.select();
     };
 
-    const scheduleFocus = () => {
-      clearScheduledFocus();
-
-      const attempt = () => focusInput();
-
-      attempt();
-      raf = requestAnimationFrame(attempt);
-      for (const delay of [30, 80, 160, 280, 420]) {
-        const timer = setTimeout(attempt, delay);
-        timers.add(timer);
-      }
-    };
-
-    const onWindowFocus = () => scheduleFocus();
-
     const off = bridge.onVisibilityChanged((visible) => {
       clearScheduledFocus();
-      window.removeEventListener("focus", onWindowFocus);
-
       if (visible) {
-        scheduleFocus();
-        window.addEventListener("focus", onWindowFocus, { once: true });
+        timer = setTimeout(focusInput, 120);
       }
     });
 
     return () => {
       off();
       clearScheduledFocus();
-      window.removeEventListener("focus", onWindowFocus);
     };
   }, []);
 
@@ -108,10 +87,6 @@ export default function App() {
         className="relative w-full h-full overflow-hidden"
         style={{ background: "var(--bg)" }}
       >
-        {/* CompactView owns the entire window's layout now: header, tabs,
-            content (flex-1), update banner (when active), footer. The
-            update-state subscription stays here so the auto-updater event
-            listeners only register once at the app boundary. */}
         <CompactView
           onThemeChange={applyTheme}
           updateState={updateState}

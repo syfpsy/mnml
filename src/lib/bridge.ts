@@ -14,6 +14,8 @@ export const bridge = {
   pin:     (id: number, pinned: boolean) => window.mnml.pin(id, pinned),
   getImageDataUrl: (id: number) =>
     window.mnml.getImageDataUrl(id) as Promise<string | null>,
+  getImageDataUrls: (ids: number[]) =>
+    window.mnml.getImageDataUrls(ids) as Promise<Record<number, string | null>>,
 
   // ── App launcher (apps + Windows settings + classic tools) ─────────────
   appSearch: (q: string) =>
@@ -49,6 +51,8 @@ export const bridge = {
   onUpdateDownloaded: (cb: (version: string) => void) => window.mnml.onUpdateDownloaded(cb),
   onSavedChanged:     (cb: () => void) => window.mnml.onSavedChanged(cb),
   onItemsCleared:     (cb: () => void) => window.mnml.onItemsCleared(cb),
+  onAppIconsResolved: (cb: (icons: Record<string, string | null>) => void) =>
+    window.mnml.onAppIconsResolved(cb),
   installUpdate:      () => window.mnml.installUpdate(),
   checkUpdate:        () => window.mnml.checkUpdate() as Promise<{
     ok: boolean; available?: boolean; version?: string | null; message?: string;

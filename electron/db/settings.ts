@@ -13,16 +13,15 @@ export interface AppSettings {
 const DEFAULTS: AppSettings = {
   monitoring: true,
   maxItems: 200,
-  // mnml is meant to be always-on: the hotkey is useless if the app isn't
-  // running. Default to true. Users who explicitly toggle off keep their
-  // choice — `getSetting` returns the stored row when one exists and only
-  // falls back to this default for never-touched settings.
   launchOnStartup: true,
   autoPaste: true,
   lightTheme: false,
 };
 
-export function getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] {
+/** In-memory cache — warmed on first read; avoids per-call SQLite during hot paths. */
+let cache: AppSettings | null = null;
+
+function readRow<K extends keyof AppSettings>(key: K): AppSettings[K] {
   const row = getDb()
     .prepare<[string], { value: string }>("SELECT value FROM settings WHERE key = ?")
     .get(key);
@@ -34,20 +33,36 @@ export function getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] 
   }
 }
 
+function loadCache(): AppSettings {
+  if (cache) return cache;
+  cache = {
+    monitoring:      readRow("monitoring"),
+    maxItems:        readRow("maxItems"),
+    launchOnStartup: readRow("launchOnStartup"),
+    autoPaste:       readRow("autoPaste"),
+    lightTheme:      readRow("lightTheme"),
+  };
+  return cache;
+}
+
+/** Call once after DB init so the first hot-path read doesn't hit SQLite. */
+export function warmSettingsCache(): void {
+  loadCache();
+}
+
+export function getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] {
+  return loadCache()[key];
+}
+
 export function setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
   getDb()
     .prepare(
       "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     )
     .run(key, JSON.stringify(value));
+  loadCache()[key] = value;
 }
 
 export function getAll(): AppSettings {
-  return {
-    monitoring:      getSetting("monitoring"),
-    maxItems:        getSetting("maxItems"),
-    launchOnStartup: getSetting("launchOnStartup"),
-    autoPaste:       getSetting("autoPaste"),
-    lightTheme:      getSetting("lightTheme"),
-  };
+  return { ...loadCache() };
 }

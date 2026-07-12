@@ -1,13 +1,13 @@
-import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage } from "electron";
+import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { uIOhook } from "uiohook-napi";
 import { autoUpdater } from "electron-updater";
 import { getDb } from "./db/index.js";
-import { getSetting } from "./db/settings.js";
+import { getSetting, warmSettingsCache } from "./db/settings.js";
 import { installDoubleAlt, suppressDoubleAltFor } from "./hotkey/double-alt.js";
-import { onNewItem, onItemUpdated, start as startMonitor, stop as stopMonitor } from "./clipboard/monitor.js";
+import { onNewItem, onItemUpdated, start as startMonitor, stop as stopMonitor, setClipboardPollCadence } from "./clipboard/monitor.js";
 import { closeDb } from "./db/index.js";
 import { IPC } from "./ipc-channels.js";
 import { registerIpc } from "./ipc.js";
@@ -58,8 +58,13 @@ let pasteAfterRestoreTimer: NodeJS.Timeout | null = null;
 let pasteFlowActive = false;
 /** Failsafe if restore/paste stalls — clears pasteFlowActive so dismiss works again. */
 let pasteFlowSafetyTimer: NodeJS.Timeout | null = null;
-/** Polls for focus loss when blur/mousedown paths miss (always-on-top edge cases). */
+/** Polls for focus loss after blur — burst only, not while the panel has focus. */
 let focusWatchTimer: NodeJS.Timeout | null = null;
+let focusWatchBurstUntil = 0;
+/** When >0, the wall-clock time the watchdog first saw focus gone *and* dismiss
+ *  blocked. If a blocking flag stays stuck this long, force-clear and hide. */
+let dismissBlockedSince = 0;
+const DISMISS_STUCK_MS = 3_000;
 
 /**
  * Tracks whether the window is logically visible.
@@ -125,6 +130,7 @@ function resetWindowRuntimeState() {
   hideInProgress = false;
   pastePending = false;
   dismissGeneration += 1;
+  setClipboardPollCadence(false);
 }
 
 function safeSendToRenderer(channel: string, payload?: unknown) {
@@ -310,6 +316,59 @@ function stopFocusWatchdog() {
     clearInterval(focusWatchTimer);
     focusWatchTimer = null;
   }
+  focusWatchBurstUntil = 0;
+}
+
+function runFocusWatchdogTick(gen: number) {
+  if (gen !== dismissGeneration) return;
+  if (!windowVisible || !isWindowUsable()) {
+    stopFocusWatchdog();
+    return;
+  }
+  if (Date.now() > focusWatchBurstUntil) {
+    stopFocusWatchdog();
+    return;
+  }
+  if (Date.now() - windowShownAt < 500) return;
+  if (
+    win!.isFocused() ||
+    win!.webContents.isFocused() ||
+    BrowserWindow.getFocusedWindow() === win ||
+    win!.webContents.isDevToolsOpened()
+  ) {
+    dismissBlockedSince = 0;
+    return;
+  }
+  if (blurLocked) {
+    dismissBlockedSince = 0;
+    return;
+  }
+  if (isDismissBlocked()) {
+    if (dismissBlockedSince === 0) {
+      dismissBlockedSince = Date.now();
+    } else if (Date.now() - dismissBlockedSince > DISMISS_STUCK_MS) {
+      dismissBlockedSince = 0;
+      forceClearDismissBlocks();
+      hideWindow();
+    }
+    return;
+  }
+  dismissBlockedSince = 0;
+  log("[focus-watch] hiding — focus left the window");
+  hideWindow();
+}
+
+/** Short burst after blur / summon — catches Alt-Tab with cursor over always-on-top panel. */
+function armFocusWatchdogBurst(ms = 3_000) {
+  focusWatchBurstUntil = Math.max(focusWatchBurstUntil, Date.now() + ms);
+  if (focusWatchTimer !== null) return;
+  dismissBlockedSince = 0;
+  const gen = dismissGeneration;
+  focusWatchTimer = setInterval(() => runFocusWatchdogTick(gen), 250);
+}
+
+function startFocusWatchdog() {
+  armFocusWatchdogBurst(3_000);
 }
 
 /** Cancel dismiss/paste timers — safe during shutdown or window reset. */
@@ -320,22 +379,16 @@ function shutdownDismissTimers() {
   cancelCapturePrev();
 }
 
-function startFocusWatchdog() {
-  stopFocusWatchdog();
-  const gen = dismissGeneration;
-  focusWatchTimer = setInterval(() => {
-    if (gen !== dismissGeneration) return;
-    if (!windowVisible || !isWindowUsable()) return;
-    if (isDismissBlocked()) return;
-    if (Date.now() - windowShownAt < 500) return;
-    if (win!.isFocused() || win!.webContents.isFocused()) return;
-    if (BrowserWindow.getFocusedWindow() === win) return;
-    if (win!.webContents.isDevToolsOpened()) return;
-    // Do not gate on cursor position — Alt-Tab away leaves the pointer over
-    // the always-on-top panel while focus is already gone (O38).
-    log("[focus-watch] hiding — focus left the window");
-    hideWindow();
-  }, 250);
+/**
+ * Last-resort recovery: a *transient* blocking flag got stuck so the panel can
+ * neither be dismissed nor re-summoned. `blurLocked` is intentionally exempt.
+ */
+function forceClearDismissBlocks() {
+  log("[focus-watch] dismiss stuck — force-clearing transient blocking flags");
+  pastePending = false;
+  suppressBlurHideUntil = 0;
+  hideInProgress = false;
+  cancelInFlightPaste();
 }
 
 function scheduleBlurHide() {
@@ -392,7 +445,7 @@ function createForegroundService(): ForegroundService {
         loggedNativeFocusForShow = true;
         log(IS_MAC ? "[focus] macOS foreground focused" : "[focus] windows foreground focused");
       }
-      scheduleSearchFocusVerification("native-foreground", [0, 16, 50, 120, 240]);
+      scheduleSearchFocusVerification("native-foreground", [0, 60]);
     },
     onFocusMiss: () => { /* noop */ },
     onRestoreOk: () => {
@@ -437,6 +490,19 @@ function recoverFromFailedHide() {
   try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
   try { win!.focus(); win!.webContents.focus(); } catch { /* noop */ }
   startFocusWatchdog();
+}
+
+/**
+ * Hide the OS window, retrying once. Windows occasionally no-ops the first
+ * `hide()` when focus state is in flux, and `isVisible()` can momentarily
+ * lag the real hide. Returns true once the window reports hidden.
+ */
+function attemptHide(): boolean {
+  if (!isWindowUsable()) return true;
+  try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
+  if (!win!.isVisible()) return true;
+  try { win!.hide(); } catch (err) { log("[hide] win.hide() retry failed:", String(err)); }
+  return !win!.isVisible();
 }
 
 function ensureWindowSize() {
@@ -823,11 +889,13 @@ function createWindow() {
     if (isDismissBlocked()) return;
     if (Date.now() - windowShownAt < 500) return;
     scheduleBlurHide();
+    armFocusWatchdogBurst();
   });
   win.on("focus", () => {
     cancelScheduledBlurHide();
+    stopFocusWatchdog();
     if (!windowVisible) return;
-    scheduleSearchFocusVerification("window-focus", [0, 16, 50, 120, 240]);
+    scheduleSearchFocusVerification("window-focus", [0, 80]);
   });
 
   // Pass the persisted `lightTheme` setting via a query param so the
@@ -883,7 +951,7 @@ function showWindow() {
     loggedNativeFocusForShow = false;
     nativeForegroundRequestsForShow = 0;
     runSummonFocusPass(true);
-    scheduleSearchFocusVerification("visible-window", [16, 50, 120, 240, 420]);
+    scheduleSearchFocusVerification("visible-window", [16, 120]);
     safeSendToRenderer(IPC.onVisibilityChanged, true);
     startFocusWatchdog();
     return;
@@ -907,6 +975,7 @@ function showWindow() {
     windowShownAt = Date.now();
     dismissGeneration += 1;
     windowVisible = true;
+    setClipboardPollCadence(true);
     showVerifyAttempts = 0;
     focusRunId += 1;
     loggedSearchFocusForShow = false;
@@ -924,7 +993,7 @@ function showWindow() {
       return;
     }
     runSummonFocusPass(true);
-    scheduleSearchFocusVerification("show", [16, 50, 100, 180, 300, 500, 800, 1_200]);
+    scheduleSearchFocusVerification("show", [0, 80, 200]);
 
     setImmediate(() => {
       if (!isWindowUsable() || !windowVisible) return;
@@ -999,14 +1068,14 @@ function hideWindow() {
     suppressDoubleAltFor(1_200);
     armPasteFlowSafety();
     pastePending = false;
-    try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
-    if (win!.isVisible()) {
+    if (!attemptHide()) {
       log("[hide] paste hide did not take effect — recovering");
       recoverFromFailedHide();
       finishHideSync();
       return;
     }
     windowVisible = false;
+    setClipboardPollCadence(false);
     notifyRendererHidden();
     const target = prevForegroundTarget;
     const ours = fg?.ownTarget() ?? null;
@@ -1032,14 +1101,27 @@ function hideWindow() {
     finishHideSync();
   } else {
     // Normal hide (Escape / click-outside).
-    try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
-    if (win!.isVisible()) {
-      log("[hide] normal hide did not take effect — recovering");
-      recoverFromFailedHide();
+    if (!attemptHide()) {
+      // `isVisible()` can lag the real hide on Windows compositor timing —
+      // re-check on the next tick before declaring the hide failed (and
+      // wrongly re-showing the panel, which reads as "it won't close").
+      const gen = dismissGeneration;
+      setTimeout(() => {
+        if (gen !== dismissGeneration || !isWindowUsable()) return;
+        if (win!.isVisible()) {
+          log("[hide] normal hide did not take effect — recovering");
+          recoverFromFailedHide();
+        } else {
+          windowVisible = false;
+          setClipboardPollCadence(false);
+          notifyRendererHidden();
+        }
+      }, 24);
       finishHideSync();
       return;
     }
     windowVisible = false;
+    setClipboardPollCadence(false);
     notifyRendererHidden();
     finishHideSync();
   }
@@ -1069,6 +1151,40 @@ function toggleWindow() {
 }
 
 function setBlurLock(locked: boolean) { blurLocked = locked; }
+
+/* ── Global input hook (click-outside dismiss + synthetic paste) ─────────────
+ * uIOhook installs a system-wide low-level keyboard/mouse hook. Windows can
+ * silently drop a low-level hook under sustained load, and the hook does not
+ * survive a sleep/resume cycle — when that happens, click-outside dismiss and
+ * double-Alt summon stop working with no error. We retry a failed start and
+ * re-arm the hook on resume / screen-unlock. We deliberately do NOT restart on
+ * idle-timeout heuristics — there's no reliable "hook is dead" signal, and a
+ * false restart would drop real events.
+ */
+let uiohookStarted = false;
+
+function startInputHook(attempt = 0) {
+  if (uiohookStarted || appQuitting) return;
+  try {
+    uIOhook.start();
+    uiohookStarted = true;
+    log("[uiohook] started for click-outside + auto-paste");
+  } catch (err) {
+    log(`[uiohook] start failed (attempt ${attempt}):`, String(err));
+    if (attempt < 3) {
+      setTimeout(() => startInputHook(attempt + 1), 1_000 * (attempt + 1));
+    }
+  }
+}
+
+function restartInputHook(reason: string) {
+  if (appQuitting) return;
+  log("[uiohook] restarting hook:", reason);
+  try { uIOhook.stop(); } catch { /* noop */ }
+  uiohookStarted = false;
+  // Let the native pump fully tear down before re-arming.
+  setTimeout(() => startInputHook(), 300);
+}
 
 /* ── Auto-launch sync ───────────────────────────────────────────────────────
  * Belt-and-suspenders for the "Launch on startup" setting. Runs on every
@@ -1111,7 +1227,7 @@ app.whenReady().then(() => {
 
   log("[startup] booting · log:", logPathForDisplay());
 
-  try { getDb(); }
+  try { getDb(); warmSettingsCache(); }
   catch (err) { log("[startup] FATAL: DB init:", String(err)); app.quit(); return; }
 
   // Make absolutely sure the Run-key registry entry matches the user's
@@ -1132,7 +1248,6 @@ app.whenReady().then(() => {
   catch (err) { log("[startup] FATAL: createWindow:", String(err)); app.quit(); return; }
 
   fg = createForegroundService();
-  fg.ensureStarted();
 
   registerIpc({
     hide: hideWindow,
@@ -1153,11 +1268,15 @@ app.whenReady().then(() => {
 
   uIOhook.on("mousedown", onGlobalMousedownHandler);
 
+  startInputHook();
+
+  // Re-arm the global hook after the OS tears it down on sleep/lock. Both
+  // events are no-ops on platforms that don't emit them.
   try {
-    uIOhook.start();
-    log("[uiohook] started for click-outside + auto-paste");
+    powerMonitor.on("resume", () => restartInputHook("system resume"));
+    powerMonitor.on("unlock-screen", () => restartInputHook("screen unlock"));
   } catch (err) {
-    log("[uiohook] start failed (click-outside + paste disabled):", String(err));
+    log("[uiohook] powerMonitor wiring failed (non-fatal):", String(err));
   }
 
   try {
@@ -1211,6 +1330,8 @@ app.on("before-quit", () => {
   try { closeDb();     } catch (err) { log("[lifecycle] closeDb:",     String(err)); }
   try { fg?.shutdown(); } catch { /* noop */ }
   uIOhook.off("mousedown", onGlobalMousedownHandler);
+  try { uIOhook.stop(); } catch { /* noop */ }
+  uiohookStarted = false;
   uninstallHotkey?.();
   globalShortcut.unregisterAll();
   tray?.destroy();

@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { SearchBar } from "./search-bar";
 import { ItemsList } from "./items-list";
 import { AppResultsList } from "./app-results-list";
 import { SavedList } from "./saved-list";
 import { SettingsIcon } from "./icons";
-import { SettingsPanel } from "./settings-panel";
 import { UpdateBanner, type UpdateState } from "./update-banner";
 import { useItems } from "../hooks/use-items";
 import { useAppSearch } from "../hooks/use-app-search";
 import { useSaved } from "../hooks/use-saved";
 import { bridge } from "../lib/bridge";
 import type { AppResult, Item, ItemType, SavedSnippet, TabKey } from "../types";
+
+const SettingsPanel = lazy(() =>
+  import("./settings-panel").then((m) => ({ default: m.SettingsPanel })),
+);
 
 interface Props {
   onThemeChange: (light: boolean) => void;
@@ -60,7 +63,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const { items, setItems, refetch, searchPending } = useItems({
     query,
     type:    !isSavedTab ? TYPE_BY_TAB[tab as Exclude<TabKey, "saved">] : undefined,
-    limit:   100,
+    limit:   50,
     enabled: !isSavedTab,
   });
 
@@ -70,7 +73,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const appSearch  = useAppSearch(isSavedTab ? "" : query);
   const appResults = appSearch.results;
 
-  const { snippets, refetch: refetchSaved } = useSaved(isSavedTab ? query : undefined);
+  const { snippets, refetch: refetchSaved } = useSaved(isSavedTab ? query : undefined, isSavedTab);
 
   const [focusedAppIndex,   setFocusedAppIndex]   = useState(-1);
   const [focusedSavedIndex, setFocusedSavedIndex] = useState(-1);
@@ -457,10 +460,12 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
       </div>
 
       {settingsOpen && (
-        <SettingsPanel
-          onClose={() => setSettingsOpen(false)}
-          onThemeChange={onThemeChange}
-        />
+        <Suspense fallback={null}>
+          <SettingsPanel
+            onClose={() => setSettingsOpen(false)}
+            onThemeChange={onThemeChange}
+          />
+        </Suspense>
       )}
     </div>
   );

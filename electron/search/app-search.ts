@@ -201,7 +201,8 @@ function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>): void {
 
 const MAX_RESULTS = 12;
 
-export async function searchApps(query: string, limit = MAX_RESULTS): Promise<AppSearchResponse> {
+/** Fast path — scores + sorts synchronously; icons filled later via `hydrateAppIcons`. */
+export function searchApps(query: string, limit = MAX_RESULTS): AppSearchResponse {
   if (!_indexed) rebuildAppIndex();
   const q = query.trim().toLowerCase();
   if (!q) return { results: [] };
@@ -219,16 +220,38 @@ export async function searchApps(query: string, limit = MAX_RESULTS): Promise<Ap
   );
 
   const top = scored.slice(0, Math.max(1, limit));
-  const results: AppResult[] = await Promise.all(
-    top.map(async ({ entry }) => ({
+  return {
+    results: top.map(({ entry }) => ({
       id:     entry.id,
       name:   entry.name,
       target: entry.target,
       kind:   entry.kind,
-      icon:   await getIcon(entry),
+      icon:   null,
     })),
-  );
-  return { results };
+  };
+}
+
+/**
+ * Resolve icons in the background and emit one batch. Never blocks the search
+ * IPC response — the renderer shows kind-glyphs until icons arrive.
+ */
+export function hydrateAppIcons(
+  ids: string[],
+  emit: (icons: Record<string, string | null>) => void,
+): void {
+  if (ids.length === 0) return;
+  if (!_indexed) rebuildAppIndex();
+  setImmediate(() => {
+    void (async () => {
+      const icons: Record<string, string | null> = {};
+      for (const id of ids) {
+        const entry = _index.find((e) => e.id === id);
+        if (!entry) continue;
+        icons[id] = await getIcon(entry);
+      }
+      if (Object.keys(icons).length > 0) emit(icons);
+    })();
+  });
 }
 
 function scoreEntry(entry: IndexEntry, q: string): number {

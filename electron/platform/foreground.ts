@@ -17,12 +17,15 @@ export type ForegroundCallbacks = {
   onRestoreMiss: () => void;
 };
 
+const HELPER_IDLE_MS = 60_000;
+
 /**
  * Cross-platform foreground capture / restore for summon + auto-paste.
- * Windows uses a persistent PowerShell Win32 helper; macOS uses osascript.
+ * Windows uses a PowerShell Win32 helper spawned on demand (not at boot).
  */
 export class ForegroundService {
   private winHelper: WinForegroundHelper | null = null;
+  private helperIdleTimer: NodeJS.Timeout | null = null;
   private captureCallback: (() => void) | null = null;
   private captureTimer: NodeJS.Timeout | null = null;
   private captureGeneration = 0;
@@ -55,14 +58,38 @@ export class ForegroundService {
     return target;
   }
 
-  ensureStarted(): void {
-    if (IS_WIN) this.winHelper?.ensureStarted();
-  }
+  /** No-op — helper is lazy-started on first foreground request. */
+  ensureStarted(): void { /* lazy */ }
 
   shutdown(): void {
     this.cancelCapture();
+    this.shutdownWinHelper();
+  }
+
+  private shutdownWinHelper(): void {
+    if (this.helperIdleTimer !== null) {
+      clearTimeout(this.helperIdleTimer);
+      this.helperIdleTimer = null;
+    }
     this.winHelper?.shutdown();
     this.winHelper = null;
+  }
+
+  private armHelperIdleShutdown(): void {
+    if (this.helperIdleTimer !== null) clearTimeout(this.helperIdleTimer);
+    this.helperIdleTimer = setTimeout(() => {
+      this.helperIdleTimer = null;
+      this.winHelper?.shutdown();
+      this.winHelper = null;
+    }, HELPER_IDLE_MS);
+  }
+
+  private ensureWinHelper(): WinForegroundHelper {
+    if (!this.winHelper) {
+      this.winHelper = new WinForegroundHelper((line) => this.handleLine(line));
+    }
+    this.armHelperIdleShutdown();
+    return this.winHelper;
   }
 
   cancelCapture(): void {
@@ -94,10 +121,8 @@ export class ForegroundService {
       return;
     }
 
-    if (!this.winHelper) {
-      this.winHelper = new WinForegroundHelper((line) => this.handleLine(line));
-    }
-    if (!this.winHelper.write("capture\n")) this.finishCapture();
+    const helper = this.ensureWinHelper();
+    if (!helper.write("capture\n")) this.finishCapture();
   }
 
   requestNativeForeground(): void {
@@ -113,10 +138,7 @@ export class ForegroundService {
     if (!win || win.isDestroyed()) return;
     const hwnd = windowHandleAsDecimal(win);
     if (!hwnd) return;
-    if (!this.winHelper) {
-      this.winHelper = new WinForegroundHelper((line) => this.handleLine(line));
-    }
-    this.winHelper.write(`focus ${hwnd}\n`);
+    this.ensureWinHelper().write(`focus ${hwnd}\n`);
   }
 
   requestRestoreForeground(target: string): void {
@@ -130,11 +152,8 @@ export class ForegroundService {
       return;
     }
 
-    if (!this.winHelper) {
-      this.winHelper = new WinForegroundHelper((line) => this.handleLine(line));
-    }
     this.awaitingRestore = true;
-    if (!this.winHelper.write(`restore ${target}\n`)) {
+    if (!this.ensureWinHelper().write(`restore ${target}\n`)) {
       this.awaitingRestore = false;
     }
   }

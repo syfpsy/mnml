@@ -21,6 +21,8 @@ const api = {
     ipcRenderer.invoke(IPC.pin, { id, pinned }),
   getImageDataUrl: (id: number): Promise<string | null> =>
     ipcRenderer.invoke(IPC.getImage, id),
+  getImageDataUrls: (ids: number[]): Promise<Record<number, string | null>> =>
+    ipcRenderer.invoke(IPC.getImages, ids),
 
   // ── App launcher ────────────────────────────────────────────────────────
   appSearch: (query: string): Promise<AppSearchResponse> =>
@@ -93,6 +95,12 @@ const api = {
     const listener = () => cb();
     ipcRenderer.on(IPC.onItemsCleared, listener);
     return () => { ipcRenderer.off(IPC.onItemsCleared, listener); };
+  },
+
+  onAppIconsResolved: (cb: (icons: Record<string, string | null>) => void): (() => void) => {
+    const listener = (_: unknown, icons: Record<string, string | null>) => cb(icons);
+    ipcRenderer.on(IPC.onAppIconsResolved, listener);
+    return () => { ipcRenderer.off(IPC.onAppIconsResolved, listener); };
   },
 
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.installUpdate),

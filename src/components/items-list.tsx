@@ -20,6 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { bridge } from "../lib/bridge";
+import { requestThumbUrl } from "../lib/thumb-batch";
 import { timeAgo, splitHighlight } from "../lib/format";
 import type { Item, ItemType } from "../types";
 import {
@@ -395,14 +396,30 @@ function TypeIcon({ item, tint }: { item: Item; tint: TintVars }) {
 
 function ImageThumb({ item, tint }: { item: Item; tint: TintVars }) {
   const [url, setUrl] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    let alive = true;
-    bridge.getImageDataUrl(item.id).then((u) => { if (alive) setUrl(u); });
-    return () => { alive = false; };
+    const el = rootRef.current;
+    if (!el) return;
+    let unsub: (() => void) | null = null;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        obs.disconnect();
+        unsub = requestThumbUrl(item.id, setUrl);
+      },
+      { root: el.closest('[role="listbox"]'), threshold: 0.01 },
+    );
+    obs.observe(el);
+    return () => {
+      obs.disconnect();
+      unsub?.();
+    };
   }, [item.id]);
 
   return (
     <div
+      ref={rootRef}
       className="w-6 h-6 shrink-0 rounded-md overflow-hidden"
       style={{ background: tint.bg }}
     >
@@ -416,26 +433,12 @@ function ImageThumb({ item, tint }: { item: Item; tint: TintVars }) {
 }
 
 function FaviconOrIcon({ item, tint }: { item: Item; tint: TintVars }) {
-  const [favOk, setFavOk] = useState(true);
-  const faviconUrl = item.hostname
-    ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(item.hostname)}&sz=16`
-    : null;
-
   return (
     <div
-      className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center overflow-hidden"
+      className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center"
       style={{ background: tint.bg, color: tint.icon }}
     >
-      {faviconUrl && favOk ? (
-        <img
-          src={faviconUrl}
-          alt=""
-          className="w-3.5 h-3.5 object-contain"
-          onError={() => setFavOk(false)}
-        />
-      ) : (
-        <LinkIcon className="w-3 h-3" />
-      )}
+      <LinkIcon className="w-3 h-3" />
     </div>
   );
 }

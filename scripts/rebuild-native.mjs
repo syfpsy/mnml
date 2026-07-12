@@ -33,6 +33,21 @@ function assertUiohookReady(label) {
 
 scrubForeignUiohookPrebuilds(uiohookDir);
 
+function bindingsReady() {
+  try {
+    execSync("node scripts/verify-native-bindings.mjs", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (bindingsReady()) {
+  console.log("[rebuild] native bindings already valid for this platform — skipping electron-rebuild");
+  assertUiohookReady("cached");
+  process.exit(0);
+}
+
 // better-sqlite3 must match Electron ABI; uiohook uses shipped prebuilds on win/mac.
 execSync("electron-rebuild -f -w better-sqlite3", { stdio: "inherit" });
 

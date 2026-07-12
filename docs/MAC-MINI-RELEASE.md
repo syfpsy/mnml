@@ -30,10 +30,10 @@ cd ~/Repos
 git clone https://github.com/syfpsy/mnml.git
 cd mnml
 git fetch origin --tags --force
-git checkout v0.3.0
+git checkout v0.3.8
 cp /path/to/your/.env.release .
 chmod +x scripts/mac-mini-release.sh
-./scripts/mac-mini-release.sh v0.3.0
+./scripts/mac-mini-release.sh v0.3.8
 ```
 
 The script: clean `npm ci` → arm64 build → sign → notarize → upload `mnml-mac.dmg`, `mnml-mac.zip`, `latest-mac.yml` to GitHub.

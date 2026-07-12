@@ -43,11 +43,3 @@ export function requestThumbUrl(id: number, cb: (url: string | null) => void): (
   scheduleFlush();
   return () => { waiters.get(id)?.delete(cb); };
 }
-
-export function primeThumbCache(batch: Record<number, string | null>) {
-  for (const [key, url] of Object.entries(batch)) {
-    const id = Number(key);
-    if (!Number.isFinite(id)) continue;
-    notify(id, url);
-  }
-}

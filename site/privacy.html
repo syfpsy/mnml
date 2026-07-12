@@ -94,21 +94,16 @@
           any download). No personal data or clipboard content is sent.
         </li>
         <li>
-          <strong>Favicons for links.</strong> When a link is shown in your
-          history, mnml fetches that site's small icon from Google's public
-          favicon service. This means the <em>domain</em> of links you copy (for
-          example <code>example.com</code>, not the full URL) is sent to Google
-          to retrieve the icon.
-        </li>
-        <li>
           <strong>Link titles.</strong> When you copy a URL, mnml fetches that
           page to read its title, so the entry reads as a real name instead of a
           raw link. That means mnml briefly visits the address you copied.
-          Requests to private or local network addresses are blocked.
+          Requests to private or local network addresses are blocked. Link rows
+          use a local icon only — mnml does not fetch favicons from third-party
+          services.
         </li>
       </ul>
       <p>
-        Both link lookups only happen for content that is actually captured, so
+        This lookup only happens for content that is actually captured, so
         anything excluded by the sensitive-content rule above never triggers a
         request. Switching off clipboard monitoring stops them too.
       </p>

@@ -128,6 +128,10 @@ git checkout vX.Y.Z
 Requires `electron-rebuild` (native modules). Install **VS 2022 Build Tools** with
 the “Desktop development with C++” workload if `npm run rebuild` fails.
 
+**If `vswhere` finds no install** but `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools` exists, the registration is broken — open **Visual Studio Installer → Modify/Repair** and ensure **Desktop development with C++** is checked. Until then, `npm run rebuild` skips when `verify-native-bindings` already passes (cached `.node` files).
+
+**macOS CI** (`workflow_dispatch` → `macos`) needs Apple signing secrets (`CSC_LINK`, `APPLE_*`) in GitHub — otherwise use **Mac mini** (`./scripts/mac-mini-release.sh vX.Y.Z`).
+
 ### 4. Site
 
 After the GitHub release is **published** (not draft) with `--latest`:

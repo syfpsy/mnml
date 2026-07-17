@@ -7,8 +7,8 @@
  *   2. Reveal-on-scroll for elements tagged `data-reveal`. One short, smooth
  *      translate+fade per section as it enters the viewport.
  *
- * No release fetching. The download buttons are static `<a href="mnml-setup.exe">`
- * links to a local binary served alongside the page.
+ * No release fetching. Download buttons are static links (`mnml-setup.exe`,
+ * `mnml-mac.dmg`) that Vercel redirects to GitHub Releases latest.
  */
 
 /* ── 1. Theme toggle ────────────────────────────────────────────────────── */

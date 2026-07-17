@@ -18,7 +18,7 @@ A keyboard-first clipboard manager for **Windows and macOS**. Press **Alt** twic
 - **Launcher** — Start-Menu apps + ~80 curated `ms-settings:` deep links (Bluetooth, Display, Sound, Update…) + classic `.msc` / `.cpl` tools (Task Manager, Device Manager, Registry Editor…), all in the same search.
 - **Never your passwords** — mnml honors the Windows "do not record" clipboard flag, so content from password managers (1Password, KeePass, Bitwarden) and browser password fields is never captured.
 - **Folder sync** — point the storage folder at Dropbox / OneDrive / iCloud and your clipboard follows you across devices (one machine at a time). No server, no account; the data only ever lives in your own cloud storage.
-- **Auto-launch + auto-update** — starts with Windows so the hotkey is always live; updates itself in the background.
+- **Auto-launch + auto-update** — starts at login so the hotkey is always live; updates itself in the background.
 - **Light + dark themes**, WCAG-AA contrast in both.
 
 ## Hotkeys

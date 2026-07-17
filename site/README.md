@@ -11,7 +11,7 @@ Self-contained static page at `site/index.html`. No build step — pure HTML, on
 | `main.js`      | Two effects: theme toggle (persists to localStorage, follows system preference until the user picks) and reveal-on-scroll for `[data-reveal]` sections. Page works fully without JS. |
 | `favicon.svg`  | 32×32 brand mark — small-caps "M" + orange dot on the cool-tinted dark rounded square. Same geometry as the app icon (`build/icon.svg`), scaled down. |
 | `og.svg`       | 1200×630 Open Graph **source** artwork. Hand-edited; rasterise via `npx sharp-cli` after changes. |
-| `og-v2.png`    | 1200×630 PNG served as `og:image` + `twitter:image`. Twitter/X explicitly rejects SVG cards, so we publish the PNG. Suffix-versioned so re-brands bust the 30-day immutable CDN + browser cache + social-platform unfurl cache — bump `og-vN.png` whenever the artwork actually changes. |
+| `og-v3.png`    | 1200×630 PNG served as `og:image` + `twitter:image`. Twitter/X explicitly rejects SVG cards, so we publish the PNG. Suffix-versioned so re-brands bust the 30-day immutable CDN + browser cache + social-platform unfurl cache — bump `og-vN.png` whenever the artwork actually changes. |
 **Downloads are not in `site/`.** The installer (`mnml-setup.exe`), update manifest
 (`latest.yml`), and blockmap live on **GitHub Releases**. `vercel.json` redirects
 `/mnml-setup.exe`, `/latest.yml`, and `/mnml-setup.exe.blockmap` (307) to

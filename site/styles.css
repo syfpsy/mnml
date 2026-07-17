@@ -327,6 +327,59 @@ html.light .theme-toggle .icon-moon { display: none; }
      weight contrast vs `.btn-label` is enough hierarchy without dropping
      contrast. */
 }
+.btn-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.os-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+/* Windows Fluent blue — distinct from Mac charcoal / light Apple pill */
+.btn-win {
+  background: #0078d4;
+  color: #fff;
+  box-shadow: 0 8px 22px -10px rgba(0, 120, 212, 0.55);
+}
+.btn-win:hover {
+  background: color-mix(in oklab, #0078d4 88%, white 12%);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.btn-win:active { transform: translateY(0); }
+html.light .btn-win {
+  background: #0067b8;
+  box-shadow: 0 8px 22px -10px rgba(0, 103, 184, 0.45);
+}
+html.light .btn-win:hover {
+  background: color-mix(in oklab, #0067b8 90%, black 10%);
+}
+
+/* macOS: light pill on dark, Apple charcoal on light */
+.btn-mac {
+  background: #e8e8e6;
+  color: #15151a;
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.45);
+}
+.btn-mac:hover {
+  background: #f2f2f0;
+  color: #15151a;
+  transform: translateY(-1px);
+}
+.btn-mac:active { transform: translateY(0); }
+html.light .btn-mac {
+  background: #1d1d1f;
+  color: #f5f5f7;
+  box-shadow: 0 8px 22px -10px rgba(29, 29, 31, 0.4);
+}
+html.light .btn-mac:hover {
+  background: #2d2d2f;
+  color: #f5f5f7;
+}
+
+/* Legacy alias — keep emerald primary if used elsewhere */
 .btn.primary {
   background: var(--accent-app);
   color: var(--btn-primary-fg);
@@ -341,6 +394,10 @@ html.light .theme-toggle .icon-moon { display: none; }
 .btn.big {
   padding: 16px 28px;
   font-size: 16px;
+}
+.btn.big .os-icon {
+  width: 18px;
+  height: 18px;
 }
 
 /* ── Demo window (mirrors the actual product) ───────────────────────────────── */
@@ -766,7 +823,13 @@ section {
   max-width: 50ch;
   margin: 0 auto 36px;
 }
-.install .btn { margin: 0 auto; }
+.install-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 8px 0 0;
+}
 .install-alt {
   margin-top: 28px;
   color: var(--t3);

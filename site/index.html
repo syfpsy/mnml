@@ -14,21 +14,21 @@
        SVG og:image, and several other unfurlers handle it inconsistently.
        The SVG is kept around for environments that prefer it; the PNG is
        the declared og:image and twitter:image. -->
-  <meta property="og:title" content="mnml: a keyboard-first clipboard for Windows" />
-  <meta property="og:description" content="Press Alt twice. Paste from history, launch apps, jump to Windows Settings, save reusable snippets. Local SQLite. No telemetry." />
+  <meta property="og:title" content="mnml: a keyboard-first clipboard for Windows and macOS" />
+  <meta property="og:description" content="Press Alt twice on Windows or Option twice on Mac. Paste from history, launch apps and settings, save reusable snippets. Local SQLite. No telemetry." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://mnml.nxyz.art/" />
   <!-- The filename includes a version suffix so re-branding (orange-mark
        OG card replacing the earlier emerald-dot one) busts the 30-day
        immutable CDN + browser cache + Twitter/Facebook unfurl cache.
        Bump the suffix any time `og-vN.png` actually changes visually. -->
-  <meta property="og:image" content="https://mnml.nxyz.art/og-v2.png" />
+  <meta property="og:image" content="https://mnml.nxyz.art/og-v3.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="mnml — a keyboard-first clipboard for Windows. Press Alt twice." />
+  <meta property="og:image:alt" content="mnml — a keyboard-first clipboard for Windows and Mac. Alt twice on Windows · Option twice on Mac." />
   <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:image" content="https://mnml.nxyz.art/og-v2.png" />
-  <meta property="twitter:image:alt" content="mnml — a keyboard-first clipboard for Windows. Press Alt twice." />
+  <meta property="twitter:image" content="https://mnml.nxyz.art/og-v3.png" />
+  <meta property="twitter:image:alt" content="mnml — a keyboard-first clipboard for Windows and Mac. Alt twice on Windows · Option twice on Mac." />
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 
@@ -87,12 +87,18 @@
           No telemetry.
         </p>
         <div class="cta">
-          <a class="btn primary" id="download-link-win" href="mnml-setup.exe" data-reveal>
-            <span class="btn-label">Download for Windows</span>
+          <a class="btn btn-win" id="download-link-win" href="mnml-setup.exe" data-reveal>
+            <span class="btn-row">
+              <svg class="os-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.25 11.25 4.1v7.65H3zm9 0L21 3v8.75h-9zM3 13.25h8.25V21L3 19.75zm9 0H21V21l-9-1.25z"/></svg>
+              <span class="btn-label">Download for Windows</span>
+            </span>
             <span class="btn-meta">v0.3.9 · .exe · Windows 10 / 11 · x64</span>
           </a>
-          <a class="btn primary" id="download-link-mac" href="mnml-mac.dmg" data-reveal>
-            <span class="btn-label">Download for macOS</span>
+          <a class="btn btn-mac" id="download-link-mac" href="mnml-mac.dmg" data-reveal>
+            <span class="btn-row">
+              <svg class="os-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              <span class="btn-label">Download for macOS</span>
+            </span>
             <span class="btn-meta">v0.3.9 · .dmg · macOS 12+ · Apple Silicon</span>
           </a>
         </div>
@@ -228,21 +234,21 @@
           <span class="n">01</span>
           <div>
             <h3>One window</h3>
-            <p>440 × 540. One tab strip. Categories filter clipboard items, snippets, apps, and Windows Settings, all in the same surface.</p>
+            <p>440 × 540. One tab strip. Categories filter clipboard items, snippets, apps, and system settings, all in the same surface.</p>
           </div>
         </li>
         <li>
           <span class="n">02</span>
           <div>
             <h3>One hotkey, always live</h3>
-            <p>Double-tap <kbd class="kbd inline">Alt</kbd> anywhere. The window appears at your cursor, the search field already has focus. mnml auto-launches with Windows so the hotkey is ready the moment you sign in.</p>
+            <p>Double-tap <kbd class="kbd inline">Alt</kbd> on Windows or <kbd class="kbd inline">Option</kbd> on Mac. The window appears at your cursor, the search field already has focus. mnml auto-launches at login so the hotkey is ready the moment you sign in.</p>
           </div>
         </li>
         <li>
           <span class="n">03</span>
           <div>
             <h3>One paste</h3>
-            <p>Click or press <kbd class="kbd inline">Enter</kbd>. mnml hides, your previous window regains focus, <kbd class="kbd inline">Ctrl + V</kbd> fires automatically.</p>
+            <p>Click or press <kbd class="kbd inline">Enter</kbd>. mnml hides, your previous window regains focus, and paste fires automatically (<kbd class="kbd inline">Ctrl + V</kbd> / <kbd class="kbd inline">⌘V</kbd>).</p>
           </div>
         </li>
         <li>
@@ -290,15 +296,14 @@
       <div class="feature">
         <div class="feature-head">
           <span class="feature-tag tag-app">Launcher</span>
-          <h3>Apps + Windows Settings, all in the same search</h3>
+          <h3>Apps + system settings, all in the same search</h3>
         </div>
         <p>
-          Start-Menu shortcuts plus ~80 curated <code>ms-settings:</code>
-          deep links (Bluetooth, Wi-Fi, Display, Sound, Update, Privacy,
-          Accessibility, Game Bar, …) plus the classic
-          <code>.msc</code> / <code>.cpl</code> tools (Task Manager, Device
-          Manager, Registry Editor, Services, PowerShell, …). Type a few
-          letters and hit Enter.
+          On Windows: Start-Menu shortcuts plus ~80 curated
+          <code>ms-settings:</code> deep links (Bluetooth, Wi-Fi, Display,
+          Sound, Update, Privacy, Accessibility, Game Bar, …) plus classic
+          <code>.msc</code> / <code>.cpl</code> tools. On Mac: Applications
+          and System Settings. Type a few letters and hit Enter.
         </p>
       </div>
 
@@ -494,14 +499,22 @@
     <section class="install" data-reveal>
       <h2>Get it</h2>
       <p class="install-lede">Windows and macOS. No setup wizard, no account. Lives in the tray / menu bar and can auto-launch at login so the hotkey is always one keypress away.</p>
-      <a class="btn primary big" href="mnml-setup.exe" id="download-link-2">
-        <span class="btn-label">Download for Windows</span>
-        <span class="btn-meta">v0.3.9 · .exe · Windows 10 / 11 · x64</span>
-      </a>
-      <a class="btn primary big" href="mnml-mac.dmg" id="download-link-mac-2">
-        <span class="btn-label">Download for macOS</span>
-        <span class="btn-meta">v0.3.9 · .dmg · macOS 12+ · Apple Silicon</span>
-      </a>
+      <div class="install-cta">
+        <a class="btn btn-win big" href="mnml-setup.exe" id="download-link-2">
+          <span class="btn-row">
+            <svg class="os-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.25 11.25 4.1v7.65H3zm9 0L21 3v8.75h-9zM3 13.25h8.25V21L3 19.75zm9 0H21V21l-9-1.25z"/></svg>
+            <span class="btn-label">Download for Windows</span>
+          </span>
+          <span class="btn-meta">v0.3.9 · .exe · Windows 10 / 11 · x64</span>
+        </a>
+        <a class="btn btn-mac big" href="mnml-mac.dmg" id="download-link-mac-2">
+          <span class="btn-row">
+            <svg class="os-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <span class="btn-label">Download for macOS</span>
+          </span>
+          <span class="btn-meta">v0.3.9 · .dmg · macOS 12+ · Apple Silicon</span>
+        </a>
+      </div>
       <p class="install-alt">
         Free, MIT-licensed. Uninstall any time via Windows Settings or by moving mnml to the Trash on Mac.
         Also available as a <a href="mnml-mac.zip">macOS .zip</a>.

@@ -53,32 +53,35 @@
     <section class="legal">
       <p class="eyebrow">Privacy</p>
       <h1>Your clipboard stays yours</h1>
-      <p class="updated">Last updated 22 May 2026</p>
+      <p class="updated">Last updated 17 July 2026</p>
 
       <p>
-        mnml is a local-first clipboard manager for Windows. The short version:
-        what you copy lives on your own computer, in a local database. mnml has
-        no servers that receive your clipboard, no user accounts, no analytics,
-        and no third-party trackers. This page spells out exactly what is stored,
-        what stays local, and the few things that touch the network.
+        mnml is a local-first clipboard manager for Windows and macOS. The short
+        version: what you copy lives on your own computer, in a local database.
+        mnml has no servers that receive your clipboard, no user accounts, no
+        analytics, and no third-party trackers. This page spells out exactly what
+        is stored, what stays local, and the few things that touch the network.
       </p>
 
       <h2>What mnml stores, and where</h2>
       <p>
         Your clipboard history, saved snippets, and settings are stored locally
-        in an SQLite database, by default at <code>%APPDATA%\mnml\mnml.sqlite</code>,
-        with captured images as PNG files in <code>%APPDATA%\mnml\images\</code>.
-        This data never leaves your machine on its own. You can wipe it any time
-        with <strong>Clear history</strong> in Settings, or by deleting those paths.
+        in an SQLite database — by default
+        <code>%APPDATA%\mnml\mnml.sqlite</code> on Windows, or
+        <code>~/Library/Application Support/mnml/</code> on macOS — with captured
+        images as PNG files alongside it. This data never leaves your machine on
+        its own. You can wipe it any time with <strong>Clear history</strong> in
+        Settings, or by deleting those paths.
       </p>
 
       <h2>What mnml never records</h2>
       <p>
-        mnml honors the Windows "do not record" clipboard markers. Content that a
-        password manager (1Password, KeePass, Bitwarden) or a browser password
-        field marks as sensitive is skipped entirely. It is never read into
-        memory, never stored, and never synced. Turning off
-        <strong>Monitor clipboard</strong> in Settings stops all capture.
+        mnml honors OS "do not record" clipboard markers where the platform
+        provides them (including Windows). Content that a password manager
+        (1Password, KeePass, Bitwarden) or a browser password field marks as
+        sensitive is skipped entirely. It is never read into memory, never
+        stored, and never synced. Turning off <strong>Monitor clipboard</strong>
+        in Settings stops all capture.
       </p>
 
       <h2>What touches the network</h2>

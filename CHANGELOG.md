@@ -14,6 +14,7 @@
 - **Foreground restore write failure** — helper stdin write miss now fires `onRestoreMiss` so paste flags clear.
 
 ### Changed
+- **Site OG + download CTAs** — Open Graph / Twitter cards updated for Windows & Mac (`og-v3.png`); download buttons use distinct Win/Mac colors with OS icons.
 - **macOS build published** — notarized Apple Silicon DMG/ZIP on GitHub Releases; site treats Windows and Mac as first-class downloads.
 - **Heavier clipboard work deferred** — image `toPNG` + disk write run via single-flight `setImmediate` / async write so the poll tick and hotkeys stay responsive.
 - **Leaner history cap** — max saved items hard-capped at 1 000 (UI + IPC + settings read; default still 200).

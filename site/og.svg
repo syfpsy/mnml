@@ -13,7 +13,7 @@
 
   <!-- Brand mark: small-caps M + orange dot. Scaled-up version of the
        app icon's geometry. Reading "M·" left-of-wordmark. -->
-  <g transform="translate(120, 220)">
+  <g transform="translate(120, 200)">
     <path fill-rule="evenodd" fill="#e8e8e6" d="
       M0,0 L96,0 L96,128 L0,128 Z
       M24,0 L48,80 L72,0 L72,128 L24,128 Z
@@ -21,28 +21,34 @@
     <circle cx="128" cy="112" r="20" fill="#fb923c"/>
   </g>
 
-  <text x="280" y="340" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
+  <text x="280" y="320" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
         font-size="180" font-weight="800" letter-spacing="-6" fill="#e8e8e6">mnml</text>
 
-  <text x="120" y="448" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
-        font-size="44" font-weight="600" fill="#e8e8e6" letter-spacing="-1.5">
-    A keyboard-first clipboard for Windows.
+  <text x="120" y="420" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
+        font-size="40" font-weight="600" fill="#e8e8e6" letter-spacing="-1.5">
+    A keyboard-first clipboard for Windows &amp; Mac.
   </text>
 
-  <text x="120" y="508" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
-        font-size="26" fill="#9494a0">
-    Press Alt twice. Paste, launch, save snippets.
+  <text x="120" y="478" font-family="Segoe UI Variable Display, Segoe UI, -apple-system, system-ui, sans-serif"
+        font-size="24" fill="#9494a0">
+    Alt twice on Windows · Option twice on Mac. Local. No telemetry.
   </text>
 
-  <!-- Bottom-right key pill -->
-  <g transform="translate(900, 480)">
-    <rect width="180" height="60" rx="10" fill="#181a1f" stroke="#3a3a44" stroke-width="1"/>
-    <text x="90" y="40" text-anchor="middle"
+  <!-- Platform pills — Fluent blue / Apple charcoal -->
+  <g transform="translate(120, 520)">
+    <rect width="150" height="44" rx="8" fill="#0078d4"/>
+    <text x="75" y="29" text-anchor="middle"
           font-family="Cascadia Code, Consolas, ui-monospace, monospace"
-          font-size="22" font-weight="600" fill="#e8e8e6">Alt + Alt</text>
+          font-size="16" font-weight="600" fill="#ffffff">Windows</text>
+  </g>
+  <g transform="translate(286, 520)">
+    <rect width="120" height="44" rx="8" fill="#e8e8e6"/>
+    <text x="60" y="29" text-anchor="middle"
+          font-family="Cascadia Code, Consolas, ui-monospace, monospace"
+          font-size="16" font-weight="600" fill="#15151a">macOS</text>
   </g>
 
-  <!-- Bottom-left tagline -->
-  <text x="120" y="570" font-family="Cascadia Code, Consolas, ui-monospace, monospace"
-        font-size="20" fill="#7e7e85">local · keyboard-first · MIT</text>
+  <text x="900" y="548" text-anchor="middle"
+        font-family="Cascadia Code, Consolas, ui-monospace, monospace"
+        font-size="18" fill="#7e7e85">local · MIT · v0.3.9</text>
 </svg>

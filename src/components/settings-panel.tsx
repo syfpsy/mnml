@@ -158,7 +158,7 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
                 <NumberInput
                   value={settings.maxItems}
                   min={20}
-                  max={5000}
+                  max={1000}
                   step={10}
                   onChange={(v) => update("maxItems", v)}
                   label="Max saved items"

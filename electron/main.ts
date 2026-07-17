@@ -14,7 +14,7 @@ import { registerIpc } from "./ipc.js";
 import { rebuildAppIndex } from "./search/app-search.js";
 import { log, logPathForDisplay } from "./utils/log.js";
 import { FALLBACK_SHORTCUT, IS_MAC, IS_WIN, PLATFORM_UI } from "./platform/config.js";
-import { triggerPaste } from "./platform/paste.js";
+import { triggerPaste, cancelPendingPaste } from "./platform/paste.js";
 import { ForegroundService } from "./platform/foreground.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -299,6 +299,26 @@ function cancelInFlightPaste() {
   pasteAfterRestorePending = false;
   awaitingHelperRestore = false;
   pasteFlowActive = false;
+  cancelPendingPaste();
+  flushDeferredShowAfterPaste();
+}
+
+function cancelPasteActivation() {
+  pastePending = false;
+  // armPasteActivation() extended suppress — release if restore never reached hide().
+  suppressBlurHideUntil = 0;
+  flushDeferredShowAfterPaste();
+}
+
+/** If show was deferred mid-paste (recreate / second-instance), retry now. */
+function flushDeferredShowAfterPaste() {
+  if (!showWhenReady) return;
+  if (pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore || pastePending) return;
+  setImmediate(() => {
+    if (!showWhenReady) return;
+    if (pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore || pastePending) return;
+    showWindow();
+  });
 }
 
 function armPasteFlowSafety() {
@@ -435,7 +455,10 @@ function clearPasteAfterRestoreTimer() {
 function onForegroundRestoreComplete(settleMs: number) {
   pasteAfterRestorePending = false;
   clearPasteAfterRestoreTimer();
-  triggerPaste(settleMs, () => { pasteFlowActive = false; });
+  triggerPaste(settleMs, () => {
+    pasteFlowActive = false;
+    flushDeferredShowAfterPaste();
+  });
 }
 
 function createForegroundService(): ForegroundService {
@@ -476,12 +499,6 @@ function armPasteActivation() {
   markInternalPointerDown(2_000);
 }
 
-function cancelPasteActivation() {
-  pastePending = false;
-  // armPasteActivation() extended suppress — release if restore never reached hide().
-  suppressBlurHideUntil = 0;
-}
-
 function recoverFromFailedHide() {
   pastePending = false;
   cancelInFlightPaste();
@@ -490,6 +507,7 @@ function recoverFromFailedHide() {
   try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
   try { win!.focus(); win!.webContents.focus(); } catch { /* noop */ }
   startFocusWatchdog();
+  flushDeferredShowAfterPaste();
 }
 
 /**
@@ -924,7 +942,8 @@ function createWindow() {
     catch (err) { log("[window] setIgnoreMouseEvents failed:", String(err)); }
     log("[startup] renderer ready");
     if (showWhenReady) {
-      showWhenReady = false;
+      // Do not clear showWhenReady here — showWindow() clears it only after
+      // the paste-flow guard passes, otherwise a mid-paste recreate loses the show.
       showWindow();
     }
   });
@@ -936,6 +955,13 @@ function showWindow() {
     recreateWindow(true);
     return;
   }
+  // Same guard as toggleWindow — second-instance / activate must not steal
+  // focus mid auto-paste. Keep showWhenReady so we retry when paste clears.
+  if (pasteFlowActive || pasteAfterRestorePending || awaitingHelperRestore || pastePending) {
+    showWhenReady = true;
+    log("[show] deferred — paste flow active");
+    return;
+  }
   reconcileVisibilityFlag();
   cancelScheduledBlurHide();
 
@@ -943,6 +969,7 @@ function showWindow() {
     showWhenReady = true;
     return;
   }
+  showWhenReady = false;
   if (windowVisible && win!.isVisible()) {
     dismissGeneration += 1;
     windowShownAt = Date.now();
@@ -1081,7 +1108,10 @@ function hideWindow() {
     const ours = fg?.ownTarget() ?? null;
     if (target && ours && target === ours) {
       try { win!.blur(); } catch { /* noop */ }
-      triggerPaste(300, () => { pasteFlowActive = false; });
+      triggerPaste(300, () => {
+        pasteFlowActive = false;
+        flushDeferredShowAfterPaste();
+      });
     } else if (target) {
       pasteAfterRestorePending = true;
       requestRestoreForeground(target);
@@ -1092,11 +1122,17 @@ function hideWindow() {
         pasteAfterRestorePending = false;
         awaitingHelperRestore = false;
         log("[paste] restore timed out — pasting anyway");
-        triggerPaste(120, () => { pasteFlowActive = false; });
+        triggerPaste(120, () => {
+          pasteFlowActive = false;
+          flushDeferredShowAfterPaste();
+        });
       }, 750);
     } else {
       try { win!.blur(); } catch { /* noop */ }
-      triggerPaste(350, () => { pasteFlowActive = false; });
+      triggerPaste(350, () => {
+        pasteFlowActive = false;
+        flushDeferredShowAfterPaste();
+      });
     }
     finishHideSync();
   } else {

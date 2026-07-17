@@ -293,7 +293,7 @@ export function registerIpc(windowControl: WindowControl) {
       }
       let next = value;
       if (key === "maxItems" && typeof value === "number") {
-        next = Math.min(10_000, Math.max(1, Math.floor(value))) as AppSettings["maxItems"];
+        next = Math.min(1_000, Math.max(1, Math.floor(value))) as AppSettings["maxItems"];
       }
       setSetting(key, next as never);
       if (key === "monitoring") {

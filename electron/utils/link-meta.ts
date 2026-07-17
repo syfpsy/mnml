@@ -6,6 +6,36 @@ import { log } from "./log.js";
 const MAX_REDIRECTS = 2;
 const TIMEOUT_MS = 4_000;
 const MAX_BYTES = 8_192;
+/** Cap parallel title fetches so link storms don't fan out unbounded. */
+const MAX_CONCURRENT_TITLE_FETCHES = 2;
+const MAX_TITLE_FETCH_QUEUE = 48;
+let titleFetchesInFlight = 0;
+const titleFetchQueue: Array<() => void> = [];
+
+function runTitleFetchQueued<T>(work: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      titleFetchesInFlight += 1;
+      work()
+        .then(resolve, reject)
+        .finally(() => {
+          titleFetchesInFlight -= 1;
+          const next = titleFetchQueue.shift();
+          if (next) next();
+        });
+    };
+    if (titleFetchesInFlight < MAX_CONCURRENT_TITLE_FETCHES) {
+      start();
+      return;
+    }
+    if (titleFetchQueue.length >= MAX_TITLE_FETCH_QUEUE) {
+      // Drop this request rather than grow forever under a link storm.
+      resolve(null as T);
+      return;
+    }
+    titleFetchQueue.push(start);
+  });
+}
 
 /**
  * Reject hostnames that resolve to private / link-local / loopback ranges.
@@ -55,6 +85,17 @@ export function fetchTitle(
   url: string,
   redirectsLeft = MAX_REDIRECTS,
 ): Promise<string | null> {
+  // Only queue at the entry call — redirects share the same slot.
+  if (redirectsLeft === MAX_REDIRECTS) {
+    return runTitleFetchQueued(() => fetchTitleInner(url, redirectsLeft));
+  }
+  return fetchTitleInner(url, redirectsLeft);
+}
+
+function fetchTitleInner(
+  url: string,
+  redirectsLeft: number,
+): Promise<string | null> {
   return new Promise((resolve) => {
     try {
       const parsed = new URL(url);
@@ -95,12 +136,13 @@ export function fetchTitle(
             redirectsLeft > 0
           ) {
             res.resume();
-            // Re-enter via fetchTitle so the private-hostname guard at the
+            // Re-enter via fetchTitleInner so the private-hostname guard at the
             // top runs against the resolved redirect target. Bare URL
             // resolution alone (`new URL(loc, url)`) wouldn't filter
             // a 302 → http://192.168.1.1/, but the recursive call does.
+            // Stay on Inner so redirects don't re-queue / nest slots.
             resolve(
-              fetchTitle(new URL(loc, url).href, redirectsLeft - 1),
+              fetchTitleInner(new URL(loc, url).href, redirectsLeft - 1),
             );
             return;
           }

@@ -155,6 +155,7 @@ export class ForegroundService {
     this.awaitingRestore = true;
     if (!this.ensureWinHelper().write(`restore ${target}\n`)) {
       this.awaitingRestore = false;
+      this.callbacks.onRestoreMiss();
     }
   }
 

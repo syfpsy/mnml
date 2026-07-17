@@ -53,6 +53,8 @@ interface Props {
   onArrowUpFromFirst?: () => void;
   listRef?: React.RefObject<HTMLDivElement | null>;
   onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>;
+  /** Bumped on panel hide so ImageThumb re-fetches after thumb-cache clear. */
+  thumbEpoch?: number;
 }
 
 /**
@@ -71,6 +73,7 @@ const TYPE_VARS: Record<ItemType, {
 export function ItemsList({
   items, onActivate, onCopyOnly, onRemove, onPinToggle, onSave,
   query, emptyHint, isLoading = false, onArrowUpFromFirst, listRef, onKeyDownCapture,
+  thumbEpoch = 0,
 }: Props) {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const lastKbdAt = useRef(0);
@@ -200,7 +203,7 @@ export function ItemsList({
               }}
             >
               <QuickNum idx={idx} />
-              <TypeIcon item={item} tint={tint} />
+              <TypeIcon item={item} tint={tint} thumbEpoch={thumbEpoch} />
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
                 <span
                   className={
@@ -381,8 +384,8 @@ interface TintVars {
   rowHover: string;
 }
 
-function TypeIcon({ item, tint }: { item: Item; tint: TintVars }) {
-  if (item.type === "image") return <ImageThumb item={item} tint={tint} />;
+function TypeIcon({ item, tint, thumbEpoch }: { item: Item; tint: TintVars; thumbEpoch: number }) {
+  if (item.type === "image") return <ImageThumb item={item} tint={tint} thumbEpoch={thumbEpoch} />;
   if (item.type === "link")  return <FaviconOrIcon item={item} tint={tint} />;
   return (
     <div
@@ -394,11 +397,12 @@ function TypeIcon({ item, tint }: { item: Item; tint: TintVars }) {
   );
 }
 
-function ImageThumb({ item, tint }: { item: Item; tint: TintVars }) {
+function ImageThumb({ item, tint, thumbEpoch }: { item: Item; tint: TintVars; thumbEpoch: number }) {
   const [url, setUrl] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setUrl(null);
     const el = rootRef.current;
     if (!el) return;
     let unsub: (() => void) | null = null;
@@ -415,7 +419,7 @@ function ImageThumb({ item, tint }: { item: Item; tint: TintVars }) {
       obs.disconnect();
       unsub?.();
     };
-  }, [item.id]);
+  }, [item.id, thumbEpoch]);
 
   return (
     <div

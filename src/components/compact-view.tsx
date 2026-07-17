@@ -9,6 +9,7 @@ import { useItems } from "../hooks/use-items";
 import { useAppSearch } from "../hooks/use-app-search";
 import { useSaved } from "../hooks/use-saved";
 import { bridge } from "../lib/bridge";
+import { clearThumbCache } from "../lib/thumb-batch";
 import type { AppResult, Item, ItemType, SavedSnippet, TabKey } from "../types";
 
 const SettingsPanel = lazy(() =>
@@ -99,6 +100,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const quickPasteRef = useRef<(n: number) => boolean>(() => false);
   /** Cancels a pending hide-reset if the user re-summons before rAF fires. */
   const hideResetGen   = useRef(0);
+  const [thumbEpoch, setThumbEpoch] = useState(0);
 
   useEffect(() => {
     bridge.setBlurLock(settingsOpen);
@@ -143,6 +145,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
           setQuery("");
           setSettingsOpen(false);
           setSavedListEpoch((n) => n + 1);
+          clearThumbCache();
+          setThumbEpoch((n) => n + 1);
         });
       });
     });
@@ -412,6 +416,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
                 onArrowUpFromFirst={focusSearch}
                 listRef={listRef}
                 onKeyDownCapture={handleClipboardKeyDownCapture}
+                thumbEpoch={thumbEpoch}
                 emptyHint={
                   tab === "image" ? "No images captured yet." :
                   tab === "link"  ? "No links captured yet." :

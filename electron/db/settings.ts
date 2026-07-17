@@ -18,6 +18,14 @@ const DEFAULTS: AppSettings = {
   lightTheme: false,
 };
 
+/** Hard ceiling — matches IPC/UI clamp; keeps LIKE/search assumptions cheap. */
+const MAX_ITEMS_CAP = 1_000;
+
+function clampMaxItems(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULTS.maxItems;
+  return Math.min(MAX_ITEMS_CAP, Math.max(1, Math.floor(n)));
+}
+
 /** In-memory cache — warmed on first read; avoids per-call SQLite during hot paths. */
 let cache: AppSettings | null = null;
 
@@ -35,13 +43,22 @@ function readRow<K extends keyof AppSettings>(key: K): AppSettings[K] {
 
 function loadCache(): AppSettings {
   if (cache) return cache;
+  const maxItems = clampMaxItems(Number(readRow("maxItems")));
   cache = {
     monitoring:      readRow("monitoring"),
-    maxItems:        readRow("maxItems"),
+    maxItems,
     launchOnStartup: readRow("launchOnStartup"),
     autoPaste:       readRow("autoPaste"),
     lightTheme:      readRow("lightTheme"),
   };
+  // Persist clamp so trim()/Settings stay consistent after the old 10k ceiling.
+  if (Number(readRow("maxItems")) !== maxItems) {
+    getDb()
+      .prepare(
+        "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      )
+      .run("maxItems", JSON.stringify(maxItems));
+  }
   return cache;
 }
 
@@ -55,12 +72,15 @@ export function getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] 
 }
 
 export function setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
+  const next = key === "maxItems" && typeof value === "number"
+    ? clampMaxItems(value) as AppSettings[K]
+    : value;
   getDb()
     .prepare(
       "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     )
-    .run(key, JSON.stringify(value));
-  loadCache()[key] = value;
+    .run(key, JSON.stringify(next));
+  loadCache()[key] = next;
 }
 
 export function getAll(): AppSettings {

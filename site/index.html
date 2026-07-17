@@ -89,15 +89,15 @@
         <div class="cta">
           <a class="btn primary" id="download-link-win" href="mnml-setup.exe" data-reveal>
             <span class="btn-label">Download for Windows</span>
-            <span class="btn-meta">v0.3.8 · .exe · Windows 10 / 11 · x64</span>
+            <span class="btn-meta">v0.3.9 · .exe · Windows 10 / 11 · x64</span>
           </a>
           <a class="btn primary" id="download-link-mac" href="mnml-mac.dmg" data-reveal>
             <span class="btn-label">Download for macOS</span>
-            <span class="btn-meta">v0.3.8 · .dmg · macOS 12+ · Apple Silicon</span>
+            <span class="btn-meta">v0.3.9 · .dmg · macOS 12+ · Apple Silicon</span>
           </a>
         </div>
         <p class="hero-foot">
-          Free and MIT-licensed. Latest release <strong>v0.3.8</strong> · installs in seconds, uninstalls cleanly.
+          Free and MIT-licensed. Latest release <strong>v0.3.9</strong> · installs in seconds, uninstalls cleanly.
           On first launch, macOS asks for <strong>Accessibility</strong> and <strong>Input Monitoring</strong> so the global hotkey works.
         </p>
       </div>
@@ -357,10 +357,20 @@
       <h2 class="eyebrow">Recent updates</h2>
       <p class="updates-lede">
         Everything below ships in the current Windows installer
-        (<a href="mnml-setup.exe">v0.3.8</a>, July&nbsp;2026).
+        (<a href="mnml-setup.exe">v0.3.9</a>, July&nbsp;2026).
         macOS: <a href="mnml-mac.dmg">.dmg</a> or <a href="mnml-mac.zip">.zip</a>.
         Older builds auto-update via the in-app banner when a newer release is available.
       </p>
+
+      <article class="release">
+        <h3>v0.3.9 — leaner under load + paste/show stability</h3>
+        <ul>
+          <li><strong>Smoother screenshots.</strong> Heavy image encode/write is deferred so hotkeys and the poll tick stay responsive.</li>
+          <li><strong>Tighter history &amp; thumbs.</strong> Max items capped at 1 000; thumbnails LRU-capped and cleared when the panel hides.</li>
+          <li><strong>Safer paste &amp; summon.</strong> Show waits out mid-paste; settle timers cancel on quit; restore helper failures clear paste locks.</li>
+          <li><strong>Link storms contained.</strong> At most two concurrent title fetches; queue capped.</li>
+        </ul>
+      </article>
 
       <article class="release">
         <h3>v0.3.8 — snappier summon &amp; less background work</h3>
@@ -483,11 +493,11 @@
       <p class="install-lede">One installer. No setup, no account, no first-run wizard. Lives in your tray and auto-launches with Windows so the hotkey is always one keypress away.</p>
       <a class="btn primary big" href="mnml-setup.exe" id="download-link-2">
         <span class="btn-label">Download for Windows</span>
-        <span class="btn-meta">v0.3.8 · .exe · Windows 10 / 11 · x64</span>
+        <span class="btn-meta">v0.3.9 · .exe · Windows 10 / 11 · x64</span>
       </a>
       <a class="btn primary big" href="mnml-mac.dmg" id="download-link-mac-2">
         <span class="btn-label">Download for macOS</span>
-        <span class="btn-meta">v0.3.8 · .dmg · macOS 12+</span>
+        <span class="btn-meta">v0.3.9 · .dmg · macOS 12+</span>
       </a>
       <p class="install-alt">
         Free, MIT-licensed, ~70 MB installed. Uninstall any time via Windows Settings.

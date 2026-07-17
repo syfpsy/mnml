@@ -1,5 +1,25 @@
 # mnml Changelog
 
+## v0.3.9 — 2026-07-17
+
+### Fixed
+- **Image encode cannot outlive monitor stop** — encode epoch aborts deferred `toPNG`/save so quit or “monitoring off” cannot reopen SQLite after close.
+- **Stale encode callback no longer wipes newer flight** — epoch mismatch returns without clearing shared pending flags.
+- **Image restore no longer re-captures** — after `writeImage`, baseline hash is taken from the clipboard’s actual bytes (deferred), matching future polls.
+- **Show blocked during paste flow** — `showWindow()` defers via `showWhenReady` and retries when paste clears (second-instance / activate / recreate).
+- **Paste settle cancelled on quit/cancel** — pending Ctrl+V timers cleared; fallback `wscript`/`osascript` child killed; generation guards late fire.
+- **Title-fetch queue capped** — at most 48 waiting lookups; excess resolve to null.
+- **maxItems clamped on read** — legacy DB values above 1 000 are corrected at cache warm.
+- **Thumb cache clear is generation-stamped** — in-flight IPC cannot refill data-URLs after hide; `ImageThumb` re-fetches on hide epoch.
+- **Foreground restore write failure** — helper stdin write miss now fires `onRestoreMiss` so paste flags clear.
+
+### Changed
+- **Heavier clipboard work deferred** — image `toPNG` + disk write run via single-flight `setImmediate` / async write so the poll tick and hotkeys stay responsive.
+- **Leaner history cap** — max saved items hard-capped at 1 000 (UI + IPC + settings read; default still 200).
+- **Renderer thumb cache capped** — LRU of 64 data-URLs, cleared when the panel hides.
+- **Link title fetches limited** — at most 2 concurrent title lookups (queued beyond that).
+- **Dual-format clipboard** — text changes are still captured while an image fingerprint short-circuits decode.
+
 ## v0.3.8 — 2026-07-12
 
 ### Changed

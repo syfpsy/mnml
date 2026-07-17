@@ -75,10 +75,19 @@ let timer: NodeJS.Timeout | null = null;
  * been > IMAGE_RECHECK_MS since the last confirmation. Worst case: a new
  * image with identical dimensions to the previous one is captured up to
  * IMAGE_RECHECK_MS late — acceptable for a clipboard manager.
+ *
+ * Heavy encode + disk write runs via setImmediate (single-flight) so the
+ * poll tick and uIOhook stay responsive.
  */
 let lastImageSizeKey = "";
 let lastImageCheckedAt = 0;
 const IMAGE_RECHECK_MS = 30_000;
+let imageEncodePending = false;
+/** Latest clipboard image waiting for encode (replaces older pending). */
+let pendingEncodeImg: Electron.NativeImage | null = null;
+let pendingEncodeBaseline = false;
+/** Bumped on stop() so in-flight setImmediate / saveImage cannot write after monitor off. */
+let encodeEpoch = 0;
 
 let pollIntervalMs = POLL_MS_HIDDEN;
 let lastFormatsKey = "";
@@ -134,10 +143,12 @@ export function start() {
       lastImageSizeKey   = "";
       lastImageCheckedAt = 0;
     } else {
-      lastImageHash      = sha1(img.toPNG());
+      // Baseline still needs a hash so we don't re-capture the boot clipboard
+      // image — defer encode so start() returns quickly.
       const { width, height } = img.getSize();
       lastImageSizeKey   = `${width}x${height}`;
       lastImageCheckedAt = Date.now();
+      scheduleImageEncode(img, /*baselineOnly*/ true);
     }
   }
 
@@ -148,14 +159,112 @@ export function start() {
 export function stop() {
   if (timer) clearInterval(timer);
   timer = null;
+  // Invalidate in-flight encode/save so stop/quit cannot reopen DB or insert.
+  encodeEpoch += 1;
   // Reset image fingerprint so a re-start triggers a fresh confirmation.
   lastImageSizeKey   = "";
   lastImageCheckedAt = 0;
   lastFormatsKey     = "";
+  imageEncodePending = false;
+  pendingEncodeImg = null;
 }
 
 function emit(item: Item) {
   for (const l of listeners) l(item);
+}
+
+/** Capture text/link when formats include text — also used beside image fingerprint hits. */
+function captureTextIfChanged(): void {
+  const text = clipboard.readText();
+  if (!text) return;
+  const h = sha1(text);
+  if (h === lastTextHash) return;
+  lastTextHash = h;
+
+  const c = classifyText(text);
+  if (!c) return;
+
+  if (c.type === "link") {
+    const item = insertOrTouch({
+      type: "link",
+      content_text: c.url,
+      content_url: c.url,
+      hostname: c.hostname,
+      preview: c.preview,
+      byte_size: c.url.length,
+      hash: h,
+    });
+    trim();
+    emit(item);
+    fetchTitle(c.url)
+      .then((title) => {
+        if (!title) return;
+        if (!getById(item.id)) return;
+        updateTitle(item.id, title);
+        const current = getById(item.id);
+        if (current) emitUpdate({ ...current, title });
+      })
+      .catch(() => {});
+  } else {
+    const item = insertOrTouch({
+      type: "text",
+      content_text: c.text,
+      preview: c.preview,
+      byte_size: c.text.length,
+      hash: h,
+    });
+    trim();
+    emit(item);
+  }
+}
+
+/**
+ * Defer toPNG + hash (+ optional save) so the poll tick / hotkey path stays free.
+ * Single-flight with latest-wins: a newer image replaces any waiting encode.
+ */
+function scheduleImageEncode(img: Electron.NativeImage, baselineOnly = false): void {
+  pendingEncodeImg = img;
+  pendingEncodeBaseline = baselineOnly;
+  if (imageEncodePending) return;
+  imageEncodePending = true;
+  const epoch = encodeEpoch;
+
+  const run = () => {
+    setImmediate(() => {
+      // Stale epoch: do NOT touch shared pending flags — a newer flight owns them.
+      if (epoch !== encodeEpoch) return;
+
+      const snap = pendingEncodeImg;
+      const baselineOnlySnap = pendingEncodeBaseline;
+      pendingEncodeImg = null;
+      if (!snap) {
+        imageEncodePending = false;
+        return;
+      }
+      try {
+        if (isClipboardConcealed()) return;
+        const png = snap.toPNG();
+        if (epoch !== encodeEpoch) return;
+        const h = sha1(png);
+        if (h === lastImageHash) return;
+        lastImageHash = h;
+        if (baselineOnlySnap) return;
+        lastTextHash = sha1(clipboard.readText() ?? "");
+        void saveImage(png, snap, h, epoch);
+      } catch (err) {
+        log("[clipboard] image encode error:", String(err));
+      } finally {
+        if (epoch !== encodeEpoch) {
+          // Newer epoch owns imageEncodePending / pendingEncodeImg.
+        } else if (pendingEncodeImg) {
+          run();
+        } else {
+          imageEncodePending = false;
+        }
+      }
+    });
+  };
+  run();
 }
 
 function poll() {
@@ -198,72 +307,44 @@ function poll() {
       const sizeKey = `${width}x${height}`;
       const now = Date.now();
       if (sizeKey === lastImageSizeKey && now - lastImageCheckedAt < IMAGE_RECHECK_MS) {
+        // Still watch text — dual-format clipboards can change text while
+        // image/* remains present at the same dimensions.
+        if (hasTextFormat) captureTextIfChanged();
         return;
       }
-      const png = img.toPNG();
-      const h = sha1(png);
       lastImageSizeKey   = sizeKey;
       lastImageCheckedAt = now;
-      if (h !== lastImageHash) {
-        lastImageHash = h;
-        lastTextHash = sha1(clipboard.readText() ?? ""); // suppress concurrent text dup
-        saveImage(png, img, h);
-      }
+      scheduleImageEncode(img);
+      if (hasTextFormat) captureTextIfChanged();
       return;
     }
 
-    const text = clipboard.readText();
-    if (!text) return;
-    const h = sha1(text);
-    if (h === lastTextHash) return;
-    lastTextHash = h;
-
-    const c = classifyText(text);
-    if (!c) return;
-
-    if (c.type === "link") {
-      const item = insertOrTouch({
-        type: "link",
-        content_text: c.url,
-        content_url: c.url,
-        hostname: c.hostname,
-        preview: c.preview,
-        byte_size: c.url.length,
-        hash: h,
-      });
-      trim();
-      emit(item);
-      // Background title enrichment — fire and forget
-      fetchTitle(c.url)
-        .then((title) => {
-          if (!title) return;
-          if (!getById(item.id)) return;
-          updateTitle(item.id, title);
-          const current = getById(item.id);
-          if (current) emitUpdate({ ...current, title });
-        })
-        .catch(() => {});
-    } else {
-      const item = insertOrTouch({
-        type: "text",
-        content_text: c.text,
-        preview: c.preview,
-        byte_size: c.text.length,
-        hash: h,
-      });
-      trim();
-      emit(item);
-    }
+    if (!hasTextFormat) return;
+    captureTextIfChanged();
   } catch (err) {
     // keep polling even if one read fails
     log("[clipboard] poll error:", String(err));
   }
 }
 
-function saveImage(png: Buffer, img: Electron.NativeImage, hash: string) {
+async function saveImage(
+  png: Buffer,
+  img: Electron.NativeImage,
+  hash: string,
+  epoch: number,
+) {
+  if (epoch !== encodeEpoch) return;
   const dir = imagesDir();
   const filepath = resolveImagePath(dir, hash);
-  if (!fs.existsSync(filepath)) fs.writeFileSync(filepath, png);
+  try {
+    if (!fs.existsSync(filepath)) {
+      await fs.promises.writeFile(filepath, png);
+    }
+  } catch (err) {
+    log("[clipboard] image write failed:", String(err));
+    return;
+  }
+  if (epoch !== encodeEpoch) return;
 
   const { width, height } = img.getSize();
   const preview = `Image · ${width}×${height}`;
@@ -307,10 +388,21 @@ export function restoreItem(item: Item): boolean {
       return false;
     }
     clipboard.writeImage(nImg);
-    const { width, height } = nImg.getSize();
-    lastImageHash = sha1(nImg.toPNG());
-    lastImageSizeKey = `${width}x${height}`;
-    lastImageCheckedAt = Date.now();
+    // Hash what the clipboard actually holds after write — matches future polls'
+    // sha1(readImage().toPNG()), unlike the on-disk file hash which can diverge
+    // after an OS round-trip. Deferred so restore stays off the hot path.
+    const confirm = clipboard.readImage();
+    if (!confirm.isEmpty()) {
+      const { width, height } = confirm.getSize();
+      lastImageSizeKey = `${width}x${height}`;
+      lastImageCheckedAt = Date.now();
+      scheduleImageEncode(confirm, /*baselineOnly*/ true);
+    } else {
+      const { width, height } = nImg.getSize();
+      lastImageSizeKey = `${width}x${height}`;
+      lastImageCheckedAt = Date.now();
+      scheduleImageEncode(nImg, /*baselineOnly*/ true);
+    }
     lastTextHash = "";
     return true;
   }

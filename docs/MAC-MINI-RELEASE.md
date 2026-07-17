@@ -1,89 +1,92 @@
 # macOS release on the Mac mini
 
-Build, sign, notarize, and upload so **https://mnml.nxyz.art/mnml-mac.dmg** works.
-Binaries live on GitHub Releases; the site redirects there (no Vercel upload for the `.dmg`).
+**Right now:** finish **v0.3.9** Mac artifacts. Windows is already on GitHub Releases + the update channel. You only need to sign/notarize/upload the Mac build.
 
-## One-time setup
+You already notarize another app — **reuse the same Apple ID, team, Developer ID cert, and app-specific password.** No new App Store Connect app.
 
-1. **Xcode Command Line Tools** — `xcode-select --install`
-2. **Node 20+** — `brew install node`
-3. **GitHub CLI** — `brew install gh` then `gh auth login`
-4. **Developer ID Application** certificate in Keychain (Apple Developer account)
-5. **App-specific password** — [appleid.apple.com](https://appleid.apple.com) → App-Specific Passwords
-6. **Credentials** — in the repo root:
+---
+
+## Do this once (if not already done for mnml)
 
 ```bash
+# Repo (skip clone if you already have it)
+mkdir -p ~/Repos && cd ~/Repos
+git clone https://github.com/syfpsy/mnml.git   # or: cd ~/Repos/mnml && git fetch --all --tags
+cd ~/Repos/mnml
+
+# Credentials — copy from your other app's .env.release, or create fresh
 cp .env.release.example .env.release
-# APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
-# Optional: CSC_NAME="Developer ID Application: …"
+# Fill APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+# If Keychain has multiple Developer ID certs, set CSC_NAME too
 ```
 
-`.env.release` stays on the Mac mini only (gitignored).
+`.env.release` is gitignored — never commit it.
 
-## Every macOS release
-
-Clone anywhere you like (e.g. `~/Repos/mnml`):
+Optional sanity check before the long build:
 
 ```bash
-mkdir -p ~/Repos
-cd ~/Repos
-git clone https://github.com/syfpsy/mnml.git
-cd mnml
+chmod +x scripts/mac-mini-preflight.sh scripts/mac-mini-release.sh
+./scripts/mac-mini-preflight.sh
+```
+
+---
+
+## Do this for v0.3.9 (copy-paste)
+
+```bash
+cd ~/Repos/mnml
 git fetch origin --tags --force
-git checkout v0.3.8
-cp /path/to/your/.env.release .
+git checkout -f v0.3.9
+# ensure .env.release is in the repo root (copy in if needed)
 chmod +x scripts/mac-mini-release.sh
-./scripts/mac-mini-release.sh v0.3.8
+./scripts/mac-mini-release.sh v0.3.9
 ```
 
-The script: clean `npm ci` → arm64 build → sign → notarize → upload `mnml-mac.dmg`, `mnml-mac.zip`, `latest-mac.yml` to GitHub.
+What the script does: `npm ci` → arm64 build → sign → notarize → upload to **existing** GitHub release `v0.3.9`:
 
-### Make the website download work
+- `mnml-mac.dmg`
+- `mnml-mac.zip`
+- `latest-mac.yml`
+- `mnml-mac.zip.blockmap`
 
-Site links use GitHub **`latest`** release. Right now **v0.2.46** is latest (Windows only); **v0.3.0** is a draft with no files yet.
+Windows `mnml-setup.exe` is already on that release, so the script will keep the release as **latest**.
 
-After `./scripts/mac-mini-release.sh` succeeds:
+---
 
-**If Windows v0.3.0 is also ready** (built on your PC with `release-local-win.ps1`):
-
-```bash
-gh release edit v0.3.0 --draft=false --latest
-```
-
-**If macOS only for now** (Windows button on the site will 404 until you add `mnml-setup.exe` to v0.3.0):
-
-```bash
-gh release edit v0.3.0 --draft=false --latest
-```
-
-Then verify:
+## Verify (after the script says Done)
 
 ```bash
 curl -sL https://mnml.nxyz.art/latest-mac.yml | head -6
+# expect: version: 0.3.9
+
 open https://mnml.nxyz.art/mnml-mac.dmg
+# should download the DMG (307 → GitHub)
+
+gh release view v0.3.9
+# should list both mnml-setup.exe and mnml-mac.dmg
 ```
+
+Site copy is already live at https://mnml.nxyz.art (v0.3.9). No Vercel step needed after Mac upload.
+
+---
 
 ## Troubleshooting
 
-**`git pull` blocked by local changes** — reset to GitHub:
+| Problem | Fix |
+| --- | --- |
+| Dirty tree / can't checkout tag | `git fetch origin --tags --force && git reset --hard v0.3.9 && rm -rf node_modules release` |
+| `uiohook-napi` is `win32-x64` | Never copy `node_modules` from Windows. `rm -rf node_modules && npm ci` on the Mac. |
+| Wrong signing cert | Set `CSC_NAME="Developer ID Application: Your Name (TEAMID)"` in `.env.release` |
+| Notarize fails | Confirm app-specific password (not account password); Team ID matches the cert |
+| Quick unsigned smoke only | `SKIP_NOTARIZE=1 npm run build:release:mac` (do **not** upload that) |
 
-```bash
-git fetch origin --tags --force
-git reset --hard origin/master
-rm -rf node_modules release
-npm ci
-```
+---
 
-**`uiohook-napi` shows `win32-x64`** — never copy `node_modules` from Windows; `rm -rf node_modules && npm ci` on the Mac.
+## One-time Apple checklist (you likely already have these)
 
-**Universal build / `x64ArchFiles` error** — pull latest `master` (arm64-only mac target).
+- [x] Apple Developer Program  
+- [x] Developer ID Application cert in Keychain  
+- [x] App-specific password  
+- [ ] `.env.release` present **in the mnml repo** on the Mac mini (reuse values from your other app)
 
-**Unsigned test** (no Apple creds):
-
-```bash
-SKIP_NOTARIZE=1 npm run build:release:mac
-```
-
-## Optional: GitHub Actions later
-
-When Actions minutes are available: **Actions → Release (manual)** → tag + `macos`. Add secrets `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, and optionally `CSC_LINK` + `CSC_KEY_PASSWORD`.
+No App Store Connect listing. Bundle id is `dev.mnml.app` (already in `package.json`).

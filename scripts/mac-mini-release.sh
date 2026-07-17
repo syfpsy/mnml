@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# mac-mini-release.sh — build, sign, notarize, and upload macOS release artifacts.
-#
-# Run on a Mac with Xcode CLT, Apple Developer ID cert in Keychain, and gh auth.
-# Does NOT use GitHub Actions (saves CI minutes).
+# mac-mini-release.sh — build, sign, notarize, upload macOS artifacts to GitHub Releases.
 #
 # Usage:
-#   git clone https://github.com/syfpsy/mnml.git && cd mnml
-#   cp .env.release.example .env.release   # fill in Apple + optional CSC_NAME
-#   ./scripts/mac-mini-release.sh          # builds package.json version
-#   ./scripts/mac-mini-release.sh v0.3.0   # explicit tag (checks out tag first)
+#   # First time on Mac mini (credentials):
+#   cp .env.release.example .env.release   # reuse Apple vars from your other app
+#   ./scripts/mac-mini-preflight.sh        # optional sanity check
 #
+#   # Every release (v0.3.9 already has Windows artifacts on GitHub):
+#   git fetch origin --tags --force && git checkout -f v0.3.9
+#   ./scripts/mac-mini-release.sh v0.3.9
+#
+# Docs: docs/MAC-MINI-RELEASE.md
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,6 +33,7 @@ if [[ -f .env.release ]]; then
   echo "[release] loaded .env.release"
 else
   echo "[release] warning: no .env.release — build may be unsigned / not notarized"
+  echo "  cp .env.release.example .env.release  # reuse Apple vars from your other app"
 fi
 
 command -v node >/dev/null || { echo "Node 20+ required"; exit 1; }
@@ -65,13 +67,12 @@ gh release upload "$TAG" \
   release/mnml-mac.zip.blockmap \
   --clobber
 
-# Only mark latest when Windows artifacts are also present (keeps v0.2.46
-# serving /mnml-setup.exe until this PC runs release-local-win.ps1).
+# Keep as latest when Windows is already present (normal for mnml after PC build).
 if gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null | grep -q 'mnml-setup.exe'; then
   echo "[release] Windows + macOS artifacts present — publishing as latest"
   gh release edit "$TAG" --draft=false --latest
 else
-  echo "[release] macOS uploaded. Release stays draft until Windows artifacts are added."
+  echo "[release] macOS uploaded, but Windows installer missing on this tag."
   echo "  On Windows: .\\scripts\\release-local-win.ps1 -Tag $TAG"
   echo "  Then:       gh release edit $TAG --draft=false --latest"
 fi
@@ -80,4 +81,6 @@ rm -f "$NOTES_FILE"
 
 echo ""
 echo "Done. macOS artifacts uploaded to https://github.com/syfpsy/mnml/releases/tag/${TAG}"
-echo "Verify: curl -sL https://mnml.nxyz.art/latest-mac.yml | head -5"
+echo "Verify:"
+echo "  curl -sL https://mnml.nxyz.art/latest-mac.yml | head -5"
+echo "  open https://mnml.nxyz.art/mnml-mac.dmg"

@@ -226,6 +226,28 @@ if (!readFileSync(join(root, "electron", "db", "saved.ts"), "utf8").includes("MA
   failures.push("saved.ts must clamp snippet content length at the DB layer.");
 }
 
+// O62 — stuck / unresponsive summon hardening
+if (/webContents\.once\(\s*["']did-finish-load["']/.test(main)) {
+  failures.push("did-finish-load must use on() (not once) so reload/unresponsive recovery re-arms rendererReady.");
+}
+
+if (!main.includes("enableWindowInput") || !main.includes("disableWindowInput") ||
+    !main.includes("ensureRendererReadyForShow") || !main.includes("healStuckRenderer")) {
+  failures.push("Summon hardening helpers missing: enable/disableWindowInput, ensureRendererReadyForShow, healStuckRenderer.");
+}
+
+if (!/function showWindow\(\)[\s\S]*enableWindowInput\(\)/.test(main)) {
+  failures.push("showWindow() must call enableWindowInput() so a visible panel is never left click-through.");
+}
+
+if (!main.includes("Reload panel") || !main.includes("Open log") || !main.includes("showItemInFolder")) {
+  failures.push("Tray menu must offer Reload panel and Open log (showItemInFolder) as escape hatches.");
+}
+
+if (!/win\.on\(\s*["']unresponsive["'][\s\S]*showWhenReady\s*=\s*true/.test(main)) {
+  failures.push("unresponsive handler must preserve showWhenReady so reload recovers a visible panel.");
+}
+
 if (failures.length > 0) {
   console.error("Window summon rule check failed:");
   for (const failure of failures) console.error(`- ${failure}`);

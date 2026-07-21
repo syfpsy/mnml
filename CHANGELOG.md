@@ -1,5 +1,10 @@
 # mnml Changelog
 
+## v0.3.10 — 2026-07-21
+
+### Fixed
+- **Stuck / unresponsive summon** — `rendererReady` re-arms on every `did-finish-load` (reload after unresponsive no longer bricks the next show); every show path clears click-through ignore-mouse; summon self-heal when readiness is stuck or search-focus IPC fails; tray **Reload panel** / **Open log** (`showItemInFolder`); `check:summon` locks the new invariants.
+
 ## v0.3.9 — 2026-07-17
 
 ### Fixed

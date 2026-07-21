@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor } from "electron";
+import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -130,6 +130,7 @@ function resetWindowRuntimeState() {
   hideInProgress = false;
   pastePending = false;
   dismissGeneration += 1;
+  summonHealGeneration = -1;
   setClipboardPollCadence(false);
 }
 
@@ -219,6 +220,60 @@ function safeReloadRenderer(): boolean {
     log("[renderer] reload failed:", String(err));
     return false;
   }
+}
+
+/** Accept pointer input — cleared on every show; set while hidden so clicks pass through. */
+function enableWindowInput() {
+  if (!isWindowUsable()) return;
+  try { win!.setIgnoreMouseEvents(false); }
+  catch (err) { log("[window] setIgnoreMouseEvents(false) failed:", String(err)); }
+}
+
+function disableWindowInput() {
+  if (!isWindowUsable()) return;
+  try { win!.setIgnoreMouseEvents(true, { forward: true }); }
+  catch (err) { log("[window] setIgnoreMouseEvents(true) failed:", String(err)); }
+}
+
+/**
+ * `safeReloadRenderer` clears `rendererReady`, but an older `once("did-finish-load")`
+ * never re-armed it. Heal when the page is already loaded and idle.
+ */
+function ensureRendererReadyForShow(): boolean {
+  if (rendererReady) return true;
+  if (!isWindowUsable()) return false;
+  const wc = win!.webContents;
+  if (wc.isLoading()) return false;
+  try {
+    const url = wc.getURL();
+    if (url && url !== "about:blank") {
+      log("[show] healing stuck rendererReady=false (page already loaded)");
+      rendererReady = true;
+      return true;
+    }
+  } catch { /* noop */ }
+  return false;
+}
+
+/** One reload/recreate per dismiss generation — avoids heal loops. */
+let summonHealGeneration = -1;
+
+function healStuckRenderer(reason: string) {
+  if (!isWindowUsable()) {
+    recreateWindow(true);
+    return;
+  }
+  // In-flight reload already owns recovery — don't stack another.
+  if (win!.webContents.isLoading()) return;
+  if (summonHealGeneration === dismissGeneration) return;
+  summonHealGeneration = dismissGeneration;
+  const shouldShow = windowVisible || showWhenReady || win!.isVisible();
+  log("[show] self-heal:", reason);
+  if (!safeReloadRenderer()) {
+    recreateWindow(shouldShow);
+    return;
+  }
+  if (shouldShow) showWhenReady = true;
 }
 
 /* ── Click-outside + blur-dismiss ─────────────────────────────────────────── */
@@ -504,7 +559,7 @@ function recoverFromFailedHide() {
   cancelInFlightPaste();
   if (!isWindowUsable()) return;
   windowVisible = true;
-  try { win!.setIgnoreMouseEvents(false); } catch { /* noop */ }
+  enableWindowInput();
   try { win!.focus(); win!.webContents.focus(); } catch { /* noop */ }
   startFocusWatchdog();
   flushDeferredShowAfterPaste();
@@ -647,6 +702,15 @@ function focusSearchInputNow(): Promise<boolean> {
     })
     .catch((err) => {
       log("[focus] search input focus failed:", String(err));
+      // Skip while a reload/heal is already in flight (rendererReady cleared).
+      if (
+        windowVisible &&
+        rendererReady &&
+        isWindowUsable() &&
+        !win!.webContents.isLoading()
+      ) {
+        healStuckRenderer("search focus executeJavaScript failed");
+      }
       return false;
     });
 }
@@ -706,6 +770,34 @@ function createTrayIcon(): Electron.NativeImage {
 function buildTrayMenu(updateVersion?: string) {
   const items: Electron.MenuItemConstructorOptions[] = [
     { label: "Show / Hide", click: () => toggleWindow() },
+    {
+      label: "Reload panel",
+      click: () => {
+        log("[tray] reload panel");
+        if (!isWindowUsable()) {
+          recreateWindow(true);
+          return;
+        }
+        const shouldShow = windowVisible || showWhenReady || win!.isVisible();
+        if (!safeReloadRenderer()) recreateWindow(shouldShow);
+        else if (shouldShow) showWhenReady = true;
+      },
+    },
+    {
+      label: "Open log",
+      click: () => {
+        const p = logPathForDisplay();
+        // Reveal in Explorer/Finder so the path is obvious; openPath alone
+        // can land in Notepad without showing where the file lives.
+        try { shell.showItemInFolder(p); }
+        catch (err) {
+          log("[tray] showItemInFolder failed:", String(err));
+          void shell.openPath(p).then((e) => {
+            if (e) log("[tray] open log failed:", e);
+          });
+        }
+      },
+    },
     { type: "separator" },
   ];
   if (updateVersion) {
@@ -860,11 +952,17 @@ function createWindow() {
 
   win.on("unresponsive", () => {
     log("[renderer] unresponsive — attempting reload");
-    if (!safeReloadRenderer()) recreateWindow(windowVisible);
+    const shouldShow = windowVisible || showWhenReady || (isWindowUsable() && win!.isVisible());
+    if (shouldShow) showWhenReady = true;
+    if (!safeReloadRenderer()) recreateWindow(shouldShow);
   });
 
   win.on("responsive", () => {
     log("[renderer] responsive again");
+    // Chromium recovered without a full reload — ensure clicks work if shown.
+    if (isWindowUsable() && (windowVisible || win!.isVisible())) {
+      enableWindowInput();
+    }
   });
 
   // Diagnostics + self-heal
@@ -933,13 +1031,34 @@ function createWindow() {
   // The renderer loads while the OS window stays hidden. Keeping the native
   // window truly hidden between summons gives the next hidden->shown transition
   // the best chance of foreground activation on Windows.
-  win.webContents.once("did-finish-load", () => {
+  // Use `on` (not `once`) so reload / unresponsive recovery re-arms rendererReady.
+  win.webContents.on("did-finish-load", () => {
     if (!isWindowUsable()) return;
     loadRetryCount = 0;
     recreateAttempts = 0;
     rendererReady = true;
-    try { win!.setIgnoreMouseEvents(true, { forward: true }); }
-    catch (err) { log("[window] setIgnoreMouseEvents failed:", String(err)); }
+    const osVisible = win!.isVisible();
+    const shown = windowVisible || osVisible;
+    if (!shown) {
+      disableWindowInput();
+    } else {
+      // Reload while visible must not leave click-through ignore-mouse on.
+      if (osVisible && !windowVisible) {
+        log("[window] OS visible after load — reconciling windowVisible");
+        windowVisible = true;
+      }
+      enableWindowInput();
+      dismissGeneration += 1;
+      windowShownAt = Date.now();
+      focusRunId += 1;
+      loggedSearchFocusForShow = false;
+      loggedNativeFocusForShow = false;
+      nativeForegroundRequestsForShow = 0;
+      runSummonFocusPass(true);
+      scheduleSearchFocusVerification("reload-visible", [0, 80, 200]);
+      safeSendToRenderer(IPC.onVisibilityChanged, true);
+      startFocusWatchdog();
+    }
     log("[startup] renderer ready");
     if (showWhenReady) {
       // Do not clear showWhenReady here — showWindow() clears it only after
@@ -965,8 +1084,15 @@ function showWindow() {
   reconcileVisibilityFlag();
   cancelScheduledBlurHide();
 
-  if (!rendererReady) {
+  if (!rendererReady && !ensureRendererReadyForShow()) {
     showWhenReady = true;
+    if (isWindowUsable() && !win!.webContents.isLoading()) {
+      let url = "";
+      try { url = win!.webContents.getURL(); } catch { /* noop */ }
+      if (!url || url === "about:blank") {
+        healStuckRenderer("renderer not ready and blank");
+      }
+    }
     return;
   }
   showWhenReady = false;
@@ -977,6 +1103,7 @@ function showWindow() {
     loggedSearchFocusForShow = false;
     loggedNativeFocusForShow = false;
     nativeForegroundRequestsForShow = 0;
+    enableWindowInput();
     runSummonFocusPass(true);
     scheduleSearchFocusVerification("visible-window", [16, 120]);
     safeSendToRenderer(IPC.onVisibilityChanged, true);
@@ -1008,8 +1135,7 @@ function showWindow() {
     loggedSearchFocusForShow = false;
     loggedNativeFocusForShow = false;
     nativeForegroundRequestsForShow = 0;
-    try { win!.setIgnoreMouseEvents(false); }
-    catch (err) { log("[show] setIgnoreMouseEvents(false) failed:", String(err)); }
+    enableWindowInput();
 
     try {
       win!.show();
@@ -1080,8 +1206,7 @@ function hideWindow() {
 
   ensureWindowSize();
 
-  try { win!.setIgnoreMouseEvents(true, { forward: true }); }
-  catch (err) { log("[hide] setIgnoreMouseEvents failed:", String(err)); }
+  disableWindowInput();
 
   // Do NOT notify renderer here — clearing the list before win.hide() made the
   // panel look like it shrank while still visible.

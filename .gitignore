@@ -36,6 +36,7 @@ build/icon.png
 # third-party skill content.
 .claude/
 .agents/
+.cursor/
 skills-lock.json
 
 .vercel

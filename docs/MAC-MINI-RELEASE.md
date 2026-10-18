@@ -1,6 +1,6 @@
 # macOS release on the Mac mini
 
-**Right now:** finish **v0.3.9** Mac artifacts. Windows is already on GitHub Releases + the update channel. You only need to sign/notarize/upload the Mac build.
+**Current:** **v0.3.10** is dual-platform on GitHub Releases (Windows + notarized Mac). Use this doc for the **next** Mac ship after a Windows release lands first.
 
 You already notarize another app — **reuse the same Apple ID, team, Developer ID cert, and app-specific password.** No new App Store Connect app.
 
@@ -31,25 +31,27 @@ chmod +x scripts/mac-mini-preflight.sh scripts/mac-mini-release.sh
 
 ---
 
-## Do this for v0.3.9 (copy-paste)
+## Do this for a tagged release (copy-paste)
+
+Replace `vX.Y.Z` with the tag (Windows artifacts should already be on that GitHub release):
 
 ```bash
 cd ~/Repos/mnml
 git fetch origin --tags --force
-git checkout -f v0.3.9
+git checkout -f vX.Y.Z
 # ensure .env.release is in the repo root (copy in if needed)
 chmod +x scripts/mac-mini-release.sh
-./scripts/mac-mini-release.sh v0.3.9
+./scripts/mac-mini-release.sh vX.Y.Z
 ```
 
-What the script does: `npm ci` → arm64 build → sign → notarize → upload to **existing** GitHub release `v0.3.9`:
+What the script does: `npm ci` → arm64 build → sign → notarize → upload to the GitHub release:
 
 - `mnml-mac.dmg`
 - `mnml-mac.zip`
 - `latest-mac.yml`
 - `mnml-mac.zip.blockmap`
 
-Windows `mnml-setup.exe` is already on that release, so the script will keep the release as **latest**.
+When Windows `mnml-setup.exe` is already on that release, the script keeps it as **latest**.
 
 ---
 
@@ -57,16 +59,16 @@ Windows `mnml-setup.exe` is already on that release, so the script will keep the
 
 ```bash
 curl -sL https://mnml.nxyz.art/latest-mac.yml | head -6
-# expect: version: 0.3.9
+# expect: version: X.Y.Z
 
 open https://mnml.nxyz.art/mnml-mac.dmg
 # should download the DMG (307 → GitHub)
 
-gh release view v0.3.9
+gh release view vX.Y.Z
 # should list both mnml-setup.exe and mnml-mac.dmg
 ```
 
-Site copy is already live at https://mnml.nxyz.art (v0.3.9). No Vercel step needed after Mac upload.
+Site copy usually ships with the Windows release; Mac upload only needs a Vercel redeploy if site version strings were not updated yet.
 
 ---
 
@@ -74,11 +76,12 @@ Site copy is already live at https://mnml.nxyz.art (v0.3.9). No Vercel step need
 
 | Problem | Fix |
 | --- | --- |
-| Dirty tree / can't checkout tag | `git fetch origin --tags --force && git reset --hard v0.3.9 && rm -rf node_modules release` |
+| Dirty tree / can't checkout tag | `git fetch origin --tags --force && git reset --hard vX.Y.Z && rm -rf node_modules release` |
 | `uiohook-napi` is `win32-x64` | Never copy `node_modules` from Windows. `rm -rf node_modules && npm ci` on the Mac. |
 | Wrong signing cert | Set `CSC_NAME="Developer ID Application: Your Name (TEAMID)"` in `.env.release` |
 | Notarize fails | Confirm app-specific password (not account password); Team ID matches the cert |
 | Quick unsigned smoke only | `SKIP_NOTARIZE=1 npm run build:release:mac` (do **not** upload that) |
+| Interactive zsh `#` comments | Don't paste `#` comment-only lines as commands — run the real commands only |
 
 ---
 

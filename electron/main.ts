@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor, shell } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor, shell, systemPreferences } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -1323,9 +1323,20 @@ function setBlurLock(locked: boolean) { blurLocked = locked; }
  * false restart would drop real events.
  */
 let uiohookStarted = false;
+let accessibilityPrompted = false;
+let accessibilityPollTimer: NodeJS.Timeout | null = null;
 
 function startInputHook(attempt = 0) {
+  if (accessibilityPollTimer !== null) { clearTimeout(accessibilityPollTimer); accessibilityPollTimer = null; }
   if (uiohookStarted || appQuitting) return;
+  // macOS: the hook (⌥⌥ summon, click-outside, ⌘V) needs Accessibility. Poll for the
+  // grant instead of burning the retries, so it starts working without a relaunch.
+  if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(!accessibilityPrompted)) {
+    if (!accessibilityPrompted) log("[uiohook] waiting for macOS Accessibility permission");
+    accessibilityPrompted = true;
+    accessibilityPollTimer = setTimeout(() => startInputHook(attempt), 2_000);
+    return;
+  }
   try {
     uIOhook.start();
     uiohookStarted = true;
@@ -1368,6 +1379,8 @@ function restartInputHook(reason: string) {
  * (`mnml`). Re-running with the same arguments is idempotent.
  */
 function syncLoginItemWithSetting() {
+  // Dev runs would register the bare Electron binary as a login item.
+  if (!app.isPackaged) return;
   try {
     const desired = Boolean(getSetting("launchOnStartup"));
     const current = app.getLoginItemSettings().openAtLogin;
@@ -1382,6 +1395,13 @@ function syncLoginItemWithSetting() {
 }
 
 /* ── App lifecycle ─────────────────────────────────────────────────────────── */
+function failStartup(stage: string, err: unknown) {
+  log(`[startup] FATAL: ${stage}:`, String(err));
+  // Quitting before the tray exists means the app just vanishes — say why.
+  dialog.showErrorBox("mnml couldn't start", `${stage} failed:\n${String(err)}\n\nLog: ${logPathForDisplay()}`);
+  app.quit();
+}
+
 app.whenReady().then(() => {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) { log("[startup] another instance running; quitting"); app.quit(); return; }
@@ -1389,7 +1409,7 @@ app.whenReady().then(() => {
   log("[startup] booting · log:", logPathForDisplay());
 
   try { getDb(); warmSettingsCache(); }
-  catch (err) { log("[startup] FATAL: DB init:", String(err)); app.quit(); return; }
+  catch (err) { failStartup("DB init", err); return; }
 
   // Make absolutely sure the Run-key registry entry matches the user's
   // saved preference. New installs (default true) get registered here on
@@ -1406,7 +1426,7 @@ app.whenReady().then(() => {
   });
 
   try { createWindow(); }
-  catch (err) { log("[startup] FATAL: createWindow:", String(err)); app.quit(); return; }
+  catch (err) { failStartup("createWindow", err); return; }
 
   fg = createForegroundService();
 

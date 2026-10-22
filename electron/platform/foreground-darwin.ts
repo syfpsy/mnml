@@ -1,4 +1,4 @@
-import { exec, execSync } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { app } from "electron";
 import { log } from "../utils/log.js";
 
@@ -11,20 +11,26 @@ export function isOwnForegroundTarget(target: string): boolean {
   return target === ownForegroundTarget();
 }
 
-export function captureForegroundTarget(): string | null {
-  try {
-    const out = execSync(
-      "osascript -e 'tell application \"System Events\" to unix id of first process whose frontmost is true'",
-      { encoding: "utf8", timeout: 2_000 },
-    ).trim();
-    const pid = parseInt(out, 10);
-    if (!Number.isFinite(pid) || pid <= 0) return null;
-    if (pid === process.pid) return null;
-    return `pid:${pid}`;
-  } catch (err) {
-    log("[focus] darwin capture failed:", String(err));
-    return null;
-  }
+/**
+ * Async + `lsappinfo` (~10 ms, no Automation prompt) — the old sync `osascript`
+ * call blocked the main thread 100–300 ms on every summon.
+ */
+export function captureForegroundTarget(): Promise<string | null> {
+  const run = (args: string[]) => new Promise<string>((resolve, reject) => {
+    execFile("lsappinfo", args, { encoding: "utf8", timeout: 1_000 }, (err, out) => (err ? reject(err) : resolve(out)));
+  });
+  return run(["front"])
+    .then((asn) => run(["info", "-only", "pid", asn.trim()]))
+    .then((out) => {
+      // Output is `"pid"=123` or `pid = 123` depending on macOS version.
+      const pid = parseInt(/"?pid"?\s*=\s*(\d+)/.exec(out)?.[1] ?? "", 10);
+      if (!Number.isFinite(pid) || pid <= 0 || pid === process.pid) return null;
+      return `pid:${pid}`;
+    })
+    .catch((err) => {
+      log("[focus] darwin capture failed:", String(err));
+      return null;
+    });
 }
 
 export function restoreForegroundTarget(target: string): Promise<boolean> {
@@ -47,22 +53,15 @@ export function restoreForegroundTarget(target: string): Promise<boolean> {
   });
 }
 
+/** Native activate — the old `osascript` System Events call cost an Automation prompt on first summon. */
 export function focusMnmlWindow(): Promise<boolean> {
-  const name = app.getName().replace(/"/g, '\\"');
-  return new Promise((resolve) => {
-    exec(
-      `osascript -e 'tell application "System Events" to set frontmost of process "${name}" to true'`,
-      { timeout: 2_000 },
-      (err) => {
-        if (err) {
-          log("[focus] darwin focus mnml failed:", err.message);
-          resolve(false);
-          return;
-        }
-        resolve(true);
-      },
-    );
-  });
+  try {
+    app.focus({ steal: true });
+    return Promise.resolve(true);
+  } catch (err) {
+    log("[focus] darwin focus mnml failed:", String(err));
+    return Promise.resolve(false);
+  }
 }
 
 function parsePidTarget(target: string): number | null {

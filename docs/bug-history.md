@@ -45,6 +45,16 @@ These are the bugs we kept hitting because Windows protects against background a
 
 ---
 
+## macOS
+
+| # | Symptom | Root cause | Fix | Avoid |
+|---|---|---|---|---|
+| M1 | Mac DMG quit instantly on launch, no window or tray (v0.3.9–v0.3.10) | `npm ci` leaves a **Node**-ABI `better_sqlite3.node`; `verify-native-bindings` only checked the file existed, so `rebuild-native` skipped `electron-rebuild` and `copy-native-deps` shipped the wrong ABI → `FATAL: DB init` → `app.quit()`. | `verify-native-bindings` loads the module in Electron (`ELECTRON_RUN_AS_NODE`), so the skip and the release gate now check the ABI. Fatal startup errors show a dialog with the log path. | Don't treat "binary exists" as "binary loads". |
+| M2 | ⌥⌥ dead on a fresh Mac install until relaunch | uiohook needs Accessibility; `startInputHook` retried 3× then gave up for the process lifetime. | On macOS, poll `isTrustedAccessibilityClient` (prompt once) and start the hook as soon as access is granted. | Don't cap retries for a permission the user grants later. |
+| M3 | Summon lag + "control System Events" prompt on first summon | Capture used sync `osascript` on the main thread (100–300 ms); focus used `osascript` System Events. | Async `lsappinfo` for capture (~10 ms, no prompt); `app.focus({ steal: true })` for focus. Restore for auto-paste still uses System Events. | Don't `execSync` on the summon path. |
+
+---
+
 ## Other
 
 | # | Symptom | Fix |

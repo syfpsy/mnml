@@ -115,9 +115,12 @@ export class ForegroundService {
     }, 250);
 
     if (IS_MAC) {
-      const target = darwinCapture();
-      if (this.onPrevCaptured) this.onPrevCaptured(target);
-      this.finishCapture();
+      void darwinCapture().then((target) => {
+        // Same as the Windows "prev" line: ignore results after timeout/cancel.
+        if (gen !== this.captureGeneration || !this.captureCallback) return;
+        this.onPrevCaptured?.(target);
+        this.finishCapture();
+      });
       return;
     }
 

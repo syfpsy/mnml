@@ -5,7 +5,9 @@
  * installer that dies on startup with "Could not locate the bindings file".
  */
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import {
   findFile,
@@ -43,6 +45,19 @@ if (!sqliteNode) {
   failures.push(
     "better-sqlite3: better_sqlite3.node not found — run `npm run rebuild`.",
   );
+} else {
+  // Present ≠ loadable: `npm install` leaves a Node-ABI build that Electron rejects at boot.
+  try {
+    const electronBin = createRequire(import.meta.url)("electron");
+    execFileSync(electronBin, ["-e", "require('better-sqlite3')(':memory:').close()"], {
+      cwd: root,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      stdio: "pipe",
+    });
+  } catch (err) {
+    const abi = String(err.stderr ?? err.message).match(/NODE_MODULE_VERSION \d+\./g)?.join(" vs ") ?? "load failed";
+    failures.push(`better-sqlite3: not loadable by Electron (${abi}) — run \`npm run rebuild\`.`);
+  }
 }
 
 const uiohookDir = path.join(root, "node_modules", "uiohook-napi");

@@ -12,7 +12,7 @@ A keyboard-first clipboard manager for **Windows and macOS**. Press **Alt** twic
 
 ## What it does
 
-- **Clipboard history** — text, links (with favicons), and image screenshots (96 px thumbnails). Full-text search (SQLite FTS5 with a LIKE fallback). Pin items to keep them past the rotation cap.
+- **Clipboard history** — text, links (with page titles), and image screenshots (96 px thumbnails). Full-text search (SQLite FTS5 with a LIKE fallback). Pin items to keep them past the rotation cap.
 - **Quick-paste** — press **Ctrl + 1…9** to paste one of the first nine items instantly. Pasting strips formatting, so you always get clean plain text.
 - **Saved snippets** — reusable text (signatures, regexes, commands) that never rotate out. One-click save from any clipboard row.
 - **Launcher** — Start-Menu apps + ~80 curated `ms-settings:` deep links (Bluetooth, Display, Sound, Update…) + classic `.msc` / `.cpl` tools (Task Manager, Device Manager, Registry Editor…), all in the same search.

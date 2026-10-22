@@ -1,5 +1,28 @@
 # mnml Changelog
 
+## v0.3.11 — 2026-10-22
+
+### Fixed
+- **macOS app quit at launch** (v0.3.9–v0.3.10) — the build shipped a SQLite module compiled for Node instead of Electron, so the app exited before showing anything. The native check now loads the module inside Electron, and a fatal startup error shows a dialog with the log path instead of exiting silently.
+- **Passwords copied on macOS were saved** — the "do not record" guard now honors `org.nspasteboard.ConcealedType` / `TransientType` (1Password, Bitwarden, KeePassXC) alongside the Windows markers.
+- **⌥⌥ dead on a fresh Mac install** — mnml asks for Accessibility once and starts the hook as soon as it is granted, no relaunch needed.
+- **Summon lag on macOS** — the frontmost app is captured asynchronously (`lsappinfo`, ~10 ms) instead of a blocking `osascript` call, and the first summon no longer asks to control System Events.
+- **Huge menu bar icon on macOS** — the status item used the 512 px app icon (518 pt wide); it is now 16 pt.
+- **Footer hints wrapped** onto two lines on macOS; shortened to one line.
+
+### Changed
+- **Electron 33 → 45** (Chromium 156, Node 24). Electron 33 was out of support. macOS 13+ is now required.
+- **Clipboard monitor** rewritten for Electron's Promise-based clipboard API: one serialized read per tick, concealed check before any content is read, images re-read only when the clipboard's types change or every 2 s.
+- **better-sqlite3 11 → 13** — ships N-API prebuilds, so there is no Electron ABI rebuild anymore.
+- **Smaller app** — the packaged SQLite module dropped from 31 MB to 2.6 MB (no sources or other platforms' binaries).
+
+### Internal
+- `.npmrc` sets `ignore-scripts=true`; `postinstall` removed. Build scripts still run `npm run rebuild` + `verify-native-bindings`. `npm ci` works on Node 26.
+- `copy-native-deps` writes inside `mnml.app` on macOS (it wrote next to it) and copies the target's prebuilds, so Windows can be cross-built from a Mac.
+- uiohook starts on the next tick to avoid a boot deadlock in libuiohook on Electron 45.
+- CI on Node 22.
+
+
 ## v0.3.10 — 2026-07-21
 
 ### Fixed

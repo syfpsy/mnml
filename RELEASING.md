@@ -132,6 +132,11 @@ git checkout vX.Y.Z
 Native modules use prebuilds; **VS 2022 Build Tools** (“Desktop development with
 C++”) are only needed if `verify-native-bindings` fails and `npm run rebuild` has to compile.
 
+An **unsigned** installer can also be cross-built on macOS with `npm run build:release:win`
+(`copy-native-deps` ships the `win32-x64` prebuilds; electron-builder fetches its own Wine
+for the exe resources). The prebuilds are only loaded in Electron on a real Windows run,
+so smoke-test there before uploading.
+
 **If `vswhere` finds no install** but `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools` exists, the registration is broken — open **Visual Studio Installer → Modify/Repair** and ensure **Desktop development with C++** is checked. Until then, `npm run rebuild` skips when `verify-native-bindings` already passes (cached `.node` files).
 
 **macOS CI** (`workflow_dispatch` → `macos`) needs Apple signing secrets (`CSC_LINK`, `APPLE_*`) in GitHub — otherwise use **Mac mini** (`./scripts/mac-mini-release.sh vX.Y.Z`).

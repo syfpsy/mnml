@@ -10,6 +10,7 @@
 import fs   from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import builder from 'electron-builder';
 import { assertSafeBasename, resolvePathWithinBase } from './lib/safe-path.mjs';
 import { findSqliteNode, findUiohookNode } from './lib/native-bindings.mjs';
 
@@ -24,19 +25,31 @@ const MODULES = [
 ];
 
 /**
- * Runtime needs better-sqlite3's lib/ + one binary; its SQLite sources and the
- * other platforms' prebuilds are ~25 MB of dead weight in the app.
- * `rel` is posix-style relative to the module root (ancestors of a kept file must pass).
+ * Copy only what the TARGET runs: lib/ + its prebuild. Sources and other
+ * platforms' prebuilds are ~25 MB of dead weight; a local compile in build/ is
+ * host-only, and node-gyp-build loads build/ before prebuilds/, so cross-builds
+ * must drop it. `rel` is posix-style relative to the module root (ancestors of
+ * a kept file must pass).
  */
-const KEEP = {
-  'better-sqlite3': (rel) => {
+function keepFor(mod, platform, arch) {
+  const host = platform === process.platform && arch === process.arch;
+  const prebuild = `prebuilds/${platform}-${arch}`;
+  if (mod === 'better-sqlite3') return (rel) => {
     const top = rel.split('/')[0];
     if (top === 'deps' || top === 'src' || rel === 'binding.gyp') return false;
-    if (top === 'prebuilds') return rel === 'prebuilds' || rel === `prebuilds/${process.platform}-${process.arch}.node`;
-    if (top === 'build') return 'build/Release/better_sqlite3.node'.startsWith(rel);
+    if (top === 'prebuilds') return rel === 'prebuilds' || rel === `${prebuild}.node`;
+    if (top === 'build') return host && 'build/Release/better_sqlite3.node'.startsWith(rel);
     return true;
-  },
-};
+  };
+  if (mod === 'uiohook-napi') return (rel) => {
+    const top = rel.split('/')[0];
+    if (top === 'libuiohook' || top === 'src') return false;
+    if (top === 'prebuilds') return rel === 'prebuilds' || rel === prebuild || rel.startsWith(`${prebuild}/`);
+    if (top === 'build') return host;
+    return true;
+  };
+  return undefined;
+}
 
 /**
  * electron-builder `afterPack` entry point.
@@ -45,8 +58,9 @@ const KEEP = {
 export default async function afterPack(ctx) {
   // Universal mac builds need per-arch native binaries from electron-builder itself.
   // This hook copies host node_modules and is only safe for single-arch targets.
-  const arch = ctx.arch;
-  if (process.platform === "darwin" && arch === "universal") {
+  const platform = ctx.electronPlatformName;
+  const arch = builder.Arch[ctx.arch];
+  if (platform === "darwin" && arch === "universal") {
     console.log("[copy-native-deps] skip — universal mac build uses per-arch rebuild");
     return;
   }
@@ -59,7 +73,7 @@ export default async function afterPack(ctx) {
     resolvePathWithinBase(resources, 'app'),
     'node_modules',
   );
-  copyModules(destMods);
+  copyModules(destMods, platform, arch);
 }
 
 // ── standalone CLI ────────────────────────────────────────────────────────────
@@ -71,12 +85,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(0);
   }
   const destMods = resolvePathWithinBase(winUnpacked, 'resources', 'app', 'node_modules');
-  copyModules(destMods);
+  copyModules(destMods, 'win32', 'x64');
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function copyModules(destBase) {
+function copyModules(destBase, platform, arch) {
   fs.mkdirSync(destBase, { recursive: true });
 
   for (const mod of MODULES) {
@@ -89,19 +103,19 @@ function copyModules(destBase) {
     }
 
     fs.rmSync(destDir, { recursive: true, force: true });
-    copyDir(srcDir, destDir, KEEP[mod]);
+    copyDir(srcDir, destDir, keepFor(mod, platform, arch));
     console.log(`[copy-native-deps] ✓  ${mod}`);
   }
 
-  verifyCopiedModules(destBase);
+  verifyCopiedModules(destBase, platform, arch);
 }
 
-function verifyCopiedModules(destBase) {
+function verifyCopiedModules(destBase, platform, arch) {
   const failures = [];
-  const sqlite = findSqliteNode(path.join(destBase, "better-sqlite3"));
-  const uiohook = findUiohookNode(path.join(destBase, "uiohook-napi"));
-  if (!sqlite) failures.push("better-sqlite3: native binary missing in packaged app");
-  if (!uiohook) failures.push("uiohook-napi: .node binary missing in packaged app");
+  const sqlite = findSqliteNode(path.join(destBase, "better-sqlite3"), platform, arch);
+  const uiohook = findUiohookNode(path.join(destBase, "uiohook-napi"), platform, arch);
+  if (!sqlite) failures.push(`better-sqlite3: ${platform}-${arch} binary missing in packaged app`);
+  if (!uiohook) failures.push(`uiohook-napi: ${platform}-${arch} binary missing in packaged app`);
   if (failures.length) {
     console.error("[copy-native-deps] packaged native bindings missing:");
     for (const f of failures) console.error(`  - ${f}`);

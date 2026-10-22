@@ -457,10 +457,11 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
           the bottom of the flex column. Outside the inert wrapper for
           symmetry with the banner (and because it's just text anyway). */}
       <div
-        className="px-3 py-1.5 flex items-center justify-between text-[11px]"
+        className="px-3 py-1.5 flex items-center justify-between gap-3 whitespace-nowrap text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        <span>{pasteRowHint} · Shift-click copy · Esc dismiss · Hover row for actions</span>
+        {/* One line: the longer macOS hints ("Option Option") wrapped both halves. */}
+        <span className="truncate">{pasteRowHint} · Shift-click copy · Esc hide</span>
         <span>{summonHint} to toggle</span>
       </div>
 

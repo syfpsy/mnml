@@ -159,8 +159,8 @@ re-reads what the clipboard actually holds, since the OS round-trip re-encodes i
 **Link titles** (`utils/link-meta.ts`): `fetchTitle(url)` reads the page `<title>`,
 guarded by `isPrivateHostname()` (blocks localhost / RFC1918 / link-local / IPv6
 ULA) at entry and on every redirect; 8 KB / 4 s / 2-redirect caps. Success →
-`updateTitle()` + an `onItemUpdated` event patches the row in place. Favicons are
-fetched client-side from Google's favicon service.
+`updateTitle()` + an `onItemUpdated` event patches the row in place. Link rows use a
+local link icon; no favicons are fetched.
 
 ## Search — `search/service.ts`
 

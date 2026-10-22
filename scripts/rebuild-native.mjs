@@ -2,16 +2,15 @@
 /**
  * Rebuild native addons for the current OS + CPU.
  * - better-sqlite3: ships N-API prebuilds (≥13) — electron-rebuild only if they don't load.
- * - uiohook-napi: npm ships prebuilds — scrub foreign platforms only; compile only if missing.
+ * - uiohook-napi: npm ships prebuilds — compile only if missing. Other platforms'
+ *   prebuilds stay (cross-builds need them); copy-native-deps ships only the target's.
  */
 
 import { execSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import {
   findUiohookNode,
   isForeignUiohookPath,
-  scrubForeignUiohookPrebuilds,
 } from "./lib/native-bindings.mjs";
 
 const uiohookDir = path.join(process.cwd(), "node_modules", "uiohook-napi");
@@ -30,8 +29,6 @@ function assertUiohookReady(label) {
   }
   console.log(`[rebuild] uiohook-napi → ${node}`);
 }
-
-scrubForeignUiohookPrebuilds(uiohookDir);
 
 function bindingsReady() {
   try {

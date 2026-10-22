@@ -56,20 +56,3 @@ export function isForeignUiohookPath(nodePath, platform = process.platform) {
   }
   return false;
 }
-
-export function scrubForeignUiohookPrebuilds(uiohookDir, platform = process.platform) {
-  const prebuilds = path.join(uiohookDir, "prebuilds");
-  if (!fs.existsSync(prebuilds)) return;
-  for (const entry of fs.readdirSync(prebuilds, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const keep = platform === "darwin"
-      ? entry.name.startsWith("darwin-")
-      : platform === "win32"
-        ? entry.name.startsWith("win32-")
-        : entry.name.startsWith("linux-");
-    if (!keep) {
-      fs.rmSync(path.join(prebuilds, entry.name), { recursive: true, force: true });
-      console.log(`[rebuild] removed foreign uiohook prebuild: ${entry.name}`);
-    }
-  }
-}

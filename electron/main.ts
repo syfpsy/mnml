@@ -760,7 +760,11 @@ function createTrayIcon(): Electron.NativeImage {
     path.join(buildDir, "tray.png"),
   ]) {
     if (fs.existsSync(candidate)) {
-      return nativeImage.createFromPath(candidate);
+      const img = nativeImage.createFromPath(candidate);
+      // macOS sizes the status item by the image's points: the 512 px icon made it 518 pt wide.
+      return IS_MAC
+        ? nativeImage.createFromBuffer(img.resize({ height: 32, quality: "best" }).toPNG(), { scaleFactor: 2 })
+        : img;
     }
   }
   log("[tray] no icon asset found in", buildDir, "— using transparent placeholder");

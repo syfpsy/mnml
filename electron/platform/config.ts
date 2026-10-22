@@ -7,8 +7,9 @@ export const IS_MAC = process.platform === "darwin";
 export const FALLBACK_SHORTCUT = IS_MAC ? "Command+Shift+V" : "Control+Shift+V";
 
 export const PLATFORM_UI = {
-  summonHint: IS_MAC ? "Option Option" : "Alt Alt",
-  pasteRowHint: IS_MAC ? "⌘1-9 paste" : "Ctrl 1-9 paste",
+  summonHint: IS_MAC ? "Control Control" : "Ctrl Ctrl",
+  // Quick-paste listens for Ctrl+1…9 on both platforms (compact-view), not ⌘.
+  pasteRowHint: "Ctrl 1-9 paste",
   pasteChord: IS_MAC ? "⌘V" : "Ctrl+V",
   launchOnStartupHint: IS_MAC
     ? "Open at login so the hotkey always works."

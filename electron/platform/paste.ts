@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 import { uIOhook, UiohookKey } from "uiohook-napi";
-import { suppressDoubleAltFor } from "../hotkey/double-alt.js";
+import { suppressDoubleTapFor } from "../hotkey/double-tap.js";
 import { log } from "../utils/log.js";
 import { IS_MAC, IS_WIN } from "./config.js";
 
@@ -54,7 +54,7 @@ export function triggerPaste(settleMs = 0, onDone?: () => void) {
       return;
     }
     try {
-      suppressDoubleAltFor(600);
+      suppressDoubleTapFor(600);
       if (IS_MAC) {
         uIOhook.keyTap(UiohookKey.V, [UiohookKey.Meta]);
         log("[paste] uIOhook ⌘V sent");

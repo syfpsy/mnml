@@ -80,7 +80,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const [focusedSavedIndex, setFocusedSavedIndex] = useState(-1);
   /** Bumped on hide so SavedList remounts and drops any open add form. */
   const [savedListEpoch,    setSavedListEpoch]    = useState(0);
-  const [summonHint,        setSummonHint]        = useState("Alt Alt");
+  const [summonHint,        setSummonHint]        = useState("Ctrl Ctrl");
   const [pasteRowHint,      setPasteRowHint]      = useState("Ctrl 1-9 paste");
   const [needsAccessibility, setNeedsAccessibility] = useState(false);
 
@@ -117,7 +117,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // Window visibility drives two things:
   //  · On HIDE — clear the search query. Summoning mnml again starts fresh
-  //    rather than showing the previous search ("fresh window every Alt-Alt"
+  //    rather than showing the previous search ("fresh window every Ctrl-Ctrl"
   //    mental model). The active tab is intentionally left alone. Always on.
   //  · On SHOW — only when using a synced folder: re-query the DB. The SQLite
   //    connection idle-closes between summons (see electron/db/index.ts), so
@@ -158,8 +158,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // Quick-paste hotkeys: Ctrl+1..9. Registered once on the window so it
   // works whether focus is in the search field or the list. Bare digits are
-  // left for typing into search; Alt is avoided (double-Alt summon + Windows
-  // alt-codes). Routes through `quickPasteRef` so it always sees current
+  // left for typing into search; Alt is avoided (Windows alt-codes). A lone
+  // Ctrl+digit never trips the double-Ctrl summon (any other key resets it). Routes through `quickPasteRef` so it always sees current
   // state without re-subscribing on every render.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -485,7 +485,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         className="px-3 py-1.5 flex items-center justify-between gap-3 whitespace-nowrap text-[11px]"
         style={{ borderTop: "1px solid var(--border)", color: "var(--t3)" }}
       >
-        {/* One line: the longer macOS hints ("Option Option") wrapped both halves. */}
+        {/* One line: longer macOS hints wrapped both halves. */}
         <span className="truncate">{pasteRowHint} · Shift-click copy · Esc hide</span>
         <span>{summonHint} to toggle</span>
       </div>

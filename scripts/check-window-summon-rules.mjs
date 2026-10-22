@@ -30,14 +30,14 @@ if (!main.includes("runSummonFocusPass(true)") ||
   failures.push("showWindow() must run native focus once and schedule verified search focus after win.show().");
 }
 
-if (!/installDoubleAlt\(\(\)\s*=>\s*{\s*setTimeout/.test(main)) {
-  failures.push("Double-Alt must delay toggleWindow() so the Alt key-up finishes before focus.");
+if (!/installDoubleTap\(\(\)\s*=>\s*{\s*setTimeout/.test(main)) {
+  failures.push("Double-tap must delay toggleWindow() so the key-up finishes before focus.");
 }
 
 if (!fgWin.includes("WINDOWS_FOREGROUND_HELPER") ||
     !fgWin.includes("AttachThreadInput") ||
     !main.includes("requestNativeForeground();") ||
-    !main.includes("suppressDoubleAltFor(")) {
+    !main.includes("suppressDoubleTapFor(")) {
   failures.push("Summon must include native foreground activation (Windows helper + macOS osascript).");
 }
 
@@ -57,10 +57,10 @@ if (!main.includes("nativeForegroundRequestsForShow >= 1") ||
 }
 
 if (!/setTimeout\(\(\)\s*=>\s*{\s*(?:if \(win\) )?toggleWindow\(\);\s*},\s*(?:[8-9]\d|[1-9]\d{2,})\)/.test(main)) {
-  failures.push("Double-Alt must wait at least 80ms after Alt key-up before toggling focus.");
+  failures.push("Double-tap must wait at least 80ms after the key-up before toggling focus.");
 }
 
-if (!main.includes("suppressDoubleAltFor(1_200)") && !main.includes("IS_WIN ? 1_200")) {
+if (!main.includes("suppressDoubleTapFor(1_200)") && !main.includes("IS_WIN ? 1_200")) {
   failures.push("Native foreground activation must suppress uIOhook long enough to ignore synthetic Alt unlocks.");
 }
 
@@ -70,8 +70,8 @@ if (!main.includes("document.hasFocus() && document.activeElement === input") ||
   failures.push("Search focus must be verified with document.hasFocus() and retried after native/window focus.");
 }
 
-if (!readFileSync(join(root, "electron", "hotkey", "double-alt.ts"), "utf8").includes("SUPPRESS_AFTER_FIRE_MS")) {
-  failures.push("Double-Alt detector must suppress repeats immediately after a real fire.");
+if (!readFileSync(join(root, "electron", "hotkey", "double-tap.ts"), "utf8").includes("SUPPRESS_AFTER_FIRE_MS")) {
+  failures.push("Double-tap detector must suppress repeats immediately after a real fire.");
 }
 
 if (!main.includes("render-process-gone") || !main.includes("recreateWindow(")) {
@@ -159,7 +159,7 @@ if (!main.includes("suppressBlurHideUntil = 0") || !main.includes("function canc
 }
 
 if (!main.includes("uIOhook.start()")) {
-  failures.push("uIOhook must start independently of double-Alt so click-outside and paste work when hotkey install fails.");
+  failures.push("uIOhook must start independently of double-tap so click-outside and paste work when hotkey install fails.");
 }
 
 if (!readFileSync(join(root, "electron", "clipboard", "monitor.ts"), "utf8").includes("clipboard.clear()")) {

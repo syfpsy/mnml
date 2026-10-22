@@ -6,7 +6,7 @@ import { uIOhook } from "uiohook-napi";
 import { autoUpdater } from "electron-updater";
 import { getDb } from "./db/index.js";
 import { getSetting, warmSettingsCache } from "./db/settings.js";
-import { installDoubleAlt, suppressDoubleAltFor } from "./hotkey/double-alt.js";
+import { installDoubleTap, suppressDoubleTapFor } from "./hotkey/double-tap.js";
 import { onNewItem, onItemUpdated, start as startMonitor, stop as stopMonitor, setClipboardPollCadence } from "./clipboard/monitor.js";
 import { closeDb } from "./db/index.js";
 import { IPC } from "./ipc-channels.js";
@@ -147,9 +147,9 @@ function safeSendToRenderer(channel: string, payload?: unknown) {
 /**
  * The logical `windowVisible` flag can drift from the OS HWND state when
  * Windows hides/minimizes us without going through hideWindow(), or when a
- * show() is rejected without throwing. If we trust the flag alone, Alt-Alt
+ * show() is rejected without throwing. If we trust the flag alone, Ctrl-Ctrl
  * can call hideWindow() while the HWND is already gone — then the next
- * Alt-Alt thinks we're hidden and show() no-ops, leaving a tray icon with
+ * Ctrl-Ctrl thinks we're hidden and show() no-ops, leaving a tray icon with
  * no summonable overlay.
  */
 function reconcileVisibilityFlag() {
@@ -620,13 +620,13 @@ function requestNativeForeground() {
   if (!win || win.isDestroyed()) return;
   if (nativeForegroundRequestsForShow >= 1) return;
   nativeForegroundRequestsForShow += 1;
-  suppressDoubleAltFor(IS_WIN ? 1_200 : 400);
+  suppressDoubleTapFor(IS_WIN ? 1_200 : 400);
   fg?.requestNativeForeground();
 }
 
 function requestRestoreForeground(target: string) {
   log("[paste] restoring foreground:", target);
-  suppressDoubleAltFor(600);
+  suppressDoubleTapFor(600);
   awaitingHelperRestore = true;
   fg?.requestRestoreForeground(target);
 }
@@ -1223,7 +1223,7 @@ function hideWindow() {
 
   if (armingPaste) {
     pasteFlowActive = true;
-    suppressDoubleAltFor(1_200);
+    suppressDoubleTapFor(1_200);
     armPasteFlowSafety();
     pastePending = false;
     if (!attemptHide()) {
@@ -1323,7 +1323,7 @@ function setBlurLock(locked: boolean) { blurLocked = locked; }
  * uIOhook installs a system-wide low-level keyboard/mouse hook. Windows can
  * silently drop a low-level hook under sustained load, and the hook does not
  * survive a sleep/resume cycle — when that happens, click-outside dismiss and
- * double-Alt summon stop working with no error. We retry a failed start and
+ * double-Ctrl summon stop working with no error. We retry a failed start and
  * re-arm the hook on resume / screen-unlock. We deliberately do NOT restart on
  * idle-timeout heuristics — there's no reliable "hook is dead" signal, and a
  * false restart would drop real events.
@@ -1335,7 +1335,7 @@ let accessibilityPollTimer: NodeJS.Timeout | null = null;
 function startInputHook(attempt = 0) {
   if (accessibilityPollTimer !== null) { clearTimeout(accessibilityPollTimer); accessibilityPollTimer = null; }
   if (uiohookStarted || appQuitting) return;
-  // macOS: the hook (⌥⌥ summon, click-outside, ⌘V) needs Accessibility. Poll for the
+  // macOS: the hook (⌃⌃ summon, click-outside, ⌘V) needs Accessibility. Poll for the
   // grant instead of burning the retries, so it starts working without a relaunch.
   if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(!accessibilityPrompted)) {
     if (!accessibilityPrompted) log("[uiohook] waiting for macOS Accessibility permission");
@@ -1471,11 +1471,11 @@ app.whenReady().then(() => {
   }
 
   try {
-    uninstallHotkey = installDoubleAlt(() => {
+    uninstallHotkey = installDoubleTap(() => {
       setTimeout(() => { toggleWindow(); }, 80);
     });
   } catch (err) {
-    log("[startup] double-alt failed (non-fatal):", String(err));
+    log("[startup] double-Ctrl failed (non-fatal):", String(err));
   }
 
   const registered = globalShortcut.register(FALLBACK_SHORTCUT, () => {

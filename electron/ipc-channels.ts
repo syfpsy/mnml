@@ -38,6 +38,10 @@ export const IPC = {
   getVersion:    "mnml:app:version",
   /** Platform-specific UI copy (summon hint, paste keys, OS name). */
   getPlatformUi: "mnml:app:platform-ui",
+  /** macOS: true while the input hook waits for Accessibility (summon, auto-paste, click-away). */
+  needsAccessibility: "mnml:app:needs-accessibility",
+  /** Opens System Settings → Privacy & Security → Accessibility. */
+  openAccessibilitySettings: "mnml:app:open-accessibility",
 
   // ── Storage folder (custom dataDir for cross-device sync) ─────────────────
   /** Returns { dataDir, defaultDir, isDefault } — current state for the UI. */

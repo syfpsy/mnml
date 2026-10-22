@@ -82,12 +82,14 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const [savedListEpoch,    setSavedListEpoch]    = useState(0);
   const [summonHint,        setSummonHint]        = useState("Alt Alt");
   const [pasteRowHint,      setPasteRowHint]      = useState("Ctrl 1-9 paste");
+  const [needsAccessibility, setNeedsAccessibility] = useState(false);
 
   useEffect(() => {
     void bridge.getPlatformUi().then((p) => {
       setSummonHint(p.summonHint);
       setPasteRowHint(p.pasteRowHint);
     }).catch(() => { /* dev in browser */ });
+    void bridge.needsAccessibility().then(setNeedsAccessibility).catch(() => {});
   }, []);
 
   const inputRef     = useRef<HTMLInputElement>(null);
@@ -126,6 +128,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     return bridge.onVisibilityChanged((visible) => {
       if (visible) {
         hideResetGen.current += 1;
+        // Re-check each summon: main starts the hook within 2 s of the grant.
+        void bridge.needsAccessibility().then(setNeedsAccessibility).catch(() => {});
         bridge.storageGet()
           .then((s) => {
             if (!s.isDefault) {
@@ -452,6 +456,27 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
         version={updateVersion}
         onInstall={onInstallUpdate}
       />
+
+      {needsAccessibility && (
+        <div
+          className="mnml-no-drag flex items-center justify-between gap-3 px-3 py-1.5 text-[11px]"
+          style={{
+            background: "var(--accent-info-bg)",
+            borderTop:  "1px solid var(--accent-info-border)",
+            color:      "var(--accent-info)",
+          }}
+        >
+          <span>Allow Accessibility so {summonHint}, auto-paste and click-away work.</span>
+          <button
+            type="button"
+            onClick={() => { void bridge.openAccessibilitySettings(); }}
+            className="shrink-0 px-2.5 py-1 rounded text-[11px] font-medium min-h-[28px] transition-opacity hover:opacity-75 active:opacity-60"
+            style={{ border: "1px solid var(--accent-info-border)", color: "var(--accent-info)" }}
+          >
+            Open Settings
+          </button>
+        </div>
+      )}
 
       {/* Footer — global keyboard / paste hints. Static text, always at
           the bottom of the flex column. Outside the inert wrapper for

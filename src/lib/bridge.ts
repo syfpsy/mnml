@@ -59,6 +59,8 @@ export const bridge = {
   }>,
   getVersion:         () => window.mnml.getVersion() as Promise<string>,
   getPlatformUi:      () => window.mnml.getPlatformUi(),
+  needsAccessibility: () => window.mnml.needsAccessibility(),
+  openAccessibilitySettings: () => window.mnml.openAccessibilitySettings(),
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    () => window.mnml.storageGet() as Promise<{

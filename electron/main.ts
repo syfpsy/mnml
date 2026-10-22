@@ -539,6 +539,7 @@ function createForegroundService(): ForegroundService {
   });
   service.onPrevCaptured = (target) => {
     prevForegroundTarget = service.sanitizePrevTarget(target);
+    log("[focus] prev target captured:", prevForegroundTarget ?? "none");
   };
   return service;
 }
@@ -624,6 +625,7 @@ function requestNativeForeground() {
 }
 
 function requestRestoreForeground(target: string) {
+  log("[paste] restoring foreground:", target);
   suppressDoubleAltFor(600);
   awaitingHelperRestore = true;
   fg?.requestRestoreForeground(target);
@@ -1441,6 +1443,7 @@ app.whenReady().then(() => {
     armPasteActivation,
     cancelPasteActivation,
     suppressBlurHide: suppressBlurHideFromRenderer,
+    inputHookReady: () => uiohookStarted,
   });
 
   try { tray = createTray(); }

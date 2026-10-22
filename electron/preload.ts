@@ -115,6 +115,8 @@ const api = {
     launchOnStartupHint: string;
     osName: string;
   }> => ipcRenderer.invoke(IPC.getPlatformUi),
+  needsAccessibility: (): Promise<boolean> => ipcRenderer.invoke(IPC.needsAccessibility),
+  openAccessibilitySettings: (): Promise<void> => ipcRenderer.invoke(IPC.openAccessibilitySettings),
 
   // ── Storage folder ──────────────────────────────────────────────────────
   storageGet:    (): Promise<{ dataDir: string; defaultDir: string; isDefault: boolean }> =>

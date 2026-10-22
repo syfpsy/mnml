@@ -28,6 +28,7 @@ interface WindowControl {
   armPasteActivation: () => void;
   cancelPasteActivation: () => void;
   suppressBlurHide: () => void;
+  inputHookReady: () => boolean;
 }
 
 /**
@@ -321,6 +322,13 @@ export function registerIpc(windowControl: WindowControl) {
     platform: process.platform,
     ...PLATFORM_UI,
   }));
+  // Without Accessibility the hook never starts and macOS drops synthetic ⌘V silently.
+  ipcMain.handle(IPC.needsAccessibility, (): boolean =>
+    process.platform === "darwin" && !windowControl.inputHookReady(),
+  );
+  ipcMain.handle(IPC.openAccessibilitySettings, () =>
+    shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"),
+  );
   ipcMain.handle(IPC.checkUpdate, async () => {
     // Returns a short summary the renderer can show ("checking" / "no update" /
     // "available v0.2.30"). The real update lifecycle still flows through the

@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import {
-  findFile,
+  findSqliteNode,
   findUiohookNode,
   isForeignUiohookPath,
 } from "./lib/native-bindings.mjs";
@@ -40,13 +40,13 @@ function verifyMacIcon() {
 }
 
 const sqliteDir = path.join(root, "node_modules", "better-sqlite3");
-const sqliteNode = findFile(sqliteDir, "better_sqlite3.node");
+const sqliteNode = findSqliteNode(sqliteDir);
 if (!sqliteNode) {
   failures.push(
-    "better-sqlite3: better_sqlite3.node not found — run `npm run rebuild`.",
+    `better-sqlite3: no binary for ${process.platform}-${process.arch} — run \`npm run rebuild\`.`,
   );
 } else {
-  // Present ≠ loadable: `npm install` leaves a Node-ABI build that Electron rejects at boot.
+  // Present ≠ loadable: a binary built for the wrong ABI dies at boot (bug-history M1).
   try {
     const electronBin = createRequire(import.meta.url)("electron");
     execFileSync(electronBin, ["-e", "require('better-sqlite3')(':memory:').close()"], {

@@ -981,8 +981,8 @@ function createWindow() {
       safeReloadRenderer();
     }, 400);
   });
-  win.webContents.on("console-message", (_e, level, msg, line, src) => {
-    if (level >= 2) log("[renderer] console", level, msg, `${src}:${line}`);
+  win.webContents.on("console-message", ({ level, message, lineNumber, sourceId }) => {
+    if (level === "warning" || level === "error") log("[renderer] console", level, message, `${sourceId}:${lineNumber}`);
   });
   win.webContents.on("before-input-event", (_event, input) => {
     if (input.type === "mouseDown" || input.type === "mouseUp") {
@@ -1449,7 +1449,10 @@ app.whenReady().then(() => {
 
   uIOhook.on("mousedown", onGlobalMousedownHandler);
 
-  startInputHook();
+  // Next tick, not inline: on Electron 45/macOS, starting the hook in the same
+  // ready tick as window + tray creation deadlocks libuiohook's hook_enable()
+  // (bug-history M4). Restarts later on (resume/unlock) are unaffected.
+  setTimeout(() => startInputHook(), 0);
 
   // Re-arm the global hook after the OS tears it down on sleep/lock. Both
   // events are no-ops on platforms that don't emit them.

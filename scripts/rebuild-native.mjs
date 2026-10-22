@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Rebuild native addons for the current OS + CPU.
- * - better-sqlite3: always electron-rebuild (no prebuilds).
+ * - better-sqlite3: ships N-API prebuilds (≥13) — electron-rebuild only if they don't load.
  * - uiohook-napi: npm ships prebuilds — scrub foreign platforms only; compile only if missing.
  */
 
@@ -48,7 +48,7 @@ if (bindingsReady()) {
   process.exit(0);
 }
 
-// better-sqlite3 must match Electron ABI; uiohook uses shipped prebuilds on win/mac.
+// No usable prebuild for this platform — compile better-sqlite3 against Electron.
 execSync("electron-rebuild -f -w better-sqlite3", { stdio: "inherit" });
 
 let uiohookNode = findUiohookNode(uiohookDir);

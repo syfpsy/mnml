@@ -123,7 +123,7 @@ export function registerIpc(windowControl: WindowControl) {
     },
   );
 
-  ipcMain.handle(IPC.restore, (_, { id, paste = false }: { id: number; paste?: boolean }) => {
+  ipcMain.handle(IPC.restore, async (_, { id, paste = false }: { id: number; paste?: boolean }) => {
     if (paste) preparePasteActivate(paste, windowControl);
     else prepareCopyOnlyRestore(windowControl);
     // `armPasteActivation()` set `pastePending` before any DB/clipboard I/O.
@@ -135,7 +135,7 @@ export function registerIpc(windowControl: WindowControl) {
       if (!itemId) return;
       const item = getById(itemId);
       if (!item) return;
-      if (!restoreItem(item)) return;
+      if (!(await restoreItem(item))) return;
       finishActivate(paste, windowControl);
       activated = true;
     } catch (err) {
@@ -243,7 +243,7 @@ export function registerIpc(windowControl: WindowControl) {
 
   ipcMain.handle(
     IPC.savedRestore,
-    (_, { id, paste = false }: { id: number; paste?: boolean }) => {
+    async (_, { id, paste = false }: { id: number; paste?: boolean }) => {
       if (paste) preparePasteActivate(paste, windowControl);
       else prepareCopyOnlyRestore(windowControl);
       let activated = false;
@@ -252,7 +252,7 @@ export function registerIpc(windowControl: WindowControl) {
         if (!snippetId) return;
         const snippet = getSavedById(snippetId);
         if (!snippet) return;
-        restoreText(snippet.content);
+        await restoreText(snippet.content);
         touchSaved(snippetId);
         broadcastSavedChanged();
         finishActivate(paste, windowControl);

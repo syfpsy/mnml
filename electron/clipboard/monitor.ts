@@ -1,4 +1,4 @@
-import { clipboard, nativeImage } from "electron";
+import { clipboard, ClipboardItem, nativeImage } from "electron";
 import fs from "node:fs";
 import { insertOrTouch, trimToMax, updateTitle, getById, type Item } from "../db/items.js";
 import { getSetting } from "../db/settings.js";
@@ -17,33 +17,44 @@ const POLL_MS_HIDDEN  = 2_000;
 const listeners = new Set<Listener>();
 const updateListeners = new Set<Listener>();
 
+/** Raw OS clipboard format as Electron (≥44) lists it in `ClipboardItem.types`. */
+const osFormat = (name: string) => `electron application/osclipboard;format="${name}"`;
+
 /**
- * Windows clipboard "don't keep this" markers.
+ * "Don't keep this" markers.
  *
  * Password managers (1Password, KeePass / KeePassXC, Bitwarden) and browsers
- * (on password fields) set these so the OS clipboard history (Win+V) and
- * third-party monitors skip the content. mnml respects them — a clipboard
- * manager that silently archives your passwords to a local SQLite file (and,
- * with folder-sync, up to your cloud) is a real liability. The marker is
- * checked BEFORE the clipboard text/image is read, so concealed content is
+ * (on password fields) set these so OS clipboard history and third-party
+ * monitors skip the content. mnml respects them — a clipboard manager that
+ * silently archives your passwords to a local SQLite file (and, with
+ * folder-sync, up to your cloud) is a real liability. Markers are checked
+ * from the type list BEFORE any text/image is read, so concealed content is
  * never even pulled into memory or hashed.
  *
+ *   Windows
  *   - `ExcludeClipboardContentFromMonitorProcessing` — its mere presence
- *     means "monitors should not process this". The de-facto standard;
- *     set by every major password manager.
+ *     means "monitors should not process this". The de-facto standard.
  *   - `CanIncludeInClipboardHistory` — a DWORD; value 0 means "keep out of
  *     clipboard history". Belt-and-suspenders for sources that use it.
+ *   macOS (nspasteboard.org convention)
+ *   - `org.nspasteboard.ConcealedType` — passwords; `TransientType` — "don't record".
  */
-const EXCLUDE_MARKER = "ExcludeClipboardContentFromMonitorProcessing";
+const EXCLUDE_MARKERS = [
+  osFormat("ExcludeClipboardContentFromMonitorProcessing"),
+  osFormat("org.nspasteboard.ConcealedType"),
+  osFormat("org.nspasteboard.TransientType"),
+];
+const CAN_INCLUDE_MARKER = osFormat("CanIncludeInClipboardHistory");
 
 /** Logged once per concealed episode (not every 500 ms poll). */
 let wasConcealed = false;
 
-function isClipboardConcealed(): boolean {
-  if (process.platform !== "win32") return false;
+async function isClipboardConcealed(item: ClipboardItem): Promise<boolean> {
   try {
-    if (clipboard.has(EXCLUDE_MARKER)) return true;
-    const buf = clipboard.readBuffer("CanIncludeInClipboardHistory");
+    if (EXCLUDE_MARKERS.some((m) => item.types.includes(m))) return true;
+    if (!item.types.includes(CAN_INCLUDE_MARKER)) return false;
+    const blob = (await item.getType(CAN_INCLUDE_MARKER)) as Blob;
+    const buf = Buffer.from(await blob.arrayBuffer());
     if (buf.length >= 4 && buf.readUInt32LE(0) === 0) return true;
     if (buf.length >= 1 && buf.readUInt8(0) === 0) return true;
     return false;
@@ -68,36 +79,29 @@ let lastImageHash = "";
 let timer: NodeJS.Timeout | null = null;
 
 /**
- * Image-poll throttle: clipboard.toPNG() re-encodes the entire bitmap on
- * every call, which for a 4K screenshot is several MB of allocation churn
- * every 500 ms. We use the image's dimensions as a cheap fingerprint and
- * only run the full PNG hash when (a) dimensions changed or (b) it has
- * been > IMAGE_RECHECK_MS since the last confirmation. Worst case: a new
- * image with identical dimensions to the previous one is captured up to
- * IMAGE_RECHECK_MS late — acceptable for a clipboard manager.
- *
- * Heavy encode + disk write runs via setImmediate (single-flight) so the
- * poll tick and uIOhook stay responsive.
+ * Image-poll throttle: `getType("image/png")` makes Electron decode the whole
+ * PNG on the main thread (~26 ms for a Retina screenshot), so it must not run
+ * every tick. Listing types is ~0.5 ms, so we re-read the image only when the
+ * type list changed or IMAGE_RECHECK_MS passed (a new screenshot over an old
+ * one keeps the same types). The PNG's byte size is the cheap fingerprint
+ * before the sha1 — Chromium's encode is deterministic, so same image → same size.
  */
-let lastImageSizeKey = "";
+let lastTypesKey = "";
 let lastImageCheckedAt = 0;
-const IMAGE_RECHECK_MS = 30_000;
-let imageEncodePending = false;
-/** Latest clipboard image waiting for encode (replaces older pending). */
-let pendingEncodeImg: Electron.NativeImage | null = null;
-let pendingEncodeBaseline = false;
-/** Bumped on stop() so in-flight setImmediate / saveImage cannot write after monitor off. */
-let encodeEpoch = 0;
+let lastImageBytes = 0;
+const IMAGE_RECHECK_MS = 2_000;
+/** Bumped on stop() so an in-flight read cannot insert after monitor off. */
+let monitorEpoch = 0;
 
 let pollIntervalMs = POLL_MS_HIDDEN;
-let lastFormatsKey = "";
+let pollInFlight = false;
+/** Serializes polls and restores — a restore must never interleave with a poll's reads. */
+let clipboardQueue: Promise<unknown> = Promise.resolve();
 
-function formatsKey(): string {
-  try {
-    return clipboard.availableFormats().join("|");
-  } catch {
-    return "";
-  }
+function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const run = clipboardQueue.then(fn, fn);
+  clipboardQueue = run.catch(() => {});
+  return run;
 }
 
 function armPollTimer() {
@@ -121,37 +125,12 @@ export function onNewItem(l: Listener): () => void {
 export function start() {
   if (timer) return;
   // Initialize baseline so we don't capture whatever was already on the
-  // clipboard on launch — but honor the sensitive-content guard here too.
-  // Without this check, a password manager that left a concealed item on
-  // the clipboard at boot (or whenever monitoring is toggled on) would
-  // still have its content read into memory and SHA-1'd. The product
-  // promise is "concealed content is never read or hashed", so guard the
-  // baseline reads. Empty hashes mean the next non-concealed clipboard
-  // write — text or image — will be captured normally.
-  if (isClipboardConcealed()) {
-    lastTextHash       = "";
-    lastImageHash      = "";
-    lastImageSizeKey   = "";
-    lastImageCheckedAt = 0;
-    wasConcealed       = true;
-    log("[clipboard] start: skipping baseline read (concealed content present)");
-  } else {
-    lastTextHash = sha1(clipboard.readText() ?? "");
-    const img = clipboard.readImage();
-    if (img.isEmpty()) {
-      lastImageHash      = "";
-      lastImageSizeKey   = "";
-      lastImageCheckedAt = 0;
-    } else {
-      // Baseline still needs a hash so we don't re-capture the boot clipboard
-      // image — defer encode so start() returns quickly.
-      const { width, height } = img.getSize();
-      lastImageSizeKey   = `${width}x${height}`;
-      lastImageCheckedAt = Date.now();
-      scheduleImageEncode(img, /*baselineOnly*/ true);
-    }
-  }
-
+  // clipboard on launch. The baseline read honors the sensitive-content
+  // guard like any poll: concealed content leaves empty hashes, so the next
+  // non-concealed clipboard write — text or image — is captured normally.
+  const epoch = monitorEpoch;
+  void exclusive(() => readClipboard(epoch, /*baselineOnly*/ true))
+    .catch((err) => log("[clipboard] baseline error:", String(err)));
   pollIntervalMs = POLL_MS_HIDDEN;
   armPollTimer();
 }
@@ -159,27 +138,25 @@ export function start() {
 export function stop() {
   if (timer) clearInterval(timer);
   timer = null;
-  // Invalidate in-flight encode/save so stop/quit cannot reopen DB or insert.
-  encodeEpoch += 1;
-  // Reset image fingerprint so a re-start triggers a fresh confirmation.
-  lastImageSizeKey   = "";
+  // Invalidate in-flight reads so stop/quit cannot reopen DB or insert.
+  monitorEpoch += 1;
+  // Reset the fingerprint so a re-start triggers a fresh confirmation.
+  lastTypesKey       = "";
   lastImageCheckedAt = 0;
-  lastFormatsKey     = "";
-  imageEncodePending = false;
-  pendingEncodeImg = null;
+  lastImageBytes     = 0;
 }
 
 function emit(item: Item) {
   for (const l of listeners) l(item);
 }
 
-/** Capture text/link when formats include text — also used beside image fingerprint hits. */
-function captureTextIfChanged(): void {
-  const text = clipboard.readText();
-  if (!text) return;
+async function captureTextIfChanged(epoch: number, baselineOnly: boolean): Promise<void> {
+  const text = await clipboard.readText();
+  if (epoch !== monitorEpoch || !text) return;
   const h = sha1(text);
   if (h === lastTextHash) return;
   lastTextHash = h;
+  if (baselineOnly) return;
 
   const c = classifyText(text);
   if (!c) return;
@@ -218,53 +195,54 @@ function captureTextIfChanged(): void {
   }
 }
 
-/**
- * Defer toPNG + hash (+ optional save) so the poll tick / hotkey path stays free.
- * Single-flight with latest-wins: a newer image replaces any waiting encode.
- */
-function scheduleImageEncode(img: Electron.NativeImage, baselineOnly = false): void {
-  pendingEncodeImg = img;
-  pendingEncodeBaseline = baselineOnly;
-  if (imageEncodePending) return;
-  imageEncodePending = true;
-  const epoch = encodeEpoch;
+async function captureImageIfChanged(item: ClipboardItem, epoch: number, baselineOnly: boolean): Promise<void> {
+  const blob = await item.getType("image/png");
+  if (epoch !== monitorEpoch || blob.size === 0 || blob.size === lastImageBytes) return;
+  const png = Buffer.from(await blob.arrayBuffer());
+  if (epoch !== monitorEpoch) return;
+  lastImageBytes = blob.size;
+  const h = sha1(png);
+  if (h === lastImageHash) return;
+  lastImageHash = h;
+  if (baselineOnly) return;
+  await saveImage(png, h, epoch);
+}
 
-  const run = () => {
-    setImmediate(() => {
-      // Stale epoch: do NOT touch shared pending flags — a newer flight owns them.
-      if (epoch !== encodeEpoch) return;
+/** One serialized clipboard read: concealed guard → text → image. */
+async function readClipboard(epoch: number, baselineOnly = false): Promise<void> {
+  const [item] = await clipboard.read();
+  if (epoch !== monitorEpoch || !item) return;
 
-      const snap = pendingEncodeImg;
-      const baselineOnlySnap = pendingEncodeBaseline;
-      pendingEncodeImg = null;
-      if (!snap) {
-        imageEncodePending = false;
-        return;
-      }
-      try {
-        if (isClipboardConcealed()) return;
-        const png = snap.toPNG();
-        if (epoch !== encodeEpoch) return;
-        const h = sha1(png);
-        if (h === lastImageHash) return;
-        lastImageHash = h;
-        if (baselineOnlySnap) return;
-        lastTextHash = sha1(clipboard.readText() ?? "");
-        void saveImage(png, snap, h, epoch);
-      } catch (err) {
-        log("[clipboard] image encode error:", String(err));
-      } finally {
-        if (epoch !== encodeEpoch) {
-          // Newer epoch owns imageEncodePending / pendingEncodeImg.
-        } else if (pendingEncodeImg) {
-          run();
-        } else {
-          imageEncodePending = false;
-        }
-      }
-    });
-  };
-  run();
+  // Respect sensitive content the source app asked us not to keep (password
+  // managers, browser password fields). Checked first — concealed content is
+  // never read or hashed. Type listing only; no DB access, so this doesn't
+  // disturb the idle-close timer.
+  if (await isClipboardConcealed(item)) {
+    if (!wasConcealed) {
+      log("[clipboard] skipping content marked sensitive by the source app");
+      wasConcealed = true;
+    }
+    if (baselineOnly) {
+      lastTextHash   = "";
+      lastImageHash  = "";
+      lastImageBytes = 0;
+    }
+    return;
+  }
+  wasConcealed = false;
+
+  const typesKey = item.types.join("|");
+  const typesChanged = typesKey !== lastTypesKey;
+  lastTypesKey = typesKey;
+
+  // Dual-format clipboards (image + text) capture both, text first.
+  if (item.types.includes("text/plain")) await captureTextIfChanged(epoch, baselineOnly);
+
+  if (!item.types.some((t) => t.startsWith("image/"))) return;
+  const now = Date.now();
+  if (!typesChanged && now - lastImageCheckedAt < IMAGE_RECHECK_MS) return;
+  lastImageCheckedAt = now;
+  await captureImageIfChanged(item, epoch, baselineOnly);
 }
 
 function poll() {
@@ -274,66 +252,23 @@ function poll() {
   // on. Reading the setting every 500 ms would also call `getDb()` every
   // tick, which would keep re-arming the DB's idle-close timer and pin the
   // SQLite file open forever — defeating the folder-sync handoff.
-
-  // Respect sensitive content the source app asked us not to keep (password
-  // managers, browser password fields). Checked first — concealed content is
-  // never read or hashed. Cheap native format checks; no DB access, so this
-  // doesn't disturb the idle-close timer.
-  if (isClipboardConcealed()) {
-    if (!wasConcealed) {
-      log("[clipboard] skipping content marked sensitive by the source app");
-      wasConcealed = true;
-    }
-    return;
-  }
-  wasConcealed = false;
-
-  try {
-    const fk = formatsKey();
-    const hasImageFormat = fk.includes("image/");
-    const hasTextFormat  = fk.includes("text/");
-    // Nothing to read when formats are unchanged and there's no text/image payload.
-    if (fk === lastFormatsKey && !hasImageFormat && !hasTextFormat) return;
-    lastFormatsKey = fk;
-
-    // image first — when copying screenshots, text is usually empty.
-    const img = hasImageFormat ? clipboard.readImage() : null;
-    if (img && !img.isEmpty()) {
-      // Cheap dimension fingerprint — getSize() is O(1) (reads cached field
-      // from the wrapping NativeImage; no decode). If dimensions match what
-      // we already hashed AND we re-confirmed recently, the image is almost
-      // certainly the same — skip the expensive toPNG() + sha1.
-      const { width, height } = img.getSize();
-      const sizeKey = `${width}x${height}`;
-      const now = Date.now();
-      if (sizeKey === lastImageSizeKey && now - lastImageCheckedAt < IMAGE_RECHECK_MS) {
-        // Still watch text — dual-format clipboards can change text while
-        // image/* remains present at the same dimensions.
-        if (hasTextFormat) captureTextIfChanged();
-        return;
-      }
-      lastImageSizeKey   = sizeKey;
-      lastImageCheckedAt = now;
-      scheduleImageEncode(img);
-      if (hasTextFormat) captureTextIfChanged();
-      return;
-    }
-
-    if (!hasTextFormat) return;
-    captureTextIfChanged();
-  } catch (err) {
+  if (pollInFlight) return;
+  pollInFlight = true;
+  const epoch = monitorEpoch;
+  void exclusive(() => readClipboard(epoch))
     // keep polling even if one read fails
-    log("[clipboard] poll error:", String(err));
-  }
+    .catch((err) => log("[clipboard] poll error:", String(err)))
+    .finally(() => { pollInFlight = false; });
 }
 
-async function saveImage(
-  png: Buffer,
-  img: Electron.NativeImage,
-  hash: string,
-  epoch: number,
-) {
-  if (epoch !== encodeEpoch) return;
+/** PNG IHDR holds width/height at fixed offsets — no decode needed. */
+function pngSize(png: Buffer): { width: number; height: number } {
+  if (png.length < 24) return { width: 0, height: 0 };
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+async function saveImage(png: Buffer, hash: string, epoch: number) {
+  if (epoch !== monitorEpoch) return;
   const dir = imagesDir();
   const filepath = resolveImagePath(dir, hash);
   try {
@@ -344,9 +279,9 @@ async function saveImage(
     log("[clipboard] image write failed:", String(err));
     return;
   }
-  if (epoch !== encodeEpoch) return;
+  if (epoch !== monitorEpoch) return;
 
-  const { width, height } = img.getSize();
+  const { width, height } = pngSize(png);
   const preview = `Image · ${width}×${height}`;
   const item = insertOrTouch({
     type: "image",
@@ -367,53 +302,55 @@ function trim() {
   for (const id of trimToMax(max)) evictThumb(id);
 }
 
-// Re-copy an item back to the system clipboard. Returns false if nothing was written.
-export function restoreItem(item: Item): boolean {
-  if (item.type === "image" && item.image_path) {
-    let imagePath: string;
-    try {
-      imagePath = assertResolvedWithinBase(item.image_path, imagesDir());
-    } catch {
-      log("[clipboard] restore: image path outside managed dir — skipping");
-      return false;
-    }
-    if (!fs.existsSync(imagePath)) {
-      log("[clipboard] restore: image file missing — skipping");
-      return false;
-    }
-    clipboard.clear();
-    const nImg = nativeImage.createFromPath(imagePath);
-    if (nImg.isEmpty()) {
-      log("[clipboard] restore: image unreadable — skipping");
-      return false;
-    }
-    clipboard.writeImage(nImg);
-    // Hash what the clipboard actually holds after write — matches future polls'
-    // sha1(readImage().toPNG()), unlike the on-disk file hash which can diverge
-    // after an OS round-trip. Deferred so restore stays off the hot path.
-    const confirm = clipboard.readImage();
-    if (!confirm.isEmpty()) {
-      const { width, height } = confirm.getSize();
-      lastImageSizeKey = `${width}x${height}`;
+/** Text write + baseline so the next poll doesn't re-capture our own write. */
+async function writeTextBaseline(text: string) {
+  clipboard.clear(); // O16: a text write alone can leave a previous image on the clipboard.
+  await clipboard.writeText(text);
+  lastTextHash   = sha1(text);
+  lastImageHash  = "";
+  lastImageBytes = 0;
+}
+
+// Re-copy an item back to the system clipboard. Resolves false if nothing was written.
+export function restoreItem(item: Item): Promise<boolean> {
+  return exclusive(async () => {
+    if (item.type === "image" && item.image_path) {
+      let imagePath: string;
+      try {
+        imagePath = assertResolvedWithinBase(item.image_path, imagesDir());
+      } catch {
+        log("[clipboard] restore: image path outside managed dir — skipping");
+        return false;
+      }
+      if (!fs.existsSync(imagePath)) {
+        log("[clipboard] restore: image file missing — skipping");
+        return false;
+      }
+      const png = await fs.promises.readFile(imagePath);
+      if (nativeImage.createFromBuffer(png).isEmpty()) {
+        log("[clipboard] restore: image unreadable — skipping");
+        return false;
+      }
+      clipboard.clear();
+      await clipboard.write([new ClipboardItem({ "image/png": new Blob([png], { type: "image/png" }) })]);
+      // Baseline from what the clipboard actually holds after the write — the OS
+      // round-trip re-encodes, so the on-disk file hash would re-capture it.
+      const [current] = await clipboard.read();
+      lastTypesKey = current?.types.join("|") ?? "";
       lastImageCheckedAt = Date.now();
-      scheduleImageEncode(confirm, /*baselineOnly*/ true);
-    } else {
-      const { width, height } = nImg.getSize();
-      lastImageSizeKey = `${width}x${height}`;
-      lastImageCheckedAt = Date.now();
-      scheduleImageEncode(nImg, /*baselineOnly*/ true);
+      const held = current ? await current.getType("image/png") : null;
+      if (held && held.size > 0) {
+        lastImageBytes = held.size;
+        lastImageHash = sha1(Buffer.from(await held.arrayBuffer()));
+      }
+      lastTextHash = "";
+      return true;
     }
-    lastTextHash = "";
+    const value = item.content_text ?? item.content_url ?? item.preview;
+    if (!value) return false;
+    await writeTextBaseline(value);
     return true;
-  }
-  const value = item.content_text ?? item.content_url ?? item.preview;
-  if (!value) return false;
-  clipboard.clear();
-  clipboard.writeText(value);
-  lastTextHash = sha1(value);
-  lastImageHash = "";
-  lastImageSizeKey = "";
-  return true;
+  });
 }
 
 /**
@@ -421,10 +358,6 @@ export function restoreItem(item: Item): boolean {
  * restore path. Updates `lastTextHash` so the monitor's next poll doesn't
  * re-capture our own write as a new clipboard entry.
  */
-export function restoreText(text: string) {
-  clipboard.clear();
-  clipboard.writeText(text);
-  lastTextHash = sha1(text);
-  lastImageHash = "";
-  lastImageSizeKey = "";
+export function restoreText(text: string): Promise<void> {
+  return exclusive(() => writeTextBaseline(text));
 }

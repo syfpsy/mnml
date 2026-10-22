@@ -9,11 +9,11 @@ If you change a subsystem, update its section here in the same commit.
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Shell | Electron 33 (Chromium 130) | Cross-platform shell; platform code in `electron/platform/` |
+| Shell | Electron 45 (Chromium 156, Node 24) | Cross-platform shell; platform code in `electron/platform/` |
 | Bundler | Vite 6 + `vite-plugin-electron` | One config builds renderer + main + preload, HMR in dev |
 | UI | React 19 + TypeScript | Single overlay window; no UI component framework |
 | Styling | Tailwind v4 (`@tailwindcss/vite`) | Utilities + a CSS-variable token system in `styles.css` |
-| Persistence | `better-sqlite3` 11 (sync) | Embedded, synchronous, FTS5 built in; rebuilt to Electron's ABI |
+| Persistence | `better-sqlite3` 13 (sync) | Embedded, synchronous, FTS5 built in; N-API prebuilds, no Electron rebuild |
 | Input | `uiohook-napi` 1.5 | System-wide key/mouse hook; double-Alt detect; synth paste |
 | Updates | `electron-updater` 6 | Background auto-update from a published `latest.yml` |
 | Packaging | `electron-builder` 25 | NSIS one-click installer (`mnml-setup.exe`) |
@@ -38,7 +38,7 @@ electron/
   preload.ts         contextBridge → window.mnml (typed MnmlApi); preload.d.ts = ambient types
   ipc.ts             ipcMain.handle wiring        ipc-channels.ts  shared channel/payload names
   clipboard/
-    monitor.ts       500 ms poll: sensitive guard, dedupe, image write, link enrichment
+    monitor.ts       500 ms / 2 s async poll: sensitive guard, dedupe, image write, link enrichment
     classifier.ts    text vs link (URL) + preview truncation (≤280)
   db/
     index.ts         init, migrations, journal mode, idle-close lifecycle
@@ -130,25 +130,31 @@ by design: $0, no server, data only in the user's own cloud.
 
 ## Clipboard monitor — `clipboard/monitor.ts`
 
-`setInterval(500 ms)`:
+`setInterval` — 500 ms while the panel is visible, 2 s hidden. Electron ≥44's
+clipboard API is Promise-based, so each tick is one serialized async read
+(`exclusive()` also queues restores behind it; a tick is skipped while one is in flight):
 
-1. **Sensitive-content guard first.** `isClipboardConcealed()` checks the Windows
-   "do not record" markers **before reading any content**:
-   `ExcludeClipboardContentFromMonitorProcessing` (set by 1Password / KeePass /
-   Bitwarden / browser password fields) and `CanIncludeInClipboardHistory == 0`.
-   Concealed content is never read, hashed, stored, or synced. **Fail-open** on a
-   query error. Logged once per episode, never *what*.
-2. **Image before text.** A `getSize()` dimension fingerprint + 4 s recheck window
-   avoids re-encoding a 4K bitmap (`toPNG()`) every tick. New images write to
-   `<dataDir>/images/<sha1>.png`.
-3. **Text.** SHA-1 dedupe vs `lastTextHash`; classified link vs text. Links insert
+1. **Sensitive-content guard first.** `clipboard.read()` lists the types without
+   reading content; `isClipboardConcealed()` checks them for "do not record"
+   markers **before reading any content**: Windows
+   `ExcludeClipboardContentFromMonitorProcessing` (1Password / KeePass / Bitwarden /
+   browser password fields) and `CanIncludeInClipboardHistory == 0`; macOS
+   `org.nspasteboard.ConcealedType` / `TransientType`. Concealed content is never
+   read, hashed, stored, or synced. **Fail-closed** on a query error. Logged once
+   per episode, never *what*.
+2. **Text.** SHA-1 dedupe vs `lastTextHash`; classified link vs text. Links insert
    immediately, then fire background `fetchTitle()` enrichment.
+3. **Image.** `getType("image/png")` decodes the PNG on the main thread (~26 ms for
+   a Retina screenshot), so it runs only when the type list changed or 2 s passed.
+   The PNG byte size is the cheap fingerprint before SHA-1; width/height come from
+   the IHDR header. New images write to `<dataDir>/images/<sha1>.png`.
 4. After each insert, `trim()` enforces `maxItems` on unpinned rows.
 
 No `getSetting("monitoring")` inside `poll()` — the timer only runs while
 monitoring is on (`start()`/`stop()` track the setting), and reading it per-tick
 would call `getDb()` and defeat the idle-close. `restoreItem()`/`restoreText()`
-update the last-seen hash so mnml never re-ingests its own write.
+update the last-seen hash so mnml never re-ingests its own write (an image restore
+re-reads what the clipboard actually holds, since the OS round-trip re-encodes it).
 
 **Link titles** (`utils/link-meta.ts`): `fetchTitle(url)` reads the page `<title>`,
 guarded by `isPrivateHostname()` (blocks localhost / RFC1918 / link-local / IPv6

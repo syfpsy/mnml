@@ -17,9 +17,13 @@ update manifest → **GitHub Releases**) and the **landing site** (static `site/
 
 ## Toolchain
 
-Windows 10/11 + Node 20+ (tested on 22). `npm install` runs `postinstall`
-(`electron-rebuild -f -o better-sqlite3`) to match the native ABI. After an
-Electron bump, rerun `npm run rebuild`.
+Windows 10/11 or macOS 13+, Node 22+. `.npmrc` sets `ignore-scripts=true`: every
+native module ships N-API prebuilds (better-sqlite3 ≥13, uiohook-napi), and Electron
+(≥42) downloads its binary on first use. Without it, lockfile installs (`npm ci`)
+run a bogus `node-gyp rebuild` for better-sqlite3 (npm misses its `"gypfile": false`)
+that fails on Python 3.12+. Every `build*` script runs `npm run rebuild`
+(`scripts/rebuild-native.mjs`), which only calls `electron-rebuild` when
+`verify-native-bindings` can't load the prebuilds inside Electron.
 
 ## Versioning
 
@@ -125,8 +129,8 @@ git checkout vX.Y.Z
 .\scripts\release-local-win.ps1
 ```
 
-Requires `electron-rebuild` (native modules). Install **VS 2022 Build Tools** with
-the “Desktop development with C++” workload if `npm run rebuild` fails.
+Native modules use prebuilds; **VS 2022 Build Tools** (“Desktop development with
+C++”) are only needed if `verify-native-bindings` fails and `npm run rebuild` has to compile.
 
 **If `vswhere` finds no install** but `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools` exists, the registration is broken — open **Visual Studio Installer → Modify/Repair** and ensure **Desktop development with C++** is checked. Until then, `npm run rebuild` skips when `verify-native-bindings` already passes (cached `.node` files).
 

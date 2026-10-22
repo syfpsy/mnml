@@ -19,6 +19,14 @@ export function findFile(dir, fileName) {
   return null;
 }
 
+/** better-sqlite3 ≥13 (N-API) loads a local build/Release first, else its shipped prebuild. */
+export function findSqliteNode(sqliteDir, platform = process.platform, arch = process.arch) {
+  const built = path.join(sqliteDir, "build", "Release", "better_sqlite3.node");
+  if (fs.existsSync(built)) return built;
+  const prebuilt = path.join(sqliteDir, "prebuilds", `${platform}-${arch}.node`);
+  return fs.existsSync(prebuilt) ? prebuilt : null;
+}
+
 export function expectedUiohookPrebuildDirs(platform = process.platform, arch = process.arch) {
   if (platform === "darwin") return [`darwin-${arch}`, "darwin-universal"];
   if (platform === "win32") return [`win32-${arch}`];

@@ -16,7 +16,7 @@ A keyboard-first clipboard manager for **Windows and macOS**. Press **Alt** twic
 - **Quick-paste** — press **Ctrl + 1…9** to paste one of the first nine items instantly. Pasting strips formatting, so you always get clean plain text.
 - **Saved snippets** — reusable text (signatures, regexes, commands) that never rotate out. One-click save from any clipboard row.
 - **Launcher** — Start-Menu apps + ~80 curated `ms-settings:` deep links (Bluetooth, Display, Sound, Update…) + classic `.msc` / `.cpl` tools (Task Manager, Device Manager, Registry Editor…), all in the same search.
-- **Never your passwords** — mnml honors the Windows "do not record" clipboard flag, so content from password managers (1Password, KeePass, Bitwarden) and browser password fields is never captured.
+- **Never your passwords** — mnml honors the "do not record" clipboard markers on Windows and macOS, so content from password managers (1Password, KeePass, Bitwarden) and browser password fields is never captured.
 - **Folder sync** — point the storage folder at Dropbox / OneDrive / iCloud and your clipboard follows you across devices (one machine at a time). No server, no account; the data only ever lives in your own cloud storage.
 - **Auto-launch + auto-update** — starts at login so the hotkey is always live; updates itself in the background.
 - **Light + dark themes**, WCAG-AA contrast in both.
@@ -45,17 +45,17 @@ No accounts, no cloud, no telemetry. The only outbound request is a daily update
 ## Build from source
 
 ```bash
-npm install        # runs electron-rebuild on better-sqlite3 to match Electron's ABI
+npm install        # no install scripts (.npmrc); native modules ship N-API prebuilds
 npm run dev        # dev mode (detached devtools)
 npm run build      # produces release/mnml-setup.exe + latest.yml + .blockmap
 npm run icons      # regenerate the app icon from build/icon.svg
 ```
 
-Requires Windows 10/11 and Node 20+ (tested on 22).
+Requires Windows 10/11 or macOS 13+, and Node 22+.
 
 ## Architecture
 
-Electron 33 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-Alt hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
+Electron 45 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-Alt hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
 
 ## Documentation
 

@@ -1,5 +1,18 @@
 # mnml Changelog
 
+## v0.3.12 — 2026-10-22
+
+### Changed
+- **Summon is double Ctrl** on Windows and macOS (Control on Mac, not ⌘). Double Alt / Option was unreliable: Alt taps open app menus on Windows, and Option is a typing modifier on macOS. Ctrl+C, Ctrl+1…9 and other combos never trigger it.
+- **Quick-paste hint on macOS** said ⌘1-9, but the shortcut has always been Ctrl+1…9; the hint now matches on both platforms.
+
+### Fixed
+- **macOS: missing Accessibility is now visible** — without it the hotkey, auto-paste and click-away failed silently (macOS drops the synthetic ⌘V). The panel shows a banner with **Open Settings**; the hook starts within 2 s of the grant, no relaunch. If System Settings shows mnml as allowed but the banner stays, run `tccutil reset Accessibility dev.mnml.app` and allow it again.
+
+### Internal
+- The log records the captured paste target and the restore request.
+
+
 ## v0.3.11 — 2026-10-22
 
 ### Fixed

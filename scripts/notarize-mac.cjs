@@ -26,10 +26,12 @@ exports.default = async function notarizeMac(context) {
   const appleId = process.env.APPLE_ID;
   const appleIdPassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
   const teamId = process.env.APPLE_TEAM_ID;
+  // Alternative to the three vars: a profile saved with `xcrun notarytool store-credentials`.
+  const keychainProfile = process.env.APPLE_KEYCHAIN_PROFILE;
 
-  if (!appleId || !appleIdPassword || !teamId) {
+  if (!keychainProfile && (!appleId || !appleIdPassword || !teamId)) {
     console.warn(
-      "[notarize] skipped — set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID in .env.release",
+      "[notarize] skipped — set APPLE_KEYCHAIN_PROFILE, or APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID in .env.release",
     );
     return;
   }
@@ -38,11 +40,10 @@ exports.default = async function notarizeMac(context) {
   const appPath = `${context.appOutDir}/${appName}.app`;
 
   console.log("[notarize] submitting", appPath);
-  await notarize({
-    appPath,
-    appleId,
-    appleIdPassword,
-    teamId,
-  });
+  await notarize(
+    keychainProfile
+      ? { appPath, keychainProfile }
+      : { appPath, appleId, appleIdPassword, teamId },
+  );
   console.log("[notarize] complete");
 };

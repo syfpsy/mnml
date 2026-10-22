@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, screen, Tray, Menu, nativeImage, powerMonitor, shell, systemPreferences } from "electron";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -1329,17 +1330,84 @@ function setBlurLock(locked: boolean) { blurLocked = locked; }
  * false restart would drop real events.
  */
 let uiohookStarted = false;
-let accessibilityPrompted = false;
+let accessibilityRequested = false;
 let accessibilityPollTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Run from the disk image or Downloads, the app can't update itself and isn't
+ * in Launchpad. Offer to move the packaged macOS app to /Applications, then
+ * relaunch from there (Electron's move itself shows no dialog). Dev stays put.
+ * Returns true when this process is quitting for the relaunch.
+ */
+function relocateToApplications(): boolean {
+  if (!IS_MAC || !app.isPackaged || app.isInApplicationsFolder()) return false;
+  log("[install] not in /Applications; offering to move");
+  const choice = dialog.showMessageBoxSync({
+    type: "question",
+    buttons: ["Move to Applications", "Not Now"],
+    defaultId: 0,
+    cancelId: 1,
+    message: "Move mnml to your Applications folder?",
+    detail: "From the disk image or Downloads, mnml can't install updates. It relaunches from Applications.",
+  });
+  if (choice !== 0) {
+    log("[install] move declined; continuing from the current folder");
+    return false;
+  }
+  try {
+    // true = replace an older mnml.app already there (Electron quits it if running).
+    const moved = app.moveToApplicationsFolder({
+      conflictHandler: () => true,
+    });
+    if (!moved) {
+      log("[install] move did not happen; continuing from the current folder");
+      return false;
+    }
+    log("[install] moved to /Applications; relaunching");
+    return true;
+  } catch (err) {
+    log("[install] move failed:", String(err));
+    return false;
+  }
+}
+
+/** CFBundleIdentifier of the running packaged app (build.appId), or null in dev. */
+function macBundleId(): string | null {
+  if (!IS_MAC || !app.isPackaged) return null;
+  try {
+    const plist = fs.readFileSync(path.join(process.resourcesPath, "..", "Info.plist"), "utf8");
+    return /<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(plist)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ask macOS for Accessibility once per launch. An "on" row left by another mnml
+ * signature (an unsigned beta or test build) never matches this binary, and
+ * toggling it doesn't rebind it, so first drop our own row (no admin needed);
+ * the prompt then lists a fresh row for the running app, off, ready to switch on.
+ */
+function requestAccessibility() {
+  const bundleId = macBundleId();
+  if (!bundleId) { systemPreferences.isTrustedAccessibilityClient(true); return; }
+  execFile("/usr/bin/tccutil", ["reset", "Accessibility", bundleId], (err) => {
+    log(err ? `[uiohook] tccutil reset failed: ${err.message}` : `[uiohook] cleared Accessibility row for ${bundleId}`);
+    systemPreferences.isTrustedAccessibilityClient(true);
+  });
+}
 
 function startInputHook(attempt = 0) {
   if (accessibilityPollTimer !== null) { clearTimeout(accessibilityPollTimer); accessibilityPollTimer = null; }
   if (uiohookStarted || appQuitting) return;
-  // macOS: the hook (⌃⌃ summon, click-outside, ⌘V) needs Accessibility. Poll for the
-  // grant instead of burning the retries, so it starts working without a relaunch.
-  if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(!accessibilityPrompted)) {
-    if (!accessibilityPrompted) log("[uiohook] waiting for macOS Accessibility permission");
-    accessibilityPrompted = true;
+  // macOS: the hook (⌃⌃ summon, click-outside, ⌘V) needs Accessibility. Ask once,
+  // then poll quietly so it starts within 2 s of the grant, no relaunch needed.
+  if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(false)) {
+    if (!accessibilityRequested) {
+      accessibilityRequested = true;
+      log("[uiohook] waiting for macOS Accessibility permission");
+      requestAccessibility();
+    }
     accessibilityPollTimer = setTimeout(() => startInputHook(attempt), 2_000);
     return;
   }
@@ -1409,6 +1477,10 @@ function failStartup(stage: string, err: unknown) {
 }
 
 app.whenReady().then(() => {
+  // Before the single-instance lock: a successful move quits and relaunches,
+  // and the old process must not still be holding the lock.
+  if (relocateToApplications()) return;
+
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) { log("[startup] another instance running; quitting"); app.quit(); return; }
 

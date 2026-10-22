@@ -1,5 +1,14 @@
 # mnml Changelog
 
+## v0.3.13 — 2026-10-22
+
+### Fixed
+- **macOS kept asking for Accessibility after it was allowed.** A row left in System Settings by another mnml signature (an unsigned beta or test build) shows "on" but never matches the current app, and toggling it does not fix it. When mnml starts without the permission, it now clears its own row (`tccutil reset`, no admin needed) before asking, so the prompt lists a row that matches. Turn it on and the hotkey works within 2 s, no relaunch.
+
+### Changed
+- **macOS install lands in /Applications.** Opened from the disk image or Downloads, mnml asks to move itself to Applications and relaunches there; from the disk image it could not install updates. The disk image now shows the Applications drop target.
+- **Banner** points at the list that opens instead of naming the Settings page, which macOS 27 renamed.
+
 ## v0.3.12 — 2026-10-22
 
 ### Changed

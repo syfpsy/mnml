@@ -466,7 +466,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
             color:      "var(--accent-info)",
           }}
         >
-          <span>Allow Accessibility so {summonHint}, auto-paste and click-away work.</span>
+          <span>Turn mnml on in the list that opens so {summonHint}, auto-paste and click-away work.</span>
           <button
             type="button"
             onClick={() => { void bridge.openAccessibilitySettings(); }}

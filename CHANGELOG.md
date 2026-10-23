@@ -1,6 +1,6 @@
 # mnml Changelog
 
-## Unreleased
+## v0.3.15 — 2026-10-23
 
 ### Fixed
 - **macOS: typing an app name could crash mnml.** App icons came from `app.getFileIcon`, which crashes Electron 45 on macOS 27; icons now come from QuickLook (and show the real icon instead of a generic one).
@@ -16,7 +16,7 @@
 - **Search works in every language**: "kısa", Cyrillic and CJK queries no longer drop letters or list everything.
 - **The panel opens fresh**: the previous search and Settings no longer come back on the next summon.
 - **All image thumbnails load**, not only the first 32.
-- **New copies stay below pinned items**, Ctrl+1–9 works on AZERTY, row times are current, and closing Settings keeps keyboard focus.
+- **New copies stay below pinned items**, Ctrl+1–9 works on AZERTY, and row times are current.
 - **⌘-click or Ctrl+scroll twice** no longer opens the panel.
 - **Folder sync safety:** a synced database that is briefly missing is never replaced by an empty one, and a failed folder move only removes the files mnml copied.
 - **One-time links** (sign-in, password reset, verify) are no longer opened in the background to read their title.

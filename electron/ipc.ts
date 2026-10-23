@@ -8,6 +8,7 @@ import {
   getById,
   listRecent,
   setPinned,
+  type Item,
   type ItemType,
 } from "./db/items.js";
 import { closeDb } from "./db/index.js";
@@ -107,20 +108,25 @@ function requirePositiveInt(id: unknown): number | null {
   return n;
 }
 
+/** Rows for the list: the renderer shows `preview`, so the full text (can be MBs) stays in main. */
+export function rendererItem(item: Item): Item {
+  return { ...item, content_text: null };
+}
+
 export function registerIpc(windowControl: WindowControl) {
   // ── Clipboard items ───────────────────────────────────────────────────────
 
   ipcMain.handle(
     IPC.listRecent,
     (_, { limit, type }: { limit?: number; type?: ItemType }) =>
-      listRecent(clampListLimit(limit, 10), type),
+      listRecent(clampListLimit(limit, 10), type).map(rendererItem),
   );
 
   ipcMain.handle(
     IPC.search,
     (_, { query, type, limit }: { query: string; type?: ItemType; limit?: number }) => {
       const scored = search(clampSearchQuery(query), { limit: clampListLimit(limit, 50), type });
-      return scored.map((s) => s.item);
+      return scored.map((s) => rendererItem(s.item));
     },
   );
 
@@ -301,7 +307,8 @@ export function registerIpc(windowControl: WindowControl) {
         if (value) startMonitor();
         else stopMonitor();
       }
-      if (key === "launchOnStartup") {
+      // Dev runs would register the bare Electron binary (as in syncLoginItemWithSetting).
+      if (key === "launchOnStartup" && app.isPackaged) {
         app.setLoginItemSettings({ openAtLogin: Boolean(value) });
       }
       return getAllSettings();

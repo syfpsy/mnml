@@ -5,7 +5,7 @@ import { AppResultsList } from "./app-results-list";
 import { SavedList } from "./saved-list";
 import { SettingsIcon } from "./icons";
 import { UpdateBanner, type UpdateState } from "./update-banner";
-import { useItems } from "../hooks/use-items";
+import { useItems, sortItemsLikeDb } from "../hooks/use-items";
 import { useAppSearch } from "../hooks/use-app-search";
 import { useSaved } from "../hooks/use-saved";
 import { bridge } from "../lib/bridge";
@@ -41,19 +41,6 @@ const TYPE_BY_TAB: Record<Exclude<TabKey, "saved">, ItemType | undefined> = {
   image: "image",
 };
 
-/** Mirror `ORDER BY` in electron/db/items.ts so pin toggles reorder without refetch. */
-function sortItemsLikeDb(items: Item[]): Item[] {
-  return [...items].sort((a, b) => {
-    const aPin = a.pinned_at != null;
-    const bPin = b.pinned_at != null;
-    if (aPin !== bPin) return aPin ? -1 : 1;
-    if (aPin && bPin && a.pinned_at !== b.pinned_at) {
-      return (b.pinned_at ?? 0) - (a.pinned_at ?? 0);
-    }
-    return b.updated_at - a.updated_at;
-  });
-}
-
 export function CompactView({ onThemeChange, updateState, updateVersion, onInstallUpdate }: Props) {
   const [query,        setQuery]        = useState("");
   const [tab,          setTab]          = useState<TabKey>("all");
@@ -83,6 +70,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const [summonHint,        setSummonHint]        = useState("Ctrl Ctrl");
   const [pasteRowHint,      setPasteRowHint]      = useState("Ctrl 1-9 paste");
   const [needsAccessibility, setNeedsAccessibility] = useState(false);
+  /** Bumped on show so row times ("5m ago") are recomputed, not left from the last summon. */
+  const [, setShownAt] = useState(0);
 
   useEffect(() => {
     void bridge.getPlatformUi().then((p) => {
@@ -100,8 +89,6 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // listener (registered once, below) calls through this ref so it always
   // sees current `items` / `snippets` / tab without re-subscribing.
   const quickPasteRef = useRef<(n: number) => boolean>(() => false);
-  /** Cancels a pending hide-reset if the user re-summons before rAF fires. */
-  const hideResetGen   = useRef(0);
   const [thumbEpoch, setThumbEpoch] = useState(0);
 
   useEffect(() => {
@@ -127,7 +114,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   useEffect(() => {
     return bridge.onVisibilityChanged((visible) => {
       if (visible) {
-        hideResetGen.current += 1;
+        setShownAt(Date.now());
         // Re-check each summon: main starts the hook within 2 s of the grant.
         void bridge.needsAccessibility().then(setNeedsAccessibility).catch(() => {});
         bridge.storageGet()
@@ -140,19 +127,14 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
           .catch(() => {});
         return;
       }
-      const gen = hideResetGen.current;
-      // Defer reset two frames so we never clear list chrome while the OS
-      // window is still visible (belt-and-suspenders with main's deferred IPC).
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (gen !== hideResetGen.current) return;
-          setQuery("");
-          setSettingsOpen(false);
-          setSavedListEpoch((n) => n + 1);
-          clearThumbCache();
-          setThumbEpoch((n) => n + 1);
-        });
-      });
+      // Reset right away: main sends this only once the OS window is hidden
+      // (notifyRendererHidden), and a hidden window never runs rAF callbacks,
+      // so a frame-deferred reset waited until the next summon and was dropped.
+      setQuery("");
+      setSettingsOpen(false);
+      setSavedListEpoch((n) => n + 1);
+      clearThumbCache();
+      setThumbEpoch((n) => n + 1);
     });
   }, [refetch, refetchSaved]);
 
@@ -165,8 +147,10 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
-      if (e.key < "1" || e.key > "9") return;          // single-digit 1..9 only
-      if (quickPasteRef.current(Number(e.key))) e.preventDefault();
+      // Physical key, not e.key: on AZERTY the 1 key types "&" unshifted.
+      const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)?.[1];
+      if (!digit) return;
+      if (quickPasteRef.current(Number(digit))) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -345,7 +329,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
               if (!isSavedTab && (searchPending || appSearch.isSearching)) return;
               if (isSavedTab) {
                 const s = snippets[0];
-                if (s) activateSaved(s);
+                if (s) { if (e.shiftKey) copyOnlySaved(s); else activateSaved(s); }
                 return;
               }
               const item = items[0];
@@ -438,7 +422,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
                 focusedIndex={focusedAppIndex}
                 onFocusedIndexChange={setFocusedAppIndex}
                 onActivate={activateApp}
-                onArrowUpFromFirst={items.length > 0 ? focusClipboardEnd : undefined}
+                onArrowUpFromFirst={items.length > 0 ? focusClipboardEnd : focusSearch}
                 listRef={appListRef}
               />
             )}
@@ -494,7 +478,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsPanel
-            onClose={() => setSettingsOpen(false)}
+            onClose={() => { setSettingsOpen(false); focusSearch(); }}
             onThemeChange={onThemeChange}
           />
         </Suspense>

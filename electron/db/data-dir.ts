@@ -139,13 +139,19 @@ function isWritable(dir: string): boolean {
  * existing files of the same name is allowed (overwrite). Throws on hard
  * errors so the caller can surface them.
  */
-function copyDataFiles(src: string, dst: string): void {
+function copyDataFiles(src: string, dst: string, created: string[]): void {
   if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true });
+
+  const copyNew = (from: string, to: string) => {
+    if (fs.existsSync(to)) return; // never overwrite (or later roll back) a file we didn't put there
+    fs.copyFileSync(from, to);
+    created.push(to);
+  };
 
   for (const file of ["mnml.sqlite", "mnml.sqlite-wal", "mnml.sqlite-shm"]) {
     const from = resolvePathWithinBase(src, file);
     if (!fs.existsSync(from)) continue;
-    fs.copyFileSync(from, resolvePathWithinBase(dst, file));
+    copyNew(from, resolvePathWithinBase(dst, file));
   }
 
   const srcImages = resolvePathWithinBase(src, "images");
@@ -157,7 +163,7 @@ function copyDataFiles(src: string, dst: string): void {
         assertSafeBasename(f);
         const fromImg = resolvePathWithinBase(srcImages, f);
         if (!fs.statSync(fromImg).isFile()) continue;
-        fs.copyFileSync(fromImg, resolvePathWithinBase(dstImages, f));
+        copyNew(fromImg, resolvePathWithinBase(dstImages, f));
       } catch {
         /* skip unsafe or unreadable entries */
       }
@@ -177,31 +183,21 @@ function writeLocationFile(absDir: string): void {
 }
 
 /**
- * Best-effort rollback of files we just copied into `dst`. Used when the
- * migration succeeds at the copy step but FAILS at the pointer-write step
- * — we don't want to leave an orphaned `mnml.sqlite` + `images/` at a
- * location the app will never use.
+ * Best-effort rollback of the files we just copied into `dst` — only those:
+ * the folder may hold the user's own files (an `images/` in their Dropbox).
+ * Used when the copy or the pointer write fails, so no orphaned
+ * `mnml.sqlite` + `images/` stay at a location the app will never use.
  *
  * Silent on individual failures: we're already in an error path, and a
  * single un-deletable file shouldn't mask the original error. Worst case
  * is a leftover artefact the user can clean up manually.
  */
-function rollbackCopy(dst: string): void {
-  for (const file of ["mnml.sqlite", "mnml.sqlite-wal", "mnml.sqlite-shm"]) {
-    const p = resolvePathWithinBase(dst, file);
-    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
+function rollbackCopy(dst: string, created: string[]): void {
+  for (const p of created) {
+    try { fs.unlinkSync(p); } catch { /* ignore */ }
   }
-  const imgDir = resolvePathWithinBase(dst, "images");
-  if (fs.existsSync(imgDir)) {
-    try {
-      for (const f of fs.readdirSync(imgDir)) {
-        try {
-          fs.unlinkSync(resolvePathWithinBase(imgDir, f));
-        } catch { /* ignore */ }
-      }
-      try { fs.rmdirSync(imgDir); } catch { /* ignore */ }
-    } catch { /* ignore */ }
-  }
+  // Removes images/ only if that left it empty.
+  try { fs.rmdirSync(resolvePathWithinBase(dst, "images")); } catch { /* ignore */ }
 }
 
 /** Delete storage-location.json so the next launch uses the default. */
@@ -270,10 +266,12 @@ export function setDataDir(targetPath: string): MigrationResult {
   const adoptExisting = fs.existsSync(targetDb);
 
   // 4. Copy (only if target is fresh).
+  const created: string[] = [];
   if (!adoptExisting) {
     try {
-      copyDataFiles(current, target);
+      copyDataFiles(current, target, created);
     } catch (err) {
+      rollbackCopy(target, created);
       return {
         ok: false,
         message: `Copy failed: ${String((err as Error).message)}. Your data is still safe at the previous location.`,
@@ -289,9 +287,7 @@ export function setDataDir(targetPath: string): MigrationResult {
     // copy so the target folder isn't left with orphan files that won't
     // get used. Best-effort — failure to delete cleanly doesn't change the
     // outcome (the canonical data still lives at the previous location).
-    if (!adoptExisting) {
-      rollbackCopy(target);
-    }
+    rollbackCopy(target, created);
     return {
       ok: false,
       message: `Couldn't save location: ${String((err as Error).message)}.`,

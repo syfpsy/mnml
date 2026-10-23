@@ -52,7 +52,10 @@ export function getDb(): Database.Database {
   if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
 
   const dbPath = resolvePathWithinBase(dataDir, "mnml.sqlite");
-  db = new Database(dbPath);
+  // After the first open the file must exist: a cloud sync mid-replace (or an
+  // iCloud-evicted file) would otherwise get a fresh empty DB that syncs back
+  // over every device's history. Throwing lets the caller retry next time.
+  db = new Database(dbPath, { fileMustExist: migrated });
 
   // Journal mode depends on whether the data lives in a synced folder:
   //   · Default %APPDATA% location → WAL. Faster; never synced, so the

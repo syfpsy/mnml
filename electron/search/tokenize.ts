@@ -13,7 +13,7 @@ export function normalize(s: string | null | undefined): string {
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")   // strip combining diacritics
-    .replace(/[^a-z0-9\s]/g, " ")      // collapse punctuation
+    .replace(/[^\p{L}\p{N}\s]/gu, " ") // collapse punctuation; keep every script (ı, кириллица, 日本)
     .replace(/\s+/g, " ")
     .trim();
 }

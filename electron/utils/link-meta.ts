@@ -78,6 +78,17 @@ function isPrivateHostname(hostname: string): boolean {
 }
 
 /**
+ * A GET can spend a one-time link (sign-in, password reset, email verify,
+ * invite) before the user opens it. Those carry a credential-like query
+ * parameter or a long random path segment; skip the title for them.
+ */
+const SECRET_PARAM_RE = /token|code|key|auth|sig|otp|magic|login|reset|verif|confirm|invite|session|ticket|secret|nonce|pass/i;
+function looksSingleUse(u: URL): boolean {
+  for (const name of u.searchParams.keys()) if (SECRET_PARAM_RE.test(name)) return true;
+  return u.pathname.split("/").some((seg) => seg.length >= 24 && /\d/.test(seg) && /[a-z]/i.test(seg));
+}
+
+/**
  * Fetch just the <title> tag from a URL.  Non-blocking — all errors resolve to null.
  * Used for enriching link items after they are inserted.
  */
@@ -106,7 +117,7 @@ function fetchTitleInner(
       // SSRF guard — see comment on `isPrivateHostname`. Applied here AND
       // in the redirect-follow branch below so a public URL can't 302 us
       // into the intranet.
-      if (isPrivateHostname(parsed.hostname)) {
+      if (isPrivateHostname(parsed.hostname) || looksSingleUse(parsed)) {
         resolve(null);
         return;
       }

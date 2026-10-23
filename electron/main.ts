@@ -11,7 +11,7 @@ import { installDoubleTap, suppressDoubleTapFor } from "./hotkey/double-tap.js";
 import { onNewItem, onItemUpdated, start as startMonitor, stop as stopMonitor, setClipboardPollCadence } from "./clipboard/monitor.js";
 import { closeDb } from "./db/index.js";
 import { IPC } from "./ipc-channels.js";
-import { registerIpc } from "./ipc.js";
+import { registerIpc, rendererItem } from "./ipc.js";
 import { rebuildAppIndex } from "./search/app-search.js";
 import { log, logPathForDisplay } from "./utils/log.js";
 import { FALLBACK_SHORTCUT, IS_MAC, IS_WIN, PLATFORM_UI } from "./platform/config.js";
@@ -575,9 +575,19 @@ function recoverFromFailedHide() {
 function attemptHide(): boolean {
   if (!isWindowUsable()) return true;
   try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
-  if (!win!.isVisible()) return true;
+  if (!win!.isVisible()) return yieldActivation();
   try { win!.hide(); } catch (err) { log("[hide] win.hide() retry failed:", String(err)); }
-  return !win!.isVisible();
+  return !win!.isVisible() && yieldActivation();
+}
+
+/**
+ * macOS: hiding the window leaves mnml the active app, so keystrokes after Esc
+ * went nowhere and the next summon captured mnml itself as the paste target.
+ * `app.hide()` makes AppKit re-activate the app the user came from.
+ */
+function yieldActivation(): true {
+  if (IS_MAC) app.hide();
+  return true;
 }
 
 function ensureWindowSize() {
@@ -1145,6 +1155,7 @@ function showWindow() {
     enableWindowInput();
 
     try {
+      if (IS_MAC) app.show(); // undo yieldActivation's app.hide()
       win!.show();
     } catch (err) {
       log("[show] win.show() threw:", String(err));
@@ -1355,9 +1366,17 @@ function relocateToApplications(): boolean {
     return false;
   }
   try {
-    // true = replace an older mnml.app already there (Electron quits it if running).
     const moved = app.moveToApplicationsFolder({
-      conflictHandler: () => true,
+      conflictHandler: (type) => {
+        if (type === "exists") return true; // replace the older copy that isn't running
+        // existsAndRunning: Electron's default focuses the running copy and quits this one — nothing would move.
+        dialog.showMessageBoxSync({
+          type: "info",
+          message: "mnml is already running from Applications.",
+          detail: "Quit it from its menu bar icon, then open this copy again to replace it.",
+        });
+        return false;
+      },
     });
     if (!moved) {
       log("[install] move did not happen; continuing from the current folder");
@@ -1523,8 +1542,8 @@ app.whenReady().then(() => {
 
   if (getSetting("monitoring")) startMonitor();
 
-  onNewItem((item)    => safeSendToRenderer(IPC.onItemAdded,   item));
-  onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, item));
+  onNewItem((item)    => safeSendToRenderer(IPC.onItemAdded,   rendererItem(item)));
+  onItemUpdated((item) => safeSendToRenderer(IPC.onItemUpdated, rendererItem(item)));
 
   uIOhook.on("mousedown", onGlobalMousedownHandler);
 

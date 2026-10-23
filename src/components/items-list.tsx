@@ -412,7 +412,9 @@ function ImageThumb({ item, tint, thumbEpoch }: { item: Item; tint: TintVars; th
         obs.disconnect();
         unsub = requestThumbUrl(item.id, setUrl);
       },
-      { root: el.closest('[role="listbox"]'), threshold: 0.01 },
+      // Implicit root: the listbox doesn't scroll (its parent does), so rooting
+      // there marked every row visible and fetched all thumbnails at once.
+      { threshold: 0.01 },
     );
     obs.observe(el);
     return () => {

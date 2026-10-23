@@ -1,7 +1,9 @@
 import { isUrl, parseUrl } from "../utils/urls.js";
 
+// `text` is what the user copied (trimmed) and what paste gives back; a link's
+// `url` is the normalized form (punycode, trailing slash) used only to fetch its title.
 export type Classified =
-  | { type: "link"; url: string; hostname: string; preview: string }
+  | { type: "link"; text: string; url: string; hostname: string; preview: string }
   | { type: "text"; text: string; preview: string };
 
 const PREVIEW_MAX = 280;
@@ -10,19 +12,13 @@ export function classifyText(raw: string): Classified | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  if (isUrl(trimmed)) {
-    const p = parseUrl(trimmed);
-    if (p) {
-      return {
-        type: "link",
-        url: p.url,
-        hostname: p.hostname,
-        preview: p.url.length > PREVIEW_MAX ? p.url.slice(0, PREVIEW_MAX) + "…" : p.url,
-      };
-    }
-  }
-
   const preview =
     trimmed.length > PREVIEW_MAX ? trimmed.slice(0, PREVIEW_MAX) + "…" : trimmed;
+
+  if (isUrl(trimmed)) {
+    const p = parseUrl(trimmed);
+    if (p) return { type: "link", text: trimmed, url: p.url, hostname: p.hostname, preview };
+  }
+
   return { type: "text", text: trimmed, preview };
 }

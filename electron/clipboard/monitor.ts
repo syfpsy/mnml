@@ -83,12 +83,10 @@ let timer: NodeJS.Timeout | null = null;
  * PNG on the main thread (~26 ms for a Retina screenshot), so it must not run
  * every tick. Listing types is ~0.5 ms, so we re-read the image only when the
  * type list changed or IMAGE_RECHECK_MS passed (a new screenshot over an old
- * one keeps the same types). The PNG's byte size is the cheap fingerprint
- * before the sha1 — Chromium's encode is deterministic, so same image → same size.
+ * one keeps the same types).
  */
 let lastTypesKey = "";
 let lastImageCheckedAt = 0;
-let lastImageBytes = 0;
 const IMAGE_RECHECK_MS = 2_000;
 /** Bumped on stop() so an in-flight read cannot insert after monitor off. */
 let monitorEpoch = 0;
@@ -143,7 +141,6 @@ export function stop() {
   // Reset the fingerprint so a re-start triggers a fresh confirmation.
   lastTypesKey       = "";
   lastImageCheckedAt = 0;
-  lastImageBytes     = 0;
 }
 
 function emit(item: Item) {
@@ -160,19 +157,22 @@ async function captureTextIfChanged(epoch: number, baselineOnly: boolean): Promi
 
   const c = classifyText(text);
   if (!c) return;
+  // Dedupe on what is stored (trimmed), not the raw read: "foo" and "foo\n" are one item.
+  const storedHash = sha1(c.text);
 
   if (c.type === "link") {
     const item = insertOrTouch({
       type: "link",
-      content_text: c.url,
+      content_text: c.text,
       content_url: c.url,
       hostname: c.hostname,
       preview: c.preview,
-      byte_size: c.url.length,
-      hash: h,
+      byte_size: c.text.length,
+      hash: storedHash,
     });
     trim();
     emit(item);
+    if (item.title) return; // re-copy of a known link: no second request
     fetchTitle(c.url)
       .then((title) => {
         if (!title) return;
@@ -188,7 +188,7 @@ async function captureTextIfChanged(epoch: number, baselineOnly: boolean): Promi
       content_text: c.text,
       preview: c.preview,
       byte_size: c.text.length,
-      hash: h,
+      hash: storedHash,
     });
     trim();
     emit(item);
@@ -197,10 +197,9 @@ async function captureTextIfChanged(epoch: number, baselineOnly: boolean): Promi
 
 async function captureImageIfChanged(item: ClipboardItem, epoch: number, baselineOnly: boolean): Promise<void> {
   const blob = await item.getType("image/png");
-  if (epoch !== monitorEpoch || blob.size === 0 || blob.size === lastImageBytes) return;
+  if (epoch !== monitorEpoch || blob.size === 0) return;
   const png = Buffer.from(await blob.arrayBuffer());
   if (epoch !== monitorEpoch) return;
-  lastImageBytes = blob.size;
   const h = sha1(png);
   if (h === lastImageHash) return;
   lastImageHash = h;
@@ -222,11 +221,9 @@ async function readClipboard(epoch: number, baselineOnly = false): Promise<void>
       log("[clipboard] skipping content marked sensitive by the source app");
       wasConcealed = true;
     }
-    if (baselineOnly) {
-      lastTextHash   = "";
-      lastImageHash  = "";
-      lastImageBytes = 0;
-    }
+    // Forget the last copy, so copying it again after the secret is captured.
+    lastTextHash  = "";
+    lastImageHash = "";
     return;
   }
   wasConcealed = false;
@@ -234,6 +231,9 @@ async function readClipboard(epoch: number, baselineOnly = false): Promise<void>
   const typesKey = item.types.join("|");
   const typesChanged = typesKey !== lastTypesKey;
   lastTypesKey = typesKey;
+  // A format that left the clipboard forgets its hash: text A → image → text A again is a new copy.
+  if (!item.types.includes("text/plain")) lastTextHash = "";
+  if (!item.types.some((t) => t.startsWith("image/"))) lastImageHash = "";
 
   // Dual-format clipboards (image + text) capture both, text first.
   if (item.types.includes("text/plain")) await captureTextIfChanged(epoch, baselineOnly);
@@ -306,9 +306,8 @@ function trim() {
 async function writeTextBaseline(text: string) {
   clipboard.clear(); // O16: a text write alone can leave a previous image on the clipboard.
   await clipboard.writeText(text);
-  lastTextHash   = sha1(text);
-  lastImageHash  = "";
-  lastImageBytes = 0;
+  lastTextHash  = sha1(text);
+  lastImageHash = "";
 }
 
 // Re-copy an item back to the system clipboard. Resolves false if nothing was written.
@@ -339,10 +338,7 @@ export function restoreItem(item: Item): Promise<boolean> {
       lastTypesKey = current?.types.join("|") ?? "";
       lastImageCheckedAt = Date.now();
       const held = current ? await current.getType("image/png") : null;
-      if (held && held.size > 0) {
-        lastImageBytes = held.size;
-        lastImageHash = sha1(Buffer.from(await held.arrayBuffer()));
-      }
+      if (held && held.size > 0) lastImageHash = sha1(Buffer.from(await held.arrayBuffer()));
       lastTextHash = "";
       return true;
     }

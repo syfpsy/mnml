@@ -9,6 +9,19 @@ interface Options {
   enabled?: boolean;
 }
 
+/** Mirror `ORDER BY` in electron/db/items.ts so pin toggles and new copies sort without refetch. */
+export function sortItemsLikeDb(items: Item[]): Item[] {
+  return [...items].sort((a, b) => {
+    const aPin = a.pinned_at != null;
+    const bPin = b.pinned_at != null;
+    if (aPin !== bPin) return aPin ? -1 : 1;
+    if (aPin && bPin && a.pinned_at !== b.pinned_at) {
+      return (b.pinned_at ?? 0) - (a.pinned_at ?? 0);
+    }
+    return b.updated_at - a.updated_at;
+  });
+}
+
 // Fetches items (either recent or search results), subscribes to new-item events,
 // and debounces search queries so typing stays smooth.
 export function useItems({ query, type, limit, enabled = true }: Options) {
@@ -41,7 +54,7 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
         setItems(results);
       } catch {
         if (current !== seq.current) return;
-        if (!trimmed) setItems([]);
+        setItems([]); // never leave the previous query's rows under a failed search
       } finally {
         if (current === seq.current) setSearchPending(false);
       }
@@ -57,10 +70,8 @@ export function useItems({ query, type, limit, enabled = true }: Options) {
       // only auto-prepend on the "recent" view with no type filter or matching type
       if (query.trim()) return;
       if (type && item.type !== type) return;
-      setItems((prev) => {
-        const without = prev.filter((p) => p.id !== item.id);
-        return [item, ...without].slice(0, limit);
-      });
+      // Sorted, not prepended: a new copy goes below pinned rows.
+      setItems((prev) => sortItemsLikeDb([item, ...prev.filter((p) => p.id !== item.id)]).slice(0, limit));
     });
     return off;
   }, [query, type, limit, enabled]);

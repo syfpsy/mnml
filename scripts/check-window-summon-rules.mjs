@@ -142,8 +142,9 @@ if (!main.includes("isDismissBlocked()") || !/win\.on\("blur"[\s\S]*isDismissBlo
   failures.push("Window blur handler must consult isDismissBlocked() before scheduling hide.");
 }
 
-if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("hideResetGen")) {
-  failures.push("Renderer hide-reset must be cancellable when user re-summons before rAF (hideResetGen).");
+// A hidden window never runs rAF, so a frame-deferred reset was dropped on the next summon.
+if (/requestAnimationFrame/.test(readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8"))) {
+  failures.push("Renderer hide-reset must run immediately on the hidden event, not in rAF (main sends it after the OS hide).");
 }
 
 if (!main.includes("cancelScheduledBlurHide()") || !/showWindow\(\)[\s\S]*cancelScheduledBlurHide\(\)/.test(main)) {
@@ -202,9 +203,6 @@ if (!ipc.includes("if (paste) windowControl.suppressBlurHide()") && !ipc.include
   failures.push("restore/savedRestore must prepare paste activation at IPC entry when paste is requested.");
 }
 
-if (!readFileSync(join(root, "src", "components", "compact-view.tsx"), "utf8").includes("hideResetGen")) {
-  failures.push("Renderer hide-reset must be cancellable when user re-summons before rAF (hideResetGen).");
-}
 
 if (!ipc.includes("isSettingKey") || !ipc.includes("updateSetting rejected unknown key")) {
   failures.push("IPC updateSetting must reject unknown setting keys (isSettingKey allowlist).");

@@ -6,11 +6,12 @@ import { imagesDir } from "./db/index.js";
 
 const THUMB_SIZE      = 96;
 const THUMB_CACHE_CAP = 64;
-const thumbCache      = new Map<number, string>();
+/** Keyed by id, checked by hash: a folder-synced DB swap can give an id another image. */
+const thumbCache      = new Map<number, { hash: string; url: string }>();
 
-function rememberThumb(id: number, dataUrl: string) {
+function rememberThumb(id: number, hash: string, url: string) {
   if (thumbCache.has(id)) thumbCache.delete(id);
-  thumbCache.set(id, dataUrl);
+  thumbCache.set(id, { hash, url });
   if (thumbCache.size > THUMB_CACHE_CAP) {
     const oldest = thumbCache.keys().next().value;
     if (oldest !== undefined) thumbCache.delete(oldest);
@@ -35,14 +36,14 @@ export function getThumbDataUrls(ids: number[]): Record<number, string | null> {
 }
 
 export function getThumbDataUrl(id: number): string | null {
-  if (thumbCache.has(id)) {
-    const cached = thumbCache.get(id)!;
-    thumbCache.delete(id);
-    thumbCache.set(id, cached);
-    return cached;
-  }
   const item = getById(id);
   if (!item || item.type !== "image" || !item.image_path) return null;
+  const cached = thumbCache.get(id);
+  if (cached?.hash === item.hash) {
+    thumbCache.delete(id);
+    thumbCache.set(id, cached);
+    return cached.url;
+  }
   let imagePath: string;
   try {
     imagePath = managedImagePath(item.image_path, imagesDir());
@@ -61,7 +62,7 @@ export function getThumbDataUrl(id: number): string | null {
             : { height: THUMB_SIZE, quality: "good" })
         : img;
     const url = `data:image/png;base64,${scaled.toPNG().toString("base64")}`;
-    rememberThumb(id, url);
+    rememberThumb(id, item.hash, url);
     return url;
   } catch {
     return null;

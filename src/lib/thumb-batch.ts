@@ -1,6 +1,8 @@
 import { bridge } from "./bridge";
 
 const THUMB_CACHE_CAP = 64;
+/** ipc.ts getImages answers at most 32 ids per call; the rest wait for the next flush. */
+const BATCH_MAX = 32;
 const urlCache = new Map<number, string | null>();
 const pending = new Set<number>();
 const waiters = new Map<number, Set<(url: string | null) => void>>();
@@ -33,9 +35,10 @@ function scheduleFlush() {
   flushTimer = setTimeout(() => {
     flushTimer = null;
     if (gen !== cacheGen) return;
-    const ids = [...pending];
-    pending.clear();
+    const ids = [...pending].slice(0, BATCH_MAX);
+    for (const id of ids) pending.delete(id);
     if (ids.length === 0) return;
+    if (pending.size > 0) scheduleFlush();
     void bridge.getImageDataUrls(ids).then((batch) => {
       if (gen !== cacheGen) return;
       for (const id of ids) {

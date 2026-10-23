@@ -129,7 +129,15 @@ function pushShortcutEntry(
   seen.add(nameKey);
 }
 
-function walkAppBundles(dir: string, out: IndexEntry[], seen: Set<string>): void {
+/**
+ * Apps live at most a few folders deep (Utilities/, "Adobe X 2026/", Creative Cloud's
+ * ACC/). Unbounded, the walk went through 6 890 plug-in and editor folders (Unity,
+ * After Effects) on the main thread at startup (~0.5 s warm, seconds cold).
+ * shortcut: Unity/Hub/Editor/<version>/Unity.app (depth 4) is skipped; Unity Hub is found.
+ */
+const MAX_APP_DIR_DEPTH = 3;
+
+function walkAppBundles(dir: string, out: IndexEntry[], seen: Set<string>, depth = 0): void {
   if (!dir || !fs.existsSync(dir)) return;
   let dirents: fs.Dirent[];
   try { dirents = fs.readdirSync(dir, { withFileTypes: true }); }
@@ -157,8 +165,8 @@ function walkAppBundles(dir: string, out: IndexEntry[], seen: Set<string>): void
           nameKey,
           aliases: [nameKey, nameKey.replace(/[\s\-_/&]+/g, "")],
         });
-      } else {
-        walkAppBundles(full, out, seen);
+      } else if (depth < MAX_APP_DIR_DEPTH) {
+        walkAppBundles(full, out, seen, depth + 1);
       }
     }
   }

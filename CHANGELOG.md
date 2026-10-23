@@ -1,5 +1,23 @@
 # mnml Changelog
 
+## Unreleased
+
+### Fixed
+- **macOS: closing the panel returns focus** to the app you were in (Esc, ⌘⌘, after a paste). Before, keystrokes went nowhere until you clicked.
+- **Copying the same text again** after an image or a password is captured again.
+- **Links paste exactly as copied**, not as a rewritten URL.
+- **Search works in every language**: "kısa", Cyrillic and CJK queries no longer drop letters or list everything.
+- **The panel opens fresh**: the previous search and Settings no longer come back on the next summon.
+- **All image thumbnails load**, not only the first 32.
+- **New copies stay below pinned items**, Ctrl+1–9 works on AZERTY, row times are current, and closing Settings keeps keyboard focus.
+- **⌘-click or Ctrl+scroll twice** no longer opens the panel.
+- **Folder sync safety:** a synced database that is briefly missing is never replaced by an empty one, and a failed folder move only removes the files mnml copied.
+- **One-time links** (sign-in, password reset, verify) are no longer opened in the background to read their title.
+- **"Move to Applications"** while an older mnml runs there now says to quit it first instead of silently keeping the old version.
+
+### Changed
+- Faster: the app index walks at most 3 folders deep (it went through thousands of plug-in folders at startup), and list rows no longer carry the full copied text over IPC.
+
 ## v0.3.14 — 2026-10-23
 
 ### Changed

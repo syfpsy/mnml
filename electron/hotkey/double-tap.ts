@@ -2,8 +2,8 @@ import { uIOhook, UiohookKey } from "uiohook-napi";
 import { log } from "../utils/log.js";
 import { IS_MAC } from "../platform/config.js";
 
-// Detect two key-ups of the summon key within TAP_WINDOW_MS with no other key pressed
-// in between, so combos (Ctrl+C, ⌘V, ⌘Tab…) never trip it: any other key resets.
+// Detect two key-ups of the summon key within TAP_WINDOW_MS with no other key, click or
+// scroll in between, so combos (Ctrl+C, ⌘V, ⌘Tab, ⌘-click, Ctrl+wheel) never trip it.
 // Summon key: Ctrl on Windows, Command (left or right ⌘) on macOS. Alt was unreliable
 // (Alt taps open app menus on Windows, Option is a typing modifier on macOS), and a
 // double Control on a real Mac keyboard didn't register for the user.
@@ -44,6 +44,11 @@ export function installDoubleTap(listener: Listener): () => void {
     return false;
   };
 
+  const interrupt = () => {
+    if (tapKeyDown) pressedDuringTap = true;
+    lastTapUp = 0;
+  };
+
   const keydown = (e: UiohookEvent) => {
     if (isSuppressed()) return;
     if (TAP_CODES.has(e.keycode)) {
@@ -51,8 +56,7 @@ export function installDoubleTap(listener: Listener): () => void {
       if (!tapKeyDown) tapKeyDown = true;
       return;
     }
-    if (tapKeyDown) pressedDuringTap = true;
-    lastTapUp = 0;
+    interrupt();
   };
 
   const keyup = (e: UiohookEvent) => {
@@ -82,6 +86,8 @@ export function installDoubleTap(listener: Listener): () => void {
   try {
     uIOhook.on("keydown", keydown);
     uIOhook.on("keyup", keyup);
+    uIOhook.on("mousedown", interrupt);
+    uIOhook.on("wheel", interrupt);
     log(
       IS_MAC ? "[hotkey] double-⌘ detector registered (" : "[hotkey] double-Ctrl detector registered (",
       TAP_WINDOW_MS,
@@ -95,6 +101,8 @@ export function installDoubleTap(listener: Listener): () => void {
     try {
       uIOhook.off("keydown", keydown);
       uIOhook.off("keyup", keyup);
+      uIOhook.off("mousedown", interrupt);
+      uIOhook.off("wheel", interrupt);
     } catch {
       // noop
     }

@@ -117,7 +117,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // Window visibility drives two things:
   //  · On HIDE — clear the search query. Summoning mnml again starts fresh
-  //    rather than showing the previous search ("fresh window every Ctrl-Ctrl"
+  //    rather than showing the previous search ("fresh window every summon"
   //    mental model). The active tab is intentionally left alone. Always on.
   //  · On SHOW — only when using a synced folder: re-query the DB. The SQLite
   //    connection idle-closes between summons (see electron/db/index.ts), so
@@ -159,8 +159,9 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // Quick-paste hotkeys: Ctrl+1..9. Registered once on the window so it
   // works whether focus is in the search field or the list. Bare digits are
   // left for typing into search; Alt is avoided (Windows alt-codes). A lone
-  // Ctrl+digit never trips the double-Ctrl summon (any other key resets it). Routes through `quickPasteRef` so it always sees current
-  // state without re-subscribing on every render.
+  // Ctrl+digit never trips the double-tap summon (any other key resets it).
+  // Routes through `quickPasteRef` so it always sees current state without
+  // re-subscribing on every render.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;

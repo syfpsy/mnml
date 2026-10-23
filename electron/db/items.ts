@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { getDb, imagesDir } from "./index.js";
-import { assertResolvedWithinBase } from "../utils/safe-path.js";
+import { managedImagePath } from "../utils/safe-path.js";
 
 export type ItemType = "text" | "image" | "link";
 
@@ -101,7 +101,7 @@ export function getById(id: number): Item | undefined {
 
 function unlinkManagedImage(imagePath: string): void {
   try {
-    fs.unlinkSync(assertResolvedWithinBase(imagePath, imagesDir()));
+    fs.unlinkSync(managedImagePath(imagePath, imagesDir()));
   } catch {
     /* outside managed dir, missing, or already gone */
   }

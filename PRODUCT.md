@@ -12,13 +12,13 @@ register: product        # the app is a tool; design serves the work.
 ## One line
 
 A keyboard-first, local-first clipboard manager for Windows and macOS. Press
-**Ctrl** twice on Windows or **Control** twice on Mac; paste from history, launch
+**Ctrl** twice on Windows or **⌘ Command** twice on Mac; paste from history, launch
 apps and settings, save reusable snippets. One small window. No accounts, no
 telemetry.
 
 ## What it is
 
-Lives in the tray; summoned by a double-tap of Ctrl into a single 440×540 overlay.
+Lives in the tray; summoned by a double-tap of Ctrl (⌘ on Mac) into a single 440×540 overlay.
 From one search box:
 
 1. **Clipboard history** — text, links (favicons + fetched titles), image

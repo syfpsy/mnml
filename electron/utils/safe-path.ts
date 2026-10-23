@@ -59,3 +59,13 @@ export function resolveImagePath(imagesBaseDir: string, hash: string): string {
   }
   return resolvePathWithinBase(imagesBaseDir, `${hash}.png`);
 }
+
+/**
+ * Map a stored `image_path` onto this device's images dir by file name. Rows keep
+ * the absolute path of the machine that captured them, so a folder-synced DB from
+ * another device (other user, drive or OS) points elsewhere; `<sha1>.png` is portable.
+ */
+export function managedImagePath(storedPath: string, imagesBaseDir: string): string {
+  const name = storedPath.split(/[\\/]/).pop() ?? "";
+  return resolveImagePath(imagesBaseDir, name.replace(/\.png$/i, ""));
+}

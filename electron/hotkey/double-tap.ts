@@ -1,12 +1,15 @@
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import { log } from "../utils/log.js";
+import { IS_MAC } from "../platform/config.js";
 
-// Detect two Ctrl key-ups within TAP_WINDOW_MS with no other key pressed in between.
-// Avoids breaking normal Ctrl use: if ANY non-Ctrl key fires between the two Ctrls, reset.
-// Ctrl on both platforms (Control on macOS, not ⌘). Alt was unreliable: Alt taps open
-// app menus on Windows, and Option is a typing modifier on macOS.
+// Detect two key-ups of the summon key within TAP_WINDOW_MS with no other key pressed
+// in between, so combos (Ctrl+C, ⌘V, ⌘Tab…) never trip it: any other key resets.
+// Summon key: Ctrl on Windows, Command (left or right ⌘) on macOS. Alt was unreliable
+// (Alt taps open app menus on Windows, Option is a typing modifier on macOS), and a
+// double Control on a real Mac keyboard didn't register for the user.
 
-const TAP_WINDOW_MS = 380;
+// 450 ms between the two key-ups: 380 ms missed relaxed double-taps.
+const TAP_WINDOW_MS = 450;
 const SUPPRESS_AFTER_FIRE_MS = 1_000;
 
 type Listener = () => void;
@@ -15,7 +18,7 @@ interface UiohookEvent {
   keycode: number;
 }
 
-const TAP_CODES = new Set<number>([UiohookKey.Ctrl, UiohookKey.CtrlRight]);
+const TAP_CODES = new Set<number>(IS_MAC ? [UiohookKey.Meta, UiohookKey.MetaRight] : [UiohookKey.Ctrl, UiohookKey.CtrlRight]);
 let suppressUntil = 0;
 
 export function suppressDoubleTapFor(ms: number) {
@@ -44,7 +47,7 @@ export function installDoubleTap(listener: Listener): () => void {
   const keydown = (e: UiohookEvent) => {
     if (isSuppressed()) return;
     if (TAP_CODES.has(e.keycode)) {
-      // If Ctrl was already down, ignore the auto-repeat keydowns.
+      // If the summon key was already down, ignore the auto-repeat keydowns.
       if (!tapKeyDown) tapKeyDown = true;
       return;
     }
@@ -65,7 +68,7 @@ export function installDoubleTap(listener: Listener): () => void {
     if (lastTapUp && now - lastTapUp <= TAP_WINDOW_MS) {
       resetTapState();
       suppressDoubleTapFor(SUPPRESS_AFTER_FIRE_MS);
-      log("[hotkey] double-Ctrl fired");
+      log("[hotkey] double-tap fired");
       try {
         listener();
       } catch (err) {
@@ -80,12 +83,12 @@ export function installDoubleTap(listener: Listener): () => void {
     uIOhook.on("keydown", keydown);
     uIOhook.on("keyup", keyup);
     log(
-      "[hotkey] double-Ctrl detector registered (",
+      IS_MAC ? "[hotkey] double-⌘ detector registered (" : "[hotkey] double-Ctrl detector registered (",
       TAP_WINDOW_MS,
       "ms window)",
     );
   } catch (err) {
-    log("[hotkey] FAILED to register double-Ctrl:", String(err));
+    log("[hotkey] FAILED to register double-tap:", String(err));
   }
 
   return () => {

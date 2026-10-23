@@ -148,9 +148,9 @@ function safeSendToRenderer(channel: string, payload?: unknown) {
 /**
  * The logical `windowVisible` flag can drift from the OS HWND state when
  * Windows hides/minimizes us without going through hideWindow(), or when a
- * show() is rejected without throwing. If we trust the flag alone, Ctrl-Ctrl
+ * show() is rejected without throwing. If we trust the flag alone, a summon
  * can call hideWindow() while the HWND is already gone — then the next
- * Ctrl-Ctrl thinks we're hidden and show() no-ops, leaving a tray icon with
+ * double-tap thinks we're hidden and show() no-ops, leaving a tray icon with
  * no summonable overlay.
  */
 function reconcileVisibilityFlag() {
@@ -1324,7 +1324,7 @@ function setBlurLock(locked: boolean) { blurLocked = locked; }
  * uIOhook installs a system-wide low-level keyboard/mouse hook. Windows can
  * silently drop a low-level hook under sustained load, and the hook does not
  * survive a sleep/resume cycle — when that happens, click-outside dismiss and
- * double-Ctrl summon stop working with no error. We retry a failed start and
+ * double-tap summon stop working with no error. We retry a failed start and
  * re-arm the hook on resume / screen-unlock. We deliberately do NOT restart on
  * idle-timeout heuristics — there's no reliable "hook is dead" signal, and a
  * false restart would drop real events.
@@ -1400,7 +1400,7 @@ function requestAccessibility() {
 function startInputHook(attempt = 0) {
   if (accessibilityPollTimer !== null) { clearTimeout(accessibilityPollTimer); accessibilityPollTimer = null; }
   if (uiohookStarted || appQuitting) return;
-  // macOS: the hook (⌃⌃ summon, click-outside, ⌘V) needs Accessibility. Ask once,
+  // macOS: the hook (⌘⌘ summon, click-outside, ⌘V) needs Accessibility. Ask once,
   // then poll quietly so it starts within 2 s of the grant, no relaunch needed.
   if (IS_MAC && !systemPreferences.isTrustedAccessibilityClient(false)) {
     if (!accessibilityRequested) {
@@ -1547,7 +1547,7 @@ app.whenReady().then(() => {
       setTimeout(() => { toggleWindow(); }, 80);
     });
   } catch (err) {
-    log("[startup] double-Ctrl failed (non-fatal):", String(err));
+    log("[startup] double-tap failed (non-fatal):", String(err));
   }
 
   const registered = globalShortcut.register(FALLBACK_SHORTCUT, () => {

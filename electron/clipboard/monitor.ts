@@ -8,7 +8,7 @@ import { classifyText } from "./classifier.js";
 import { fetchTitle } from "../utils/link-meta.js";
 import { evictThumb } from "../thumb-cache.js";
 import { log } from "../utils/log.js";
-import { assertResolvedWithinBase, resolveImagePath } from "../utils/safe-path.js";
+import { managedImagePath, resolveImagePath } from "../utils/safe-path.js";
 
 type Listener = (item: Item) => void;
 
@@ -317,9 +317,9 @@ export function restoreItem(item: Item): Promise<boolean> {
     if (item.type === "image" && item.image_path) {
       let imagePath: string;
       try {
-        imagePath = assertResolvedWithinBase(item.image_path, imagesDir());
+        imagePath = managedImagePath(item.image_path, imagesDir());
       } catch {
-        log("[clipboard] restore: image path outside managed dir — skipping");
+        log("[clipboard] restore: not a managed image path — skipping");
         return false;
       }
       if (!fs.existsSync(imagePath)) {

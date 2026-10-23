@@ -14,7 +14,7 @@ If you change a subsystem, update its section here in the same commit.
 | UI | React 19 + TypeScript | Single overlay window; no UI component framework |
 | Styling | Tailwind v4 (`@tailwindcss/vite`) | Utilities + a CSS-variable token system in `styles.css` |
 | Persistence | `better-sqlite3` 13 (sync) | Embedded, synchronous, FTS5 built in; N-API prebuilds, no Electron rebuild |
-| Input | `uiohook-napi` 1.5 | System-wide key/mouse hook; double-Ctrl detect; synth paste |
+| Input | `uiohook-napi` 1.5 | System-wide key/mouse hook; double-tap detect; synth paste |
 | Updates | `electron-updater` 6 | Background auto-update from a published `latest.yml` |
 | Packaging | `electron-builder` 25 | NSIS one-click installer (`mnml-setup.exe`) |
 
@@ -24,7 +24,7 @@ had some; they were removed. Don't reintroduce them without a reason.
 ## Process model
 
 - **Main** (`electron/`, Node) owns all native concerns: SQLite, clipboard poller,
-  global double-Ctrl hook, Win32 foreground activation, tray, auto-updater,
+  global double-tap hook, Win32 foreground activation, tray, auto-updater,
   auto-launch, launcher index.
 - **Renderer** (`src/`, React) is a **single** frameless overlay (440×540). It
   never touches Node directly — only `window.mnml`, a typed bridge from
@@ -48,7 +48,7 @@ electron/
     service.ts       FTS5 BM25 + LIKE fallback       tokenize.ts  normalize/escapeFtsQuery
     app-search.ts    in-memory launcher index + launch
     windows-settings.ts  curated ms-settings: + .msc/.cpl list
-  hotkey/double-tap.ts   two Ctrl key-ups ≤380 ms, no key between → fire
+  hotkey/double-tap.ts   two Ctrl (⌘ on macOS) key-ups ≤450 ms, no key between → fire
   utils/             hash.ts (sha1), urls.ts, link-meta.ts (fetchTitle + SSRF guard), log.ts
 src/
   main.tsx, app.tsx  root mount; theme apply, focus backup, Esc-hide, update events
@@ -114,7 +114,7 @@ files). So `db/index.ts` doesn't hold the connection:
 
 Because the connection idle-closes between summons, the renderer refetches on
 summon **only when the folder is custom** (`syncing`), surfacing another device's
-changes on the next Ctrl-Ctrl with no restart.
+changes on the next summon with no restart.
 
 ## Storage folder (cross-device sync) — `db/data-dir.ts`
 
@@ -195,9 +195,11 @@ content stored verbatim. `touchSaved` floats used snippets up. Searched in-memor
 
 ## Global hotkey — `hotkey/double-tap.ts`
 
-`uiohook-napi` system-wide: fire on the **second Ctrl key-up within 380 ms** (left or
-right; Control on macOS, not ⌘) with no other key between (so Ctrl+C, Ctrl+1…9 and
-other combos still work); self-suppress 1 s after firing. `suppressDoubleTapFor(ms)`
+`uiohook-napi` system-wide: fire on the **second key-up of the summon key within
+450 ms** (Ctrl on Windows, ⌘ Command on macOS; left or right) with no other key
+between (so Ctrl+C, ⌘V, ⌘Tab, Ctrl+1…9 and other combos still work); self-suppress
+1 s after firing. Double Control did not register on a real Mac keyboard, so macOS
+moved to ⌘ in v0.3.14; 380 ms missed relaxed double-taps. `suppressDoubleTapFor(ms)`
 mutes the detector around mnml's own synthetic keys (Ctrl+V / ⌘V paste, the Win32
 helper's Alt tap). Alt was the summon key until v0.3.11: Alt taps open app menus on
 Windows. Fallback global shortcut `Ctrl+Shift+V` (`⌘⇧V` on macOS) for when the hook
@@ -300,5 +302,5 @@ Copy text → top; copy again → no dup, moves up; copy a URL → Link, title f
 copy from a password manager → nothing. Search filters; Esc clears then hides.
 Launcher: "bluetooth" / "task manager" appear and launch. Saved: save, switch tab,
 filter, activate. Quick-paste: Ctrl+3 pastes the third row. Pin survives the trim.
-Ctrl-Ctrl toggles; Ctrl shortcuts unaffected. Storage: point at a folder → restart + data; reset.
+Double-tap toggles; Ctrl / ⌘ shortcuts unaffected. Storage: point at a folder → restart + data; reset.
 Update banner appears for a newer published version.

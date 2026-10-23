@@ -2,7 +2,7 @@
 
 # mnml
 
-A keyboard-first clipboard manager for **Windows and macOS**. Press **Ctrl** twice (Windows) or **Control** twice (Mac); paste from history, launch apps and settings, save reusable snippets. One 440×540 window. Local SQLite. No accounts, no telemetry.
+A keyboard-first clipboard manager for **Windows and macOS**. Press **Ctrl** twice (Windows) or **⌘ Command** twice (Mac); paste from history, launch apps and settings, save reusable snippets. One 440×540 window. Local SQLite. No accounts, no telemetry.
 
 <br clear="left" />
 
@@ -25,7 +25,7 @@ A keyboard-first clipboard manager for **Windows and macOS**. Press **Ctrl** twi
 
 | Key | Action |
 |---|---|
-| **Ctrl Ctrl** (double-tap, Control on Mac) | Show / hide, anywhere |
+| **Ctrl Ctrl** (double-tap; **⌘⌘** on Mac) | Show / hide, anywhere |
 | **Ctrl + Shift + V** | Fallback toggle (if the global hook is blocked by policy) |
 | **Ctrl + 1…9** | Quick-paste the Nth item |
 | **↑ / ↓**, **Ctrl+Home/End** | Navigate the list |
@@ -55,7 +55,7 @@ Requires Windows 10/11 or macOS 13+, and Node 22+.
 
 ## Architecture
 
-Electron 45 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-Ctrl hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
+Electron 45 + React 19 + TypeScript + Tailwind v4 + better-sqlite3 + uiohook-napi. The main process owns the clipboard monitor, the global double-tap hook, native Win32 foreground activation, and the SQLite layer; the renderer is a single overlay window. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the internals and [`CHANGELOG.md`](./CHANGELOG.md) for release history.
 
 ## Documentation
 

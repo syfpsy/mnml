@@ -1,7 +1,7 @@
 import { nativeImage } from "electron";
 import fs from "node:fs";
 import { getById } from "./db/items.js";
-import { assertResolvedWithinBase } from "./utils/safe-path.js";
+import { managedImagePath } from "./utils/safe-path.js";
 import { imagesDir } from "./db/index.js";
 
 const THUMB_SIZE      = 96;
@@ -45,7 +45,7 @@ export function getThumbDataUrl(id: number): string | null {
   if (!item || item.type !== "image" || !item.image_path) return null;
   let imagePath: string;
   try {
-    imagePath = assertResolvedWithinBase(item.image_path, imagesDir());
+    imagePath = managedImagePath(item.image_path, imagesDir());
   } catch {
     return null;
   }

@@ -1,5 +1,15 @@
 # mnml Changelog
 
+## v0.3.14 — 2026-10-23
+
+### Changed
+- **macOS summon is double ⌘ Command** (left or right). Double Control did not register on a real Mac keyboard. Windows stays double Ctrl. Any other key between the taps still resets it, so ⌘C, ⌘V and ⌘Tab never open the panel.
+- **More forgiving double-tap:** the two key releases may be up to 450 ms apart (was 380 ms).
+
+### Fixed
+- **Folder sync: images from another device** showed no thumbnail, could not be pasted, and their files stayed on disk after deleting the row. Each row stored the capturing machine's absolute path; mnml now finds the image by its file name in this device's images folder.
+
+
 ## v0.3.13 — 2026-10-22
 
 ### Fixed

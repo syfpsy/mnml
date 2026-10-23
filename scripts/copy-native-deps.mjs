@@ -128,14 +128,17 @@ function copyDir(from, to, keep, rel = '') {
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
     const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
     if (keep && !keep(entryRel)) continue;
+    let s, d;
     try {
       assertSafeBasename(entry.name);
-      const s = resolvePathWithinBase(from, entry.name);
-      const d = resolvePathWithinBase(to, entry.name);
-      if (entry.isDirectory()) copyDir(s, d, keep, entryRel);
-      else                     fs.copyFileSync(s, d);
+      s = resolvePathWithinBase(from, entry.name);
+      d = resolvePathWithinBase(to, entry.name);
     } catch (err) {
       console.warn(`[copy-native-deps] skip unsafe entry: ${entry.name}`, err);
+      continue;
     }
+    // Copy errors (ENOSPC, EACCES) fail the build: a missing lib/*.js would only show at launch.
+    if (entry.isDirectory()) copyDir(s, d, keep, entryRel);
+    else                     fs.copyFileSync(s, d);
   }
 }

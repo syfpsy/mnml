@@ -13,6 +13,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { bridge } from "../lib/bridge";
 import type { SavedSnippet } from "../types";
+
+/** Same cap as electron/db/saved.ts, so the form can't hold text the save would cut. */
+const MAX_SNIPPET_CONTENT_LEN = 64 * 1024;
 import { BookmarkIcon, PlusIcon, TrashIcon, XIcon } from "./icons";
 import { QuickNum } from "./items-list";
 
@@ -45,6 +48,9 @@ export function SavedList({
 }: Props) {
   const [adding, setAdding] = useState(false);
   const lastKbdAt = useRef(0);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  // The form unmounts with focus inside; hand focus to "+" so the keyboard keeps working.
+  const closeForm = () => { setAdding(false); addBtnRef.current?.focus(); };
 
   const activeIndex = focusedIndex >= 0 && focusedIndex < snippets.length ? focusedIndex : -1;
   const activeId = activeIndex >= 0 ? savedRowId(snippets[activeIndex]) : undefined;
@@ -56,6 +62,9 @@ export function SavedList({
   if (empty && !!trimmedQuery && !adding) return null;
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLUListElement>) => {
+    // Keys on a row's own button (Delete) belong to that button: Enter there
+    // used to paste the highlighted snippet instead of deleting.
+    if ((event.target as Element).closest("button")) return;
     lastKbdAt.current = Date.now();
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -97,6 +106,7 @@ export function SavedList({
           Snippets
         </p>
         <button
+          ref={addBtnRef}
           type="button"
           aria-label={adding ? "Cancel adding snippet" : "Add new snippet"}
           onClick={() => setAdding((v) => !v)}
@@ -109,8 +119,8 @@ export function SavedList({
 
       {adding && (
         <AddSnippetForm
-          onCancel={() => setAdding(false)}
-          onSaved={() => setAdding(false)}
+          onCancel={closeForm}
+          onSaved={closeForm}
         />
       )}
 
@@ -283,6 +293,8 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // Only Esc inside the form cancels it; Esc in search or Settings keeps the draft.
+      if (!(e.target as Element | null)?.closest?.("[data-mnml-snippet-form]")) return;
       e.stopImmediatePropagation();
       onCancel();
     };
@@ -322,6 +334,7 @@ function AddSnippetForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: 
         style={{ color: "var(--t1)" }}
       />
       <textarea
+        maxLength={MAX_SNIPPET_CONTENT_LEN}
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Paste or type the snippet content…"

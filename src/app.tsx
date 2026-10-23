@@ -74,11 +74,13 @@ export default function App() {
       setUpdateVersion(v);
       setUpdateState("downloading");
     });
+    // A failed download goes back to idle instead of "Downloading…" for a day.
+    const offError = bridge.onUpdateError(() => setUpdateState((s) => (s === "downloading" ? "idle" : s)));
     const offReady = bridge.onUpdateDownloaded((v) => {
       setUpdateVersion(v);
       setUpdateState("ready");
     });
-    return () => { offAvail(); offReady(); };
+    return () => { offAvail(); offError(); offReady(); };
   }, []);
 
   return (

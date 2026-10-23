@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { SearchBar } from "./search-bar";
 import { ItemsList } from "./items-list";
 import { AppResultsList } from "./app-results-list";
@@ -89,6 +90,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   // listener (registered once, below) calls through this ref so it always
   // sees current `items` / `snippets` / tab without re-subscribing.
   const quickPasteRef = useRef<(n: number) => boolean>(() => false);
+  const pendingEnter  = useRef<{ shift: boolean; at: number } | null>(null);
   const [thumbEpoch, setThumbEpoch] = useState(0);
 
   useEffect(() => {
@@ -127,6 +129,7 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
           .catch(() => {});
         return;
       }
+      pendingEnter.current = null;
       // Reset right away: main sends this only once the OS window is hidden
       // (notifyRendererHidden), and a hidden window never runs rAF callbacks,
       // so a frame-deferred reset waited until the next summon and was dropped.
@@ -158,14 +161,17 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
 
   // Reset section focus whenever the underlying lists change.
   useEffect(() => { setFocusedAppIndex(-1);   }, [query, appResults.length, tab]);
-  useEffect(() => { setFocusedSavedIndex(-1); }, [query, snippets.length, tab]);
+  // `snippets`, not its length: a restore moves the snippet to the top, so a
+  // kept index would highlight (and Enter would paste) a different one.
+  useEffect(() => { setFocusedSavedIndex(-1); }, [query, snippets, tab]);
 
   // ── Focus helpers ───────────────────────────────────────────────────────
 
   const focusList = () => {
     if (isSavedTab) { focusSavedList(); return; }
     // ItemsList uses `role="listbox"` after the v0.2.31 ARIA-semantics fix.
-    const list = listRef.current?.querySelector<HTMLElement>('[role="listbox"]');
+    // An empty clipboard list has no key handling: focusing it was a dead end.
+    const list = items.length > 0 ? listRef.current?.querySelector<HTMLElement>('[role="listbox"]') : null;
     if (list) { list.focus(); return; }
     if (appResults.length > 0) focusAppList();
   };
@@ -214,12 +220,35 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
   const activate      = async (item: Item)        => { void bridge.suppressBlurHide(); await bridge.restore(item.id, true); };
   const activateApp   = async (result: AppResult) => {
     void bridge.suppressBlurHide();
-    const ok = await bridge.appLaunch(result.target);
-    if (ok) await bridge.hide();
+    await bridge.appLaunch(result.target); // main hides the panel after a launch
   };
   const activateSaved = async (s: SavedSnippet)   => { void bridge.suppressBlurHide(); await bridge.savedRestore(s.id, true); };
   const copyOnly      = async (item: Item)        => { await bridge.restore(item.id); };
   const copyOnlySaved = async (s: SavedSnippet)   => { await bridge.savedRestore(s.id, false); };
+
+  const runEnter = (shift: boolean) => {
+    if (isSavedTab) {
+      const s = snippets[0];
+      if (s) { if (shift) copyOnlySaved(s); else activateSaved(s); }
+      return;
+    }
+    const item = items[0];
+    if (item) {
+      if (shift) copyOnly(item); else activate(item);
+      return;
+    }
+    const r = appResults[0];
+    if (r) activateApp(r);
+  };
+
+  // "safari⏎" typed fast: Enter lands before the debounced search answers.
+  // Run it once results are in, instead of dropping it.
+  useEffect(() => {
+    const p = pendingEnter.current;
+    if (!p || searchPending || appSearch.isSearching) return;
+    pendingEnter.current = null;
+    if (Date.now() - p.at < 1_500) runEnter(p.shift);
+  }, [searchPending, appSearch.isSearching]);
 
   const focusSearch = () => {
     const el = inputRef.current;
@@ -273,12 +302,9 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
     }
   };
 
+  // Throws when nothing was saved, so SaveBtn shows no false "Saved".
   const handleSave = async (item: Item) => {
-    try {
-      await bridge.savedFromItem(item.id);
-    } catch {
-      /* SaveBtn handles confirmation — errors stay silent here */
-    }
+    if (!(await bridge.savedFromItem(item.id))) throw new Error("not saved");
   };
 
   const ariaLabel   = isSavedTab ? "Filter saved snippets" : "Search clipboard";
@@ -326,19 +352,11 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
             onHome={() => {}}
             onEnd={() => {}}
             onEnter={(e) => {
-              if (!isSavedTab && (searchPending || appSearch.isSearching)) return;
-              if (isSavedTab) {
-                const s = snippets[0];
-                if (s) { if (e.shiftKey) copyOnlySaved(s); else activateSaved(s); }
+              if (!isSavedTab && (searchPending || appSearch.isSearching)) {
+                pendingEnter.current = { shift: e.shiftKey, at: Date.now() };
                 return;
               }
-              const item = items[0];
-              if (item) {
-                if (e.shiftKey) copyOnly(item); else activate(item);
-                return;
-              }
-              const r = appResults[0];
-              if (r) activateApp(r);
+              runEnter(e.shiftKey);
             }}
             onDelete={() => {
               if (isSavedTab || searchPending) return;
@@ -478,7 +496,8 @@ export function CompactView({ onThemeChange, updateState, updateVersion, onInsta
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsPanel
-            onClose={() => { setSettingsOpen(false); focusSearch(); }}
+            // flushSync: the input is `inert` until Settings closes, and focus() on it is ignored.
+            onClose={() => { flushSync(() => setSettingsOpen(false)); focusSearch(); }}
             onThemeChange={onThemeChange}
           />
         </Suspense>

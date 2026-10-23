@@ -49,6 +49,7 @@ export const bridge = {
   onVisibilityChanged: (cb: (visible: boolean) => void) => window.mnml.onVisibilityChanged(cb),
   onUpdateAvailable:  (cb: (version: string) => void) => window.mnml.onUpdateAvailable(cb),
   onUpdateDownloaded: (cb: (version: string) => void) => window.mnml.onUpdateDownloaded(cb),
+  onUpdateError:      (cb: () => void) => window.mnml.onUpdateError(cb),
   onSavedChanged:     (cb: () => void) => window.mnml.onSavedChanged(cb),
   onItemsCleared:     (cb: () => void) => window.mnml.onItemsCleared(cb),
   onAppIconsResolved: (cb: (icons: Record<string, string | null>) => void) =>

@@ -17,15 +17,15 @@ export type ForegroundCallbacks = {
   onRestoreMiss: () => void;
 };
 
-const HELPER_IDLE_MS = 60_000;
-
 /**
  * Cross-platform foreground capture / restore for summon + auto-paste.
- * Windows uses a PowerShell Win32 helper spawned on demand (not at boot).
+ * Windows uses a resident PowerShell Win32 helper, started shortly after boot.
+ * It idles in ReadLine (no CPU). A cold start (PowerShell + Add-Type, ~1 s)
+ * can't answer the 250 ms capture, so the v0.3.10–v0.3.14 lazy start with a
+ * 60 s idle shutdown lost the paste target on most summons.
  */
 export class ForegroundService {
   private winHelper: WinForegroundHelper | null = null;
-  private helperIdleTimer: NodeJS.Timeout | null = null;
   private captureCallback: (() => void) | null = null;
   private captureTimer: NodeJS.Timeout | null = null;
   private captureGeneration = 0;
@@ -58,8 +58,9 @@ export class ForegroundService {
     return target;
   }
 
-  /** No-op — helper is lazy-started on first foreground request. */
-  ensureStarted(): void { /* lazy */ }
+  ensureStarted(): void {
+    if (IS_WIN) this.ensureWinHelper().ensureStarted();
+  }
 
   shutdown(): void {
     this.cancelCapture();
@@ -67,28 +68,15 @@ export class ForegroundService {
   }
 
   private shutdownWinHelper(): void {
-    if (this.helperIdleTimer !== null) {
-      clearTimeout(this.helperIdleTimer);
-      this.helperIdleTimer = null;
-    }
+    this.awaitingRestore = false;
     this.winHelper?.shutdown();
     this.winHelper = null;
-  }
-
-  private armHelperIdleShutdown(): void {
-    if (this.helperIdleTimer !== null) clearTimeout(this.helperIdleTimer);
-    this.helperIdleTimer = setTimeout(() => {
-      this.helperIdleTimer = null;
-      this.winHelper?.shutdown();
-      this.winHelper = null;
-    }, HELPER_IDLE_MS);
   }
 
   private ensureWinHelper(): WinForegroundHelper {
     if (!this.winHelper) {
       this.winHelper = new WinForegroundHelper((line) => this.handleLine(line));
     }
-    this.armHelperIdleShutdown();
     return this.winHelper;
   }
 
@@ -103,6 +91,8 @@ export class ForegroundService {
 
   requestCapturePrev(onDone: () => void): void {
     this.cancelCapture();
+    // A new summon makes any unanswered restore moot; left true, it would swallow every focus reply.
+    this.awaitingRestore = false;
     const gen = this.captureGeneration;
     this.captureCallback = () => {
       if (gen !== this.captureGeneration) return;
@@ -209,6 +199,11 @@ export class ForegroundService {
     }
 
     log("[focus] foreground helper:", line);
+    // An "error: …" reply to a restore is a miss: paste now instead of waiting for the 750 ms timer.
+    if (line.startsWith("error") && this.awaitingRestore) {
+      this.awaitingRestore = false;
+      this.callbacks.onRestoreMiss();
+    }
   }
 
   /** Set by main after construction to store the captured target. */

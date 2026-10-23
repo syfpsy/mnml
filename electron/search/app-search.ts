@@ -7,7 +7,7 @@
  *
  * Both are loaded once at startup into a plain `AppEntry[]` array. Search
  * is a synchronous fuzzy match against names / aliases. Icons are extracted
- * lazily via Electron's `app.getFileIcon` and cached in-process.
+ * lazily (`app.getFileIcon` on Windows, QuickLook on macOS) and cached in-process.
  *
  * Replaces the v0.2.16–v0.2.22 bulk PC-file indexer, which was too heavy
  * for the value it provided. The full filesystem search has been removed.
@@ -15,8 +15,8 @@
 
 import fs   from "node:fs";
 import path from "node:path";
-import { exec } from "node:child_process";
-import { app, shell } from "electron";
+import { exec, execFile } from "node:child_process";
+import { app, nativeImage, shell } from "electron";
 import { log } from "../utils/log.js";
 import { WINDOWS_SHORTCUTS } from "./windows-settings.js";
 import { MACOS_SHORTCUTS } from "./macos-settings.js";
@@ -55,13 +55,15 @@ interface IndexEntry {
   aliases:   string[];
 }
 
-const SHORTCUT_DIRS_WIN = [
+// A function: app.getPath must not run at import, before app ready.
+const shortcutDirsWin = () => [
   path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs"),
   path.join(
     process.env.ProgramData ?? process.env.PROGRAMDATA ?? "C:\\ProgramData",
     "Microsoft", "Windows", "Start Menu", "Programs",
   ),
-  path.join(process.env.USERPROFILE ?? "", "Desktop"),
+  // app.getPath, not %USERPROFILE%\Desktop: OneDrive folder backup moves the Desktop.
+  app.getPath("desktop"),
   path.join(process.env.PUBLIC ?? "C:\\Users\\Public", "Desktop"),
 ];
 
@@ -74,6 +76,9 @@ const APP_DIRS_MAC = [
 
 let _index: IndexEntry[] = [];
 let _indexed = false;
+let _indexedAt = 0;
+/** mnml runs from login to shutdown: rebuild a stale index so new apps show and removed ones go. */
+const INDEX_MAX_AGE_MS = 60_000;
 
 /**
  * Build the index. Cheap (sync .lnk walk + static list); call once at
@@ -81,6 +86,7 @@ let _indexed = false;
  */
 export function rebuildAppIndex(): void {
   const startedAt = Date.now();
+  _indexedAt = startedAt;
   const entries: IndexEntry[] = [];
   const seenNames = new Set<string>();
 
@@ -104,7 +110,7 @@ export function rebuildAppIndex(): void {
     pushShortcutEntry(entries, seenNames, sc.name, sc.command, sc.kind, sc.aliases);
   }
 
-  for (const dir of SHORTCUT_DIRS_WIN) walkLnk(dir, entries, seenNames);
+  for (const dir of shortcutDirsWin()) walkLnk(dir, entries, seenNames);
 
   _index = entries;
   _indexed = true;
@@ -151,28 +157,29 @@ function walkAppBundles(dir: string, out: IndexEntry[], seen: Set<string>, depth
     } catch {
       continue;
     }
-    if (e.isDirectory()) {
-      if (e.name.endsWith(".app")) {
-        const display = e.name.slice(0, -4).trim();
-        const nameKey = display.toLowerCase();
-        if (!nameKey || seen.has(nameKey)) continue;
-        seen.add(nameKey);
-        out.push({
-          id: full,
-          name: display,
-          target: full,
-          kind: "app",
-          nameKey,
-          aliases: [nameKey, nameKey.replace(/[\s\-_/&]+/g, "")],
-        });
-      } else if (depth < MAX_APP_DIR_DEPTH) {
-        walkAppBundles(full, out, seen, depth + 1);
-      }
+    if (e.name.startsWith(".")) continue; // hidden copies like ".iTerm.verzio-last-known-good.app"
+    // Safari and other Cryptex apps are symlinks in /Applications. Links are
+    // taken as apps but never walked into, so a link loop can't recurse.
+    if (e.name.endsWith(".app") && (e.isDirectory() || e.isSymbolicLink())) {
+      const display = e.name.slice(0, -4).trim();
+      const nameKey = display.toLowerCase();
+      if (!nameKey || seen.has(nameKey)) continue;
+      seen.add(nameKey);
+      out.push({
+        id: full,
+        name: display,
+        target: full,
+        kind: "app",
+        nameKey,
+        aliases: [nameKey, nameKey.replace(/[\s\-_/&]+/g, "")],
+      });
+    } else if (e.isDirectory() && depth < MAX_APP_DIR_DEPTH) {
+      walkAppBundles(full, out, seen, depth + 1);
     }
   }
 }
 
-function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>): void {
+function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>, depth = 0): void {
   if (!dir || !fs.existsSync(dir)) return;
   let dirents: fs.Dirent[];
   try { dirents = fs.readdirSync(dir, { withFileTypes: true }); }
@@ -186,7 +193,8 @@ function walkLnk(dir: string, out: IndexEntry[], seen: Set<string>): void {
     } catch {
       continue;
     }
-    if (e.isDirectory()) { walkLnk(full, out, seen); continue; }
+    // Capped like the macOS walk: a repo on the Desktop is thousands of folders.
+    if (e.isDirectory()) { if (depth < MAX_APP_DIR_DEPTH) walkLnk(full, out, seen, depth + 1); continue; }
     if (!e.isFile() || !e.name.toLowerCase().endsWith(".lnk")) continue;
 
     const display = e.name.slice(0, -4).trim();
@@ -212,6 +220,13 @@ const MAX_RESULTS = 12;
 /** Fast path — scores + sorts synchronously; icons filled later via `hydrateAppIcons`. */
 export function searchApps(query: string, limit = MAX_RESULTS): AppSearchResponse {
   if (!_indexed) rebuildAppIndex();
+  // Stale: answer from the current index, rebuild between keystrokes (~20 ms walk).
+  else if (Date.now() - _indexedAt > INDEX_MAX_AGE_MS) {
+    _indexedAt = Date.now();
+    setImmediate(() => {
+      try { rebuildAppIndex(); } catch (err) { log("[app-search] refresh failed:", String(err)); }
+    });
+  }
   const q = query.trim().toLowerCase();
   if (!q) return { results: [] };
 
@@ -266,10 +281,12 @@ function scoreEntry(entry: IndexEntry, q: string): number {
   // Best-of among aliases. Aliases include the name itself + a no-separator
   // form, so substring + acronym + subsequence checks all run uniformly.
   let best = 0;
-  for (const alias of entry.aliases) {
-    const s = matchScore(alias, q);
+  entry.aliases.forEach((alias, i) => {
+    // Extra aliases (after name + no-separator name) lose ties: "iterm" opens
+    // iTerm, not Terminal's "iterm" alias; "passwords" opens Passwords.
+    const s = matchScore(alias, q) - (i >= 2 ? 1 : 0);
     if (s > best) best = s;
-  }
+  });
   if (best === 0) return 0;
   // Slight bias: settings pages outrank tools at the same score, apps last.
   // (Reasoning: when a user types "wifi" they want the modern Settings page,
@@ -353,17 +370,20 @@ async function getIcon(entry: IndexEntry): Promise<string | null> {
     return null;
   }
 
-  if (IS_MAC && entry.target.endsWith(".app")) {
+  if (IS_MAC) {
+    // Not app.getFileIcon: on macOS 27 its "large" size crashes Electron 45 (a
+    // CHECK in a thread-pool worker, the whole app dies) and "normal" returns
+    // generic icons. QuickLook gives the real icon. realpath: /Applications/
+    // Safari.app is a symlink into the Cryptex, and QuickLook draws the link.
+    let url: string | null = null;
     try {
-      const img = await app.getFileIcon(entry.target, { size: "large" });
-      if (!img.isEmpty()) {
-        const url = `data:image/png;base64,${img.toPNG().toString("base64")}`;
-        rememberIcon(entry.id, url);
-        return url;
-      }
+      const img = await nativeImage.createThumbnailFromPath(await fs.promises.realpath(entry.target), { width: 48, height: 48 });
+      if (!img.isEmpty()) url = `data:image/png;base64,${img.toPNG().toString("base64")}`;
     } catch {
-      // fall through
+      // removed app or no thumbnail: the renderer shows the kind glyph
     }
+    rememberIcon(entry.id, url);
+    return url;
   }
 
   // Walk a small list of candidate paths in priority order: the .lnk's
@@ -458,16 +478,12 @@ export async function launchAppResult(target: string): Promise<boolean> {
       if (err) log(`[app-search] openPath failed: ${err}`);
       return !err;
     }
-    // Bundle id or bare app name — `open -a`.
-    const quoted = target.replace(/"/g, '\\"');
+    // Built-in tools are bundle ids: `open -a` only resolves app names, so
+    // "com.apple.Terminal" never opened. `-b` looks the id up; execFile, no shell.
     return new Promise<boolean>((resolve) => {
-      exec(`open -a "${quoted}"`, (err) => {
-        if (err) {
-          log(`[app-search] open -a failed: ${err.message}`);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
+      execFile("/usr/bin/open", ["-b", target], (err) => {
+        if (err) log(`[app-search] open -b failed: ${err.message}`);
+        resolve(!err);
       });
     });
   }

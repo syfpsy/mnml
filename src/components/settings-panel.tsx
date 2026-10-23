@@ -154,14 +154,14 @@ export function SettingsPanel({ onClose, onThemeChange }: Props) {
             </Row>
 
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px" }}>
-              <Row label="Max saved items" hint="Older items are pruned above the limit.">
+              <Row label="History size" hint="Oldest copies are removed past this number. Pinned items and snippets are kept.">
                 <NumberInput
                   value={settings.maxItems}
                   min={20}
                   max={1000}
                   step={10}
                   onChange={(v) => update("maxItems", v)}
-                  label="Max saved items"
+                  label="History size"
                 />
               </Row>
             </div>
@@ -383,7 +383,7 @@ function CheckUpdateBtn() {
     >
       {state === "checking"  ? "Checking…" :
        state === "current"   ? "Up to date" :
-       state === "available" ? "Update ready" :
+       state === "available" ? "Downloading…" :
        state === "error"     ? "Check failed" :
        "Check now"}
     </button>
@@ -422,6 +422,7 @@ function StorageSection() {
   const [state, setState] = useState<{ dataDir: string; defaultDir: string; isDefault: boolean } | null>(null);
   const [busy,  setBusy]  = useState<"idle" | "picking" | "migrating">("idle");
   const [msg,   setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -467,6 +468,14 @@ function StorageSection() {
 
   const reset = async () => {
     if (busy !== "idle") return;
+    // The default folder still holds the copy from before the move: say so before switching to it.
+    if (!confirmReset) {
+      setConfirmReset(true);
+      setTimeout(() => setConfirmReset(false), 6000);
+      flash("err", "The default folder has your data from before the move; this folder's data stays here, unused.", 6000);
+      return;
+    }
+    setConfirmReset(false);
     setBusy("migrating");
     const r = await bridge.storageReset();
     if (!r.ok) {
@@ -534,7 +543,7 @@ function StorageSection() {
             disabled={busy !== "idle"}
             className="mnml-btn-ghost text-[12px] px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Reset to default
+            {confirmReset ? "Click again to reset" : "Reset to default"}
           </button>
         )}
       </div>

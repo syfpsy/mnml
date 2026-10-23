@@ -91,6 +91,8 @@ export function ItemsList({
       : undefined;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Enter on a row's Pin/Save/Delete button must press that button, not paste the row.
+    if ((e.target as Element).closest("button")) return;
     lastKbdAt.current = Date.now();
     if (items.length === 0) return;
     if (e.key === "ArrowDown") {
@@ -221,9 +223,10 @@ export function ItemsList({
                 <span className="text-[11px] tabular-nums mr-1" style={{ color: "var(--t3)" }}>
                   {timeAgo(item.updated_at)}
                 </span>
-                {onSave && item.type !== "image" && (
-                  <SaveBtn onSave={() => onSave(item)} />
-                )}
+                {onSave && (item.type !== "image"
+                  ? <SaveBtn onSave={() => onSave(item)} />
+                  // Images can't be snippets; keep the slot so the time column stays aligned.
+                  : <span aria-hidden className="w-[26px]" />)}
                 <ActionBtn
                   label={item.pinned_at != null ? "Unpin" : "Pin"}
                   onClick={() => onPinToggle(item)}

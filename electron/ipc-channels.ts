@@ -61,6 +61,7 @@ export const IPC = {
   onVisibilityChanged: "mnml:event:visibility",
   onUpdateAvailable:   "mnml:event:update-available",
   onUpdateDownloaded:  "mnml:event:update-downloaded",
+  onUpdateError:       "mnml:event:update-error",
   onSavedChanged:      "mnml:event:saved-changed",
   onItemsCleared:      "mnml:event:items-cleared",
   /** Lazy app-search icon hydration (main → renderer after fast search response). */

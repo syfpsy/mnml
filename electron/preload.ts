@@ -79,6 +79,11 @@ const api = {
     return () => { ipcRenderer.off(IPC.onUpdateAvailable, listener); };
   },
 
+  onUpdateError: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on(IPC.onUpdateError, listener);
+    return () => { ipcRenderer.off(IPC.onUpdateError, listener); };
+  },
   onUpdateDownloaded: (cb: (version: string) => void): (() => void) => {
     const listener = (_: unknown, version: string) => cb(version);
     ipcRenderer.on(IPC.onUpdateDownloaded, listener);

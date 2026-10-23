@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **macOS: typing an app name could crash mnml.** App icons came from `app.getFileIcon`, which crashes Electron 45 on macOS 27; icons now come from QuickLook (and show the real icon instead of a generic one).
+- **Windows: auto-paste lost its target after a minute idle.** The foreground helper started on demand and shut down after 60 s, too slow for the summon; it now starts with mnml and stays ready. A late focus request can no longer re-show the hidden panel.
+- **Launcher:** Safari (a symlink on macOS 13+) is found, hidden app copies are not, Terminal / Activity Monitor / Disk Utility / Console / Keychain Access / Finder open again, an app's exact name beats another entry's alias, newly installed or removed apps show up without a restart, and Enter typed right after a search is no longer dropped. A launched app keeps focus.
+- **Updates:** a failed download no longer leaves "Downloading…" for a day, a failed check retries after an hour, and a Mac copy outside Applications says to move it instead of offering an update that can't install.
+- **Snippets:** Enter on a row's Delete button deletes instead of pasting; the highlight follows the snippet after a paste; Esc in search or Settings keeps a half-typed snippet; text too long for a snippet is refused instead of saved cut short; a failed list load keeps your snippets on screen.
+- **Settings:** closing it puts the cursor back in search; "Reset to default" asks once and says the default folder holds the older copy; "History size" says what it keeps.
+- **Security:** a link or file dropped on the panel can no longer navigate it (the page would have had mnml's full API).
 - **macOS: closing the panel returns focus** to the app you were in (Esc, ⌘⌘, after a paste). Before, keystrokes went nowhere until you clicked.
 - **Copying the same text again** after an image or a password is captured again.
 - **Links paste exactly as copied**, not as a rewritten URL.

@@ -11,7 +11,8 @@ export function useSaved(query?: string, enabled = true) {
   const [snippets, setSnippets] = useState<SavedSnippet[]>([]);
 
   const load = useCallback(() => {
-    bridge.savedList().then(setSnippets).catch(() => setSnippets([]));
+    // Keep the last list on error (a synced DB mid-replace), never show "no snippets".
+    bridge.savedList().then(setSnippets).catch(() => {});
   }, []);
 
   useEffect(() => {

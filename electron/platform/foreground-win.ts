@@ -18,6 +18,7 @@ public static class MnmlForeground {
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr hWnd);
   [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
   [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
@@ -30,7 +31,9 @@ public static class MnmlForeground {
   }
 
   public static bool Focus(IntPtr hWnd) {
-    if (hWnd == IntPtr.Zero) return false;
+    // Only mnml's own panel is focused here. A request that waited in the pipe
+    // must not re-show it after Electron hid it (ShowWindowAsync would).
+    if (hWnd == IntPtr.Zero || !IsWindowVisible(hWnd)) return false;
 
     IntPtr foreground = GetForegroundWindow();
     uint foregroundPid;
@@ -108,7 +111,8 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
 
 export function windowHandleAsDecimal(w: BrowserWindow): string | null {
   const handle = w.getNativeWindowHandle();
-  if (handle.length >= 8) return handle.readBigUInt64LE(0).toString();
+  // Signed, like the helper's ToInt64()/[Int64]: a sign-extended HWND must compare equal and parse.
+  if (handle.length >= 8) return handle.readBigInt64LE(0).toString();
   if (handle.length >= 4) return BigInt(handle.readUInt32LE(0)).toString();
   return null;
 }

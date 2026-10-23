@@ -80,7 +80,7 @@ Site copy usually ships with the Windows release; Mac upload only needs a Vercel
 | `uiohook-napi` is `win32-x64` | Never copy `node_modules` from Windows. `rm -rf node_modules && npm ci` on the Mac. |
 | Wrong signing cert | Set `CSC_NAME="Developer ID Application: Your Name (TEAMID)"` in `.env.release` |
 | Notarize fails | Confirm app-specific password (not account password); Team ID matches the cert |
-| Quick unsigned smoke only | `SKIP_NOTARIZE=1 npm run build:release:mac` (do **not** upload that) |
+| Quick un-notarized smoke only | `npm run build:release:mac -- -c.mac.notarize=false` (do **not** upload that) |
 | Interactive zsh `#` comments | Don't paste `#` comment-only lines as commands — run the real commands only |
 
 ---

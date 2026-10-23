@@ -94,7 +94,7 @@ export function AppResultsList({
       <ul
         ref={listRef}
         role="listbox"
-        aria-label="Apps and Windows settings"
+        aria-label="Apps and settings"
         aria-activedescendant={activeId}
         tabIndex={0}
         data-mnml-listbox="true"
@@ -201,7 +201,7 @@ function hashString(value: string): string {
 }
 
 function kindHint(result: AppResult): string {
-  if (result.kind === "setting") return "Windows Settings";
+  if (result.kind === "setting") return "Settings"; // macOS rows too
   if (result.kind === "tool") return "System tool";
   return "App";
 }

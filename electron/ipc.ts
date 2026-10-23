@@ -24,6 +24,7 @@ import { PLATFORM_UI } from "./platform/config.js";
 
 interface WindowControl {
   hide: () => void;
+  hideAfterAppLaunch: () => void;
   setBlurLock: (locked: boolean) => void;
   setPastePending: () => void;
   armPasteActivation: () => void;
@@ -208,7 +209,11 @@ export function registerIpc(windowControl: WindowControl) {
 
   ipcMain.handle(
     IPC.appLaunch,
-    async (_, { target }: { target: string }) => launchAppResult(target),
+    async (_, { target }: { target: string }) => {
+      const ok = await launchAppResult(target);
+      if (ok) windowControl.hideAfterAppLaunch();
+      return ok;
+    },
   );
 
   // ── Saved snippets ────────────────────────────────────────────────────────
@@ -218,10 +223,9 @@ export function registerIpc(windowControl: WindowControl) {
   ipcMain.handle(
     IPC.savedAdd,
     (_, { label, content }: { label: string; content: string }): SavedSnippet => {
-      const created = addSaved(
-        clampString(label, MAX_SNIPPET_LABEL_LEN),
-        clampString(content, MAX_SNIPPET_CONTENT_LEN),
-      );
+      const body = clampString(content, MAX_SNIPPET_CONTENT_LEN);
+      if (!body.trim()) throw new Error("empty snippet"); // restoring it would just clear the clipboard
+      const created = addSaved(clampString(label, MAX_SNIPPET_LABEL_LEN), body);
       broadcastSavedChanged();
       return created;
     },
@@ -280,8 +284,9 @@ export function registerIpc(windowControl: WindowControl) {
       const item = getById(id);
       if (!item) return null;
       const content = item.content_text ?? item.content_url ?? item.preview;
-      if (!content) return null;
-      const created = addSaved(label ?? "", content);
+      // Too long for a snippet: refuse rather than save a cut copy (the UI shows no "Saved").
+      if (!content || content.length > MAX_SNIPPET_CONTENT_LEN) return null;
+      const created = addSaved(clampString(label, MAX_SNIPPET_LABEL_LEN), content);
       broadcastSavedChanged();
       return created;
     },
@@ -296,6 +301,11 @@ export function registerIpc(windowControl: WindowControl) {
     (_, { key, value }: { key: keyof AppSettings; value: AppSettings[keyof AppSettings] }) => {
       if (!isSettingKey(key)) {
         log("[ipc] updateSetting rejected unknown key:", String(key));
+        return getAllSettings();
+      }
+      // A wrong type would be stored as-is: maxItems "abc" breaks every prune, "false" is truthy.
+      if (typeof value !== typeof getAllSettings()[key]) {
+        log("[ipc] updateSetting rejected value type for", key);
         return getAllSettings();
       }
       let next = value;
@@ -340,9 +350,14 @@ export function registerIpc(windowControl: WindowControl) {
     // Returns a short summary the renderer can show ("checking" / "no update" /
     // "available v0.2.30"). The real update lifecycle still flows through the
     // existing autoUpdater event subscriptions in main.ts.
+    // Same gate as canSelfUpdate() in main.ts: Squirrel can't replace a copy outside /Applications.
+    if (process.platform === "darwin" && app.isPackaged && !app.isInApplicationsFolder()) {
+      return { ok: false, message: "Move mnml to Applications to get updates" } as const;
+    }
     try {
       const r = await autoUpdater.checkForUpdates();
       if (!r) return { ok: false, message: "Updates disabled (dev build)" } as const;
+      r.downloadPromise?.catch(() => {}); // failures arrive via the "error" event
 
       // electron-updater's `updateInfo.version` is the server's LATEST
       // version regardless of whether it's newer than the installed one —

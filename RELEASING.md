@@ -58,7 +58,8 @@ changes. Normal flow: **build → fill the new section → commit (when asked).*
 
 `electron-builder` config is in `package.json` `build`: appId `dev.mnml.app`,
 `asar:false`, `npmRebuild:false`, `afterPack: scripts/copy-native-deps.mjs`,
-`afterSign: scripts/notarize-mac.cjs` (macOS only, when Apple env vars set),
+macOS notarization by electron-builder itself when `APPLE_KEYCHAIN_PROFILE`
+(or `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID`) is set,
 `extraResources` ships icons, NSIS x64 (`mnml-setup.exe`), mac arm64
 (`mnml-mac.dmg` / `mnml-mac.zip`).
 
@@ -209,8 +210,9 @@ keys.**
 ### macOS (Mac mini)
 
 **Developer ID + notarization** via `.env.release` on the Mac mini. See
-[`docs/MAC-MINI-RELEASE.md`](./docs/MAC-MINI-RELEASE.md). `scripts/notarize-mac.cjs`
-runs automatically after sign when `APPLE_*` env vars are set.
+[`docs/MAC-MINI-RELEASE.md`](./docs/MAC-MINI-RELEASE.md). electron-builder
+notarizes right after signing when `APPLE_KEYCHAIN_PROFILE` or the `APPLE_*` trio is set
+(the old `afterSign` hook submitted a second time, so it was removed).
 
 ### Windows (in progress)
 

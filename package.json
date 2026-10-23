@@ -65,7 +65,6 @@
     "asar": false,
     "npmRebuild": false,
     "afterPack": "./scripts/copy-native-deps.mjs",
-    "afterSign": "scripts/notarize-mac.cjs",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

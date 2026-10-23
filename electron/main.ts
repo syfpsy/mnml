@@ -572,12 +572,12 @@ function recoverFromFailedHide() {
  * `hide()` when focus state is in flux, and `isVisible()` can momentarily
  * lag the real hide. Returns true once the window reports hidden.
  */
-function attemptHide(): boolean {
+function attemptHide(yieldFocus = true): boolean {
   if (!isWindowUsable()) return true;
   try { win!.hide(); } catch (err) { log("[hide] win.hide() failed:", String(err)); }
-  if (!win!.isVisible()) return yieldActivation();
+  if (!win!.isVisible()) return !yieldFocus || yieldActivation();
   try { win!.hide(); } catch (err) { log("[hide] win.hide() retry failed:", String(err)); }
-  return !win!.isVisible() && yieldActivation();
+  return !win!.isVisible() && (!yieldFocus || yieldActivation());
 }
 
 /**
@@ -872,18 +872,43 @@ function setupAutoUpdater() {
 
   autoUpdater.on("error", (err) => {
     log("[updater] error:", err.message);
+    // A failed download would leave the banner on "Downloading…" until the next check.
+    safeSendToRenderer(IPC.onUpdateError);
+    tray?.setToolTip(`mnml — clipboard manager\n${PLATFORM_UI.summonHint} to show/hide`);
   });
 
-  // Check on startup, then once a day for long-running instances. Was every
-  // 4 h, but the network round-trip wasn't doing anything useful between
-  // checks. Handle is stored so `before-quit` can clear it.
-  const check = () =>
-    autoUpdater.checkForUpdates().catch((err) =>
-      log("[updater] check failed:", err.message),
-    );
+  // Check on startup, then daily; a failed check retries after an hour instead
+  // of a day. An hourly tick against wall time, because a 24 h timer counts
+  // only awake time on a sleeping laptop. Handle is cleared in `before-quit`.
+  let lastCheckAt = 0;
+  let lastCheckOk = false;
+  const check = () => {
+    lastCheckAt = Date.now();
+    autoUpdater.checkForUpdates()
+      .then((r) => {
+        lastCheckOk = true;
+        r?.downloadPromise?.catch(() => {}); // failures arrive via "error"; not an unhandled rejection
+      })
+      .catch((err) => {
+        lastCheckOk = false;
+        log("[updater] check failed:", err.message);
+      });
+  };
   check();
   if (updaterInterval) clearInterval(updaterInterval);
-  updaterInterval = setInterval(check, 24 * 60 * 60 * 1000);
+  const HOUR = 60 * 60 * 1000;
+  updaterInterval = setInterval(() => {
+    if (Date.now() - lastCheckAt >= (lastCheckOk ? 24 * HOUR : HOUR)) check();
+  }, HOUR);
+}
+
+/**
+ * macOS outside /Applications (disk image, a translocated Downloads copy):
+ * Squirrel can't replace the app, yet electron-updater still says "ready"
+ * and "Restart" then does nothing. No updates until mnml is moved.
+ */
+function canSelfUpdate(): boolean {
+  return app.isPackaged && !(IS_MAC && !app.isInApplicationsFolder());
 }
 
 /* ── Window positioning ────────────────────────────────────────────────────── */
@@ -948,6 +973,10 @@ function createWindow() {
   });
 
   win.setMenu(null);
+  // The preload exposes the whole mnml API to whatever page this window shows:
+  // a link or file dropped on the panel must not navigate it, nor open windows.
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.setMinimumSize(WINDOW_SIZE.width, WINDOW_SIZE.height);
   win.setMaximumSize(WINDOW_SIZE.width, WINDOW_SIZE.height);
   win.setAlwaysOnTop(true, "screen-saver");
@@ -1196,7 +1225,8 @@ function showWindow() {
   requestCapturePrev(revealWindow);
 }
 
-function hideWindow() {
+/** yieldFocus=false after launching an app: that app takes focus, handing it back to the previous one would bury it. */
+function hideWindow(yieldFocus = true) {
   if (appQuitting) return;
   if (hideInProgress) {
     log("[hide] ignored — hide already in progress");
@@ -1280,7 +1310,7 @@ function hideWindow() {
     finishHideSync();
   } else {
     // Normal hide (Escape / click-outside).
-    if (!attemptHide()) {
+    if (!attemptHide(yieldFocus)) {
       // `isVisible()` can lag the real hide on Windows compositor timing —
       // re-check on the next tick before declaring the hide failed (and
       // wrongly re-showing the panel, which reads as "it won't close").
@@ -1291,6 +1321,7 @@ function hideWindow() {
           log("[hide] normal hide did not take effect — recovering");
           recoverFromFailedHide();
         } else {
+          if (yieldFocus) yieldActivation();
           windowVisible = false;
           setClipboardPollCadence(false);
           notifyRendererHidden();
@@ -1526,9 +1557,12 @@ app.whenReady().then(() => {
   catch (err) { failStartup("createWindow", err); return; }
 
   fg = createForegroundService();
+  // Windows: warm the foreground helper off the startup path, so the first summon's capture is answered.
+  setTimeout(() => fg?.ensureStarted(), 2_000);
 
   registerIpc({
     hide: hideWindow,
+    hideAfterAppLaunch: () => hideWindow(false),
     setBlurLock,
     setPastePending,
     armPasteActivation,
@@ -1575,7 +1609,7 @@ app.whenReady().then(() => {
   });
   log("[hotkey] fallback", FALLBACK_SHORTCUT, registered ? "ok" : "FAILED");
 
-  if (app.isPackaged) {
+  if (canSelfUpdate()) {
     try { setupAutoUpdater(); }
     catch (err) { log("[updater] setup failed (non-fatal):", String(err)); }
   }
